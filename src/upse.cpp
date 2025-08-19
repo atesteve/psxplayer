@@ -26,16 +26,15 @@ UpseModule::UpseModule(std::string const& file_name)
         return;
     }
 
-    upse_eventloop_set_audio_callback(
-        _mod.get(),
-        [](unsigned char* data, long length, const void* userdata) {
-            auto* const pa = (pa_simple*)userdata;
+    _thread.emplace([this] {
+        int16_t* buf;
+        int n;
+        do {
             int error;
-            pa_simple_write(pa, data, length, &error);
-        },
-        _audio.get());
-
-    _thread.emplace([this] { upse_eventloop_run(_mod.get()); });
+            n = upse_eventloop_render(_mod.get(), &buf);
+            pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
+        } while (n > 0);
+    });
 }
 
 UpseModule::~UpseModule()
