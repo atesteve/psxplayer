@@ -1,11 +1,14 @@
 #include "main-window.h"
 
 #include <fmt/format.h>
+
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
+
+static bool toggle{true};
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow{parent}
@@ -20,6 +23,26 @@ MainWindow::MainWindow(QWidget* parent)
         }
 
         open_file(name);
+    });
+
+    QObject::connect(_ui.playButton, &QPushButton::clicked, this, [this] {
+        if (!_module) {
+            return;
+        }
+
+        if (toggle) {
+            _module->pause();
+        } else {
+            _module->play();
+        }
+
+        toggle = !toggle;
+    });
+
+    QObject::connect(_ui.horizontalSlider, &QSlider::sliderReleased, this, [this] {
+        float const pos =
+            static_cast<float>(_ui.horizontalSlider->value()) / _ui.horizontalSlider->maximum();
+        _module->seek(pos);
     });
 }
 

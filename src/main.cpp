@@ -1,9 +1,6 @@
 #include "main-window.h"
-
 #include "libupse/upse.h"
-
 #include <fmt/format.h>
-
 #include <QApplication>
 
 int main(int argc, char* argv[])

@@ -22,4 +22,5 @@ private:
 
     Ui::MainWindow _ui;
     std::optional<UpseModule> _module;
+    int _clips{};
 };

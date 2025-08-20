@@ -33,13 +33,30 @@ UpseModule::UpseModule(std::string const& file_name)
             int error;
             n = upse_eventloop_render(_mod.get(), &buf);
             pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
+            if (_pause) {
+                _continue->get();
+            }
         } while (n > 0);
     });
+}
+
+void UpseModule::seek(float pos)
+{
+    if (!_mod) {
+        return;
+    }
+    pos = std::min<float>(pos, 1);
+    pos = std::max<float>(pos, 0);
+
+    float const length = _mod->metadata->length;
+
+    upse_eventloop_seek(_mod.get(), static_cast<uint32_t>(length * pos));
 }
 
 UpseModule::~UpseModule()
 {
     if (_mod) {
         upse_eventloop_stop(_mod.get());
+        play();
     }
 }

@@ -8,6 +8,8 @@
 #include <thread>
 #include <string>
 #include <optional>
+#include <future>
+#include <atomic>
 
 struct upse_module_deleter {
     void operator()(upse_module_t* mod) const noexcept { upse_module_close(mod); }
@@ -20,9 +22,33 @@ public:
     explicit UpseModule(std::string const& file_name);
     ~UpseModule();
 
+    void pause()
+    {
+        if (_pause) {
+            return;
+        }
+        _continue_promise.emplace();
+        _continue.emplace(_continue_promise->get_future());
+        _pause = true;
+    }
+
+    void play()
+    {
+        if (!_pause) {
+            return;
+        }
+        _pause = false;
+        _continue_promise->set_value();
+    }
+
+    void seek(float pos);
+
     operator bool() const { return _mod.get(); }
 
 private:
+    std::optional<std::promise<void>> _continue_promise;
+    std::optional<std::future<void>> _continue;
+    std::atomic_bool _pause;
     upse_unique_ptr _mod;
     pa_simple_unique_ptr _audio;
     std::optional<std::jthread> _thread;
