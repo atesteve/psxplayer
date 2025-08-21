@@ -583,7 +583,7 @@ static void bios_strcpy(upse_module_instance_t *ins)
 	src++;
 	dest++;
     } while (val);
-    //strcpy(Ra0, Ra1); 
+    //strcpy(Ra0, Ra1);
     v0 = a0;
     pc0 = ra;
 }
@@ -603,7 +603,7 @@ static void bios_strncpy(upse_module_instance_t *ins)
 	max--;
     } while (val && max);
 
-    //strncpy(Ra0, Ra1, a2);  
+    //strncpy(Ra0, Ra1, a2);
     v0 = a0;
     pc0 = ra;
 }
@@ -742,7 +742,7 @@ static void bios_bcopy(upse_module_instance_t *ins)
 	dest++;
 	src++;
     }
-    //memcpy(Ra1,Ra0,a2); 
+    //memcpy(Ra1,Ra0,a2);
     pc0 = ra;
 }
 
@@ -757,7 +757,7 @@ static void bios_bzero(upse_module_instance_t *ins)
 	dest++;
     }
 
-    //memset(Ra0,0,a1); 
+    //memset(Ra0,0,a1);
     pc0 = ra;
 }
 
@@ -782,7 +782,7 @@ static void bios_memcpy(upse_module_instance_t *ins)
 	dest++;
 	src++;
     }
-    //memcpy(Ra0, Ra1, a2); 
+    //memcpy(Ra0, Ra1, a2);
     v0 = a0;
     pc0 = ra;
 }
@@ -1402,7 +1402,7 @@ void upse_ps1_bios_init(upse_module_instance_t *ins)
     biosA0[0x2b] = bios_memset;
     biosA0[0x2c] = bios_memmove;
     biosA0[0x2c] = bios_memcpy;	/* Our code should be compatible
-				   with both memcpy and memmove 
+				   with both memcpy and memmove
 				   semantics. */
     biosA0[0x2d] = bios_memcmp;
     biosA0[0x2e] = bios_memchr;
@@ -1425,7 +1425,7 @@ void upse_ps1_bios_init(upse_module_instance_t *ins)
     biosA0[0x44] = bios_FlushCache;
     //biosA0[0x45] = bios_InstallInterruptHandler;
     //biosA0[0x4f] = bios_sys_a0_4f;
-    //biosA0[0x50] = bios_sys_a0_50;                
+    //biosA0[0x50] = bios_sys_a0_50;
     biosA0[0x70] = bios__bu_init;
     biosA0[0x71] = bios__96_init;
     biosA0[0x72] = bios__96_remove;
@@ -1444,10 +1444,10 @@ void upse_ps1_bios_init(upse_module_instance_t *ins)
     //biosA0[0x7f] = bios_sys_a0_7f;
     //biosA0[0x80] = bios_sys_a0_80;
     //biosA0[0x81] = bios_sys_a0_81;
-    //biosA0[0x82] = bios_sys_a0_82;                
+    //biosA0[0x82] = bios_sys_a0_82;
     //biosA0[0x83] = bios_sys_a0_83;
     //biosA0[0x84] = bios_sys_a0_84;
-    //biosA0[0x85] = bios__96_CdStop;       
+    //biosA0[0x85] = bios__96_CdStop;
     //biosA0[0x86] = bios_sys_a0_86;
     //biosA0[0x87] = bios_sys_a0_87;
     //biosA0[0x88] = bios_sys_a0_88;
@@ -1456,7 +1456,7 @@ void upse_ps1_bios_init(upse_module_instance_t *ins)
     //biosA0[0x8b] = bios_sys_a0_8b;
     //biosA0[0x8c] = bios_sys_a0_8c;
     //biosA0[0x8d] = bios_sys_a0_8d;
-    //biosA0[0x8e] = bios_sys_a0_8e;                
+    //biosA0[0x8e] = bios_sys_a0_8e;
     //biosA0[0x8f] = bios_sys_a0_8f;
     //biosA0[0x90] = bios_sys_a0_90;
     //biosA0[0x91] = bios_sys_a0_91;
@@ -1574,7 +1574,7 @@ void upse_ps1_bios_init(upse_module_instance_t *ins)
     //biosC0[0x15] = bios__cdevinput;
     //biosC0[0x16] = bios__cdevscan;
     //biosC0[0x17] = bios__circgetc;
-    //biosC0[0x18] = bios__circputc;                  
+    //biosC0[0x18] = bios__circputc;
     //biosC0[0x19] = bios_ioabort;
     //biosC0[0x1a] = bios_sys_c0_1a
     //biosC0[0x1b] = bios_KernelRedirect;
@@ -1623,6 +1623,21 @@ void upse_ps1_bios_init(upse_module_instance_t *ins)
     PSXMu32(ins, 0x0894) = BFLIP32((0x3b << 26) | 0);
 
     ins->biosstate = biosstate;
+}
+
+void *upse_ps1_bios_take_snapshot(upse_module_instance_t *ins)
+{
+    upse_ps1_bios_state_t *src_biosstate = ins->biosstate;
+    upse_ps1_bios_state_t *biosstate = malloc(sizeof(upse_ps1_bios_state_t));
+    memcpy(biosstate, src_biosstate, sizeof(upse_ps1_bios_state_t));
+    return biosstate;
+}
+
+void upse_ps1_bios_restore_snapshot(upse_module_instance_t *ins, void *snapshot_biosstate)
+{
+    upse_ps1_bios_state_t *dst_biosstate = ins->biosstate;
+    upse_ps1_bios_state_t *src_biosstate = snapshot_biosstate;
+    memcpy(dst_biosstate, src_biosstate, sizeof(upse_ps1_bios_state_t));
 }
 
 void upse_ps1_bios_shutdown(upse_module_instance_t *ins)

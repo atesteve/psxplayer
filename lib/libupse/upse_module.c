@@ -124,6 +124,24 @@ upse_module_close(upse_module_t *mod)
     free(mod);
 }
 
+upse_snapshot_t *
+upse_module_take_snapshot(upse_module_t *mod)
+{
+    return upse_ps1_take_snapshot(&mod->instance);
+}
+
+void
+upse_module_restore_snapshot(upse_module_t *mod, upse_snapshot_t *snapshot)
+{
+    upse_ps1_restore_snapshot(&mod->instance, snapshot);
+}
+
+void
+upse_module_destroy_snapshot(upse_snapshot_t *snapshot)
+{
+    upse_ps1_destroy_snapshot(snapshot);
+}
+
 extern upse_module_t *upse_load_psf(void *fileptr, const char *path, const upse_iofuncs_t *funcs);
 extern upse_module_t *upse_load_psf2(void *fileptr, const char *path, const upse_iofuncs_t *funcs);
 

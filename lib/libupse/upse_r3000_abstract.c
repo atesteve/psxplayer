@@ -134,3 +134,41 @@ void upse_ps1_execute_bios(upse_module_instance_t *ins)
     while (ins->cpustate.pc != 0x80030000)
         upse_r3000_cpu_execute_block(ins);
 }
+
+upse_snapshot_t *upse_ps1_take_snapshot(upse_module_instance_t *ins)
+{
+    upse_snapshot_t *ret = (upse_snapshot_t *)malloc(sizeof(upse_snapshot_t));
+    memcpy(&ret->instance, ins, sizeof(upse_module_instance_t));
+
+    ret->instance.spu = upse_ps1_spu_take_snapshot(ins);
+    ret->instance.ctrstate = upse_ps1_counter_take_snapshot(ins);
+    ret->instance.biosstate = upse_ps1_bios_take_snapshot(ins);
+
+    return ret;
+}
+
+void upse_ps1_restore_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot)
+{
+    void *spu = ins->spu;
+    void *ctrstate = ins->ctrstate;
+    void *biosstate = ins->biosstate;
+
+    memcpy(ins, &snapshot->instance, sizeof(upse_module_instance_t));
+
+    ins->spu = spu;
+    ins->ctrstate = ctrstate;
+    ins->biosstate = biosstate;
+
+    upse_ps1_spu_restore_snapshot(ins, snapshot->instance.spu);
+    upse_ps1_counter_restore_snapshot(ins, snapshot->instance.ctrstate);
+    upse_ps1_bios_restore_snapshot(ins, snapshot->instance.biosstate);
+}
+
+void upse_ps1_destroy_snapshot(upse_snapshot_t *snapshot)
+{
+    upse_ps1_spu_close(snapshot->instance.spu);
+    upse_ps1_counter_shutdown(&snapshot->instance);
+    upse_ps1_bios_shutdown(&snapshot->instance);
+    free(snapshot);
+}
+

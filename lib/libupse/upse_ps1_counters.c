@@ -114,6 +114,21 @@ void upse_ps1_counter_init(upse_module_instance_t *ins)
     ctrstate->last = 0;
 }
 
+void *upse_ps1_counter_take_snapshot(upse_module_instance_t *ins)
+{
+    upse_psx_counter_state_t *src_ctrstate = ins->ctrstate;
+    upse_psx_counter_state_t *ctrstate = malloc(sizeof(upse_psx_counter_state_t));
+    memcpy(ctrstate, src_ctrstate, sizeof(upse_psx_counter_state_t));
+    return ctrstate;
+}
+
+void upse_ps1_counter_restore_snapshot(upse_module_instance_t *ins, void *snapshot_ctrstate)
+{
+    upse_psx_counter_state_t *dst_ctrstate = ins->ctrstate;
+    upse_psx_counter_state_t *src_ctrstate = snapshot_ctrstate;
+    memcpy(dst_ctrstate, src_ctrstate, sizeof(upse_psx_counter_state_t));
+}
+
 void upse_ps1_counter_shutdown(upse_module_instance_t *ins)
 {
     free(ins->ctrstate);
