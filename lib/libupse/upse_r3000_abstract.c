@@ -69,6 +69,7 @@ void upse_ps1_shutdown(upse_module_instance_t *ins)
 {
     upse_ps1_memory_shutdown(ins);
     upse_ps1_bios_shutdown(ins);
+    upse_ps1_counter_shutdown(ins);
 
     upse_r3000_cpu_shutdown(ins);
 

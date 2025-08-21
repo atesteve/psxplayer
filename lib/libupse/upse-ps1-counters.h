@@ -34,6 +34,7 @@ typedef struct
 } upse_psx_counter_state_t;
 
 void upse_ps1_counter_init(upse_module_instance_t *ins);
+void upse_ps1_counter_shutdown(upse_module_instance_t *ins);
 void upse_ps1_counter_update(upse_module_instance_t *ins);
 void upse_ps1_counter_set_count(upse_module_instance_t *ins, u32 index, u32 value);
 void upse_ps1_counter_set_mode(upse_module_instance_t *ins, u32 index, u32 value);

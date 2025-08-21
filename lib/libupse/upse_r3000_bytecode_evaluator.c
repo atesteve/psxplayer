@@ -1091,7 +1091,6 @@ int upse_r3000_cpu_execute_render(upse_module_instance_t *ins, s16 **s)
 
         if (!upse_ps1_counter_run(ins))
         {
-            upse_ps1_shutdown(ins);
             return 0;
         }
 

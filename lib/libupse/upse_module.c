@@ -120,6 +120,7 @@ upse_module_close(upse_module_t *mod)
         return;
 
     upse_free_psf_metadata(mod->metadata); /* XXX */
+    upse_ps1_shutdown(&mod->instance);
     free(mod);
 }
 

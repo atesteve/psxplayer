@@ -114,6 +114,11 @@ void upse_ps1_counter_init(upse_module_instance_t *ins)
     ctrstate->last = 0;
 }
 
+void upse_ps1_counter_shutdown(upse_module_instance_t *ins)
+{
+    free(ins->ctrstate);
+}
+
 void upse_ps1_counter_sleep(upse_module_instance_t *ins)
 {
     s32 min, x, lmin;
