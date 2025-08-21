@@ -18,6 +18,8 @@
 #ifndef __UPSE__LIBUPSE__UPSE_PS1_GPU_H__GUARD
 #define __UPSE__LIBUPSE__UPSE_PS1_GPU_H__GUARD
 
+#include "upse-types.h"
+
 extern void upse_ps1_gpu_set_status(u32 cmd);
 extern u32  upse_ps1_gpu_get_status(void);
 

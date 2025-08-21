@@ -65,7 +65,7 @@ typedef struct {
     s16 hist[2];
 } upse_spu_nyquist_info_t;
 
-typedef struct {
+typedef struct upse_spu_state {
 	void *pCore;
 
     u8 pSpuBuffer[32770];

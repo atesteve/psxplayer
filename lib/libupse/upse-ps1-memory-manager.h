@@ -17,39 +17,40 @@
  * UPSE is offered without any warranty of any kind, explicit or implicit.
  */
 
-#include "upse-internal.h"
-
 #ifndef _UPSE__LIBUPSE__UPSE_PS1_MEMORY_MANAGER_H__GUARD
 #define _UPSE__LIBUPSE__UPSE_PS1_MEMORY_MANAGER_H__GUARD
 
+#include "upse-types.h"
+#include "upse-module.h"
+
 #ifdef WORDS_BIGENDIAN
-static INLINE u16 BFLIP16(u16 x)
+static inline u16 BFLIP16(u16 x)
 {
     return (((x >> 8) & 0xFF) | ((x & 0xFF) << 8));
 }
 
-static INLINE u32 BFLIP32(u32 x)
+static inline u32 BFLIP32(u32 x)
 {
     return (((x >> 24) & 0xFF) | ((x >> 8) & 0xFF00) | ((x << 8) & 0xFF0000) | ((x << 24) & 0xFF000000));
 }
 #else
-static INLINE u16 BFLIP16(u16 x)
+static inline u16 BFLIP16(u16 x)
 {
     return x;
 }
 
-static INLINE u32 BFLIP32(u32 x)
+static inline u32 BFLIP32(u32 x)
 {
     return x;
 }
 #endif
 
-static INLINE s32 BFLIP32S(s32 x)
+static inline s32 BFLIP32S(s32 x)
 {
     return (s32) BFLIP32((u32) x);
 }
 
-static INLINE s16 BFLIP16S(s16 x)
+static inline s16 BFLIP16S(s16 x)
 {
     return (s16) BFLIP16((u16) x);
 }

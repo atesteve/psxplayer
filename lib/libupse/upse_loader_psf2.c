@@ -122,9 +122,9 @@ upse_psf2_parse_filesystem(upse_filesystem_t *ret, char *curdir, u8 *filesys, u8
               char lcurdir[4096];
               _DEBUG("new subdirectory [filesystem @%p]: %s %d %d %d", filesys, cptr, offs, uncomp, bsize);
 
-              strncpy(lcurdir, curdir, 4096);
-              strncat(lcurdir, "/", 4096);
-              strncat(lcurdir, (char *) cptr, 4096);
+              strncpy(lcurdir, curdir, 4095);
+              strncat(lcurdir, "/", 4095);
+              strncat(lcurdir, (char *) cptr, 4095);
 
               _DEBUG("parsing directory %s", lcurdir);
               upse_psf2_parse_filesystem(ret, lcurdir, filesys, &filesys[offs], len);

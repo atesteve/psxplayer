@@ -20,6 +20,8 @@
 #ifndef _UPSE__LIBUPSE__UPSE_PS1_BIOS_PRIVATE_H__GUARD
 #define _UPSE__LIBUPSE__UPSE_PS1_BIOS_PRIVATE_H__GUARD
 
+#include "upse-types.h"
+
 //#define r0 (ins->cpustate.GPR.n.r0)
 #define at (ins->cpustate.GPR.n.at)
 #define v0 (ins->cpustate.GPR.n.v0)

@@ -394,7 +394,7 @@ static void psxDelayTest(upse_module_instance_t *ins, u32 reg, u32 bpc)
 
 static void psxNULL(upse_module_instance_t *ins);
 
-static INLINE void doBranch(upse_module_instance_t *ins, u32 tar)
+static inline void doBranch(upse_module_instance_t *ins, u32 tar)
 {
     u32 tmp;
 
@@ -963,7 +963,7 @@ static void psxCFC0(upse_module_instance_t *ins)
     _rRt_ = (int) _rFs_;
 }
 
-static INLINE void MTC0(upse_module_instance_t *ins, int reg, u32 val)
+static inline void MTC0(upse_module_instance_t *ins, int reg, u32 val)
 {
     switch (reg)
     {

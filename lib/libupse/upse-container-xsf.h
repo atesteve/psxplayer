@@ -54,6 +54,8 @@
 #ifndef __UPSE_LIBUPSE_UPSE_CONTAINER_XSF_H__GUARD
 #define __UPSE_LIBUPSE_UPSE_CONTAINER_XSF_H__GUARD
 
+#include "upse-types.h"
+
 #define MAX_UNKNOWN_TAGS			32
 
 typedef struct {

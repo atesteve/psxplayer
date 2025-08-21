@@ -23,8 +23,22 @@
 // - generic cleanup for the Peops release
 //
 //*************************************************************************//
-    u16 CALLBACK SPUreadDMA(void);
-void CALLBACK SPUreadDMAMem(u16 * pusPSXMem, int iSize);
-void CALLBACK SPUwriteDMA(u16 val);
-void CALLBACK SPUwriteDMAMem(u16 * pusPSXMem, int iSize);
 
+#ifndef __UPSE_PS1_SPU_DMA_HANDLER_H__
+#define __UPSE_PS1_SPU_DMA_HANDLER_H__
+
+#include "upse-types.h"
+
+#ifndef CALLBACK
+#define CALLBACK
+#endif
+
+u16 CALLBACK SPUreadDMA(void);
+
+void CALLBACK SPUreadDMAMem(u16 * pusPSXMem, int iSize);
+
+void CALLBACK SPUwriteDMA(u16 val);
+
+void CALLBACK SPUwriteDMAMem(u16 * pusPSXMem, int iSize);
+
+#endif

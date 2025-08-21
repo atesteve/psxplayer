@@ -1,7 +1,8 @@
-#include "upse-spu-internal.h"
 
 #ifndef __UPSE_PS1_SPU_BASE_H__
 #define __UPSE_PS1_SPU_BASE_H__
+
+#include "upse-spu-internal.h"
 
 upse_spu_state_t *upse_ps1_spu_open(upse_module_instance_t *ins);
 void upse_ps1_spu_setlength(upse_spu_state_t *spu, s32 stop, s32 fade);

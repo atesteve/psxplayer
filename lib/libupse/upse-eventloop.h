@@ -18,7 +18,11 @@
 #ifndef __UPSE__LIBUPSE__UPSE_EVENTLOOP_H__GUARD
 #define __UPSE__LIBUPSE__UPSE_EVENTLOOP_H__GUARD
 
-#include "upse-module.h"
+#include "upse-types.h"
+
+typedef struct upse_module upse_module_t;
+
+typedef void (*upse_audio_callback_func_t) (unsigned char *, long, const void *);
 
 void upse_eventloop_run(upse_module_t *mod);
 void upse_eventloop_stop(upse_module_t *mod);

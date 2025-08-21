@@ -20,6 +20,8 @@
 #ifndef _UPSE__LIBUPSE__UPSE_PS1_BIOS_BASE_H__GUARD
 #define _UPSE__LIBUPSE__UPSE_PS1_BIOS_BASE_H__GUARD
 
+#include "upse-module.h"
+
 /* these are for tracing in the executive layer --nenolod */
 extern char *biosA0n[256];
 extern char *biosB0n[256];

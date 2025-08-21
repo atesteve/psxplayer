@@ -20,6 +20,8 @@
 #ifndef _UPSE__LIBUPSE__UPSE_PS1_HAL_H__GUARD
 #define _UPSE__LIBUPSE__UPSE_PS1_HAL_H__GUARD
 
+#include "upse-module.h"
+
 void upse_ps1_hal_reset(upse_module_instance_t *ins);
 u8 upse_ps1_hal_read_8(upse_module_instance_t *ins, u32 add);
 u16 upse_ps1_hal_read_16(upse_module_instance_t *ins, u32 add);

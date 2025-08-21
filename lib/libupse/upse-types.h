@@ -32,8 +32,6 @@
 
 #ifndef WIN32_MSC
 
-#define INLINE inline
-
 typedef int8_t s8;
 typedef int16_t s16;
 typedef int32_t s32;
@@ -63,8 +61,6 @@ typedef unsigned int u32;
 
 typedef signed __int64 s64;
 typedef unsigned __int64 u64;
-
-#define INLINE
 
 #define strcasecmp stricmp
 #define strncasecmp strnicmp

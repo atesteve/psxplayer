@@ -19,7 +19,6 @@
 #define __UPSE__LIBUPSE__UPSE_STRING_H__GUARD
 
 #include "upse.h"
-#include "upse-string.h"
 
 /*
  * fgets() wrapper - inefficient, but it will do.

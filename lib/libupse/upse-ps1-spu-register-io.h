@@ -14,8 +14,13 @@
  * the UPSE source kit as COPYING.
  *
  * UPSE is offered without any warranty of any kind, explicit or implicit.
- */  
-    
+ */
+
+#ifndef __UPSE_PS1_SPU_REGISTER_IO_H__
+#define __UPSE_PS1_SPU_REGISTER_IO_H__
+
+#include "upse-types.h"
+
 #define H_SPUReverbAddr  0x0da2
 #define H_SPUirqAddr     0x0da4
 #define H_SPUaddr        0x0da6
@@ -143,6 +148,8 @@
 #define H_SPU_ADSRLevel22  0x0d68
 #define H_SPU_ADSRLevel23  0x0d78
 
+typedef struct upse_spu_state upse_spu_state_t;
+
 void SoundOn(upse_spu_state_t *spu, int start, int end, u16 val);
 
 void SoundOff(upse_spu_state_t *spu, int start, int end, u16 val);
@@ -154,3 +161,5 @@ void NoiseOn(upse_spu_state_t *spu, int start, int end, u16 val);
 void SetVolumeLR(upse_spu_state_t *spu, int right, u8 ch, s16 vol);
 
 void SetPitch(upse_spu_state_t *spu, int ch, u16 val);
+
+#endif

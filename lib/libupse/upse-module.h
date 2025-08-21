@@ -18,6 +18,9 @@
 #ifndef __UPSE__LIBUPSE__UPSE_MODULE_H__GUARD
 #define __UPSE__LIBUPSE__UPSE_MODULE_H__GUARD
 
+#include "upse-types.h"
+#include "upse-eventloop.h"
+
 typedef union
 {
     struct
@@ -79,7 +82,9 @@ typedef int (*upse_eventloop_render_func_t)(upse_module_instance_t *ins, s16 **s
 typedef void (*upse_eventloop_setcb_func_t)(upse_module_instance_t *ins, upse_audio_callback_func_t func, const void *user_data);
 typedef int (*upse_eventloop_seek_func_t)(upse_module_instance_t *ins, u32 t);
 
-typedef struct {
+typedef struct upse_psf upse_psf_t;
+
+typedef struct upse_module {
     void *opaque;
     upse_psf_t *metadata; /* XXX */
     upse_eventloop_func_t evloop_run;
@@ -90,6 +95,7 @@ typedef struct {
     upse_module_instance_t instance;
 } upse_module_t;
 
+typedef struct upse_iofuncs upse_iofuncs_t;
 typedef upse_module_t *(*upse_loader_func_t)(void *fileptr, const char *path, const upse_iofuncs_t *iofuncs);
 
 upse_loader_func_t upse_module_probe(void *fileptr, const upse_iofuncs_t *funcs);

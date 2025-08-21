@@ -22,7 +22,7 @@
 
 #include <stdio.h>
 
-#include "upse-internal.h"
+#include "upse-module.h"
 
 typedef enum
 {

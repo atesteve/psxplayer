@@ -20,6 +20,9 @@
 #ifndef __PSXCOUNTERS_H__
 #define __PSXCOUNTERS_H__
 
+#include "upse-types.h"
+#include "upse-module.h"
+
 typedef struct
 {
     u32 count, mode, target;

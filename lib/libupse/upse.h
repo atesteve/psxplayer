@@ -33,7 +33,7 @@ extern "C" {
 #include "upse-types.h"
 #include "upse-container-xsf.h"
 
-typedef struct
+typedef struct upse_psf
 {
     u16 rate;
     u32 length;
@@ -51,7 +51,7 @@ typedef struct
     upse_xsf_t *xsf;
 } upse_psf_t;
 
-typedef struct
+typedef struct upse_iofuncs
 {
     void *(*open_impl) (const char *path, const char *mode);
     size_t(*read_impl) (void *ptr, size_t size, size_t nmemb, void *file);
@@ -62,8 +62,6 @@ typedef struct
 
 upse_psf_t *upse_get_psf_metadata(const char *path, const upse_iofuncs_t * iofuncs);
 void upse_free_psf_metadata(upse_psf_t * info);
-
-typedef void (*upse_audio_callback_func_t) (unsigned char *, long, const void *);
 
 /*
  * Set the interpolation mode.

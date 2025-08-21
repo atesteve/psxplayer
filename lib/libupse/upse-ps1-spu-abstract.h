@@ -20,6 +20,8 @@
 #ifndef _UPSE__LIBUPSE__UPSE_PS1_SPU_ABSTRACT_H__GUARD
 #define _UPSE__LIBUPSE__UPSE_PS1_SPU_ABSTRACT_H__GUARD
 
+#include "upse-module.h"
+
 #define H_SPUirqAddr     0x0da4
 #define H_SPUaddr        0x0da6
 #define H_SPUdata        0x0da8
@@ -30,6 +32,7 @@
 #define H_SPUoff1        0x0d8c
 #define H_SPUoff2        0x0d8e
 
+typedef struct upse_spu_state upse_spu_state_t;
 
 void SPUirq(upse_module_instance_t *ins);
 u16 upse_ps1_spu_read_register(upse_spu_state_t *spu, u32 reg);

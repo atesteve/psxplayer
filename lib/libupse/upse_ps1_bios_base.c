@@ -390,7 +390,7 @@ typedef struct
     int CurThread;
 } upse_ps1_bios_state_t;
 
-static INLINE void softCall(upse_module_instance_t *ins, u32 pc)
+static inline void softCall(upse_module_instance_t *ins, u32 pc)
 {
     pc0 = pc;
     ra = 0x80001000;
@@ -398,7 +398,7 @@ static INLINE void softCall(upse_module_instance_t *ins, u32 pc)
 	upse_r3000_cpu_execute_block(ins);
 }
 
-static INLINE void softCall2(upse_module_instance_t *ins, u32 pc)
+static inline void softCall2(upse_module_instance_t *ins, u32 pc)
 {
     u32 sra = ra;
     pc0 = pc;
@@ -408,7 +408,7 @@ static INLINE void softCall2(upse_module_instance_t *ins, u32 pc)
     ra = sra;
 }
 
-static INLINE void DeliverEvent(upse_module_instance_t *ins, u32 ev, u32 spec)
+static inline void DeliverEvent(upse_module_instance_t *ins, u32 ev, u32 spec)
 {
     upse_ps1_bios_state_t *biosstate = ins->biosstate;
 
@@ -1661,7 +1661,7 @@ void biosInterrupt(upse_module_instance_t *ins)
     }
 }
 
-static INLINE void SaveRegs(upse_module_instance_t *ins)
+static inline void SaveRegs(upse_module_instance_t *ins)
 {
     upse_ps1_bios_state_t *biosstate = ins->biosstate;
 

@@ -15,10 +15,10 @@
  * UPSE is offered without any warranty of any kind, explicit or implicit.
  */
 
-#include "upse-types.h"
-
 #ifndef __UPSE_LIBUPSE_UPSE_FILESYSTEM_H__GUARD
 #define __UPSE_LIBUPSE_UPSE_FILESYSTEM_H__GUARD
+
+#include "upse-types.h"
 
 typedef struct _upse_filesystem_entry {
     struct _upse_filesystem_entry *prev, *next;
