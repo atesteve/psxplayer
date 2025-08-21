@@ -10,6 +10,11 @@ endif()
 add_compile_options(-g3)
 add_link_options(-g3)
 
+if(FSANITIZE)
+  add_compile_options(-fsanitize=${FSANITIZE})
+  add_link_options(-fsanitize=${FSANITIZE})
+endif()
+
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 qt_standard_project_setup()
 
