@@ -169,8 +169,6 @@ int upse_ps1_counter_run(upse_module_instance_t *ins)
     else
 	cycles = ins->cpustate.cycle - ctrstate->last;
 
-    cycles *= 1;
-
     if (cycles >= 16)
     {
 	if (!upse_ps1_spu_render(ins->spu, cycles))

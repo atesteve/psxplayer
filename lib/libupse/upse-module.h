@@ -98,7 +98,7 @@ typedef struct upse_module {
 typedef struct {
     upse_module_instance_t instance;
     size_t bump_ptr;
-    char storage[565112];
+    char storage[565132];
 } upse_snapshot_t;
 
 typedef struct upse_iofuncs upse_iofuncs_t;

@@ -24,7 +24,7 @@
 #define KEYON_DEFER_SAMPLES (64)
 
 //
-// Render max samples 
+// Render max samples
 //
 #define RENDERMAX (200)
 
@@ -839,6 +839,7 @@ static uint32 EMU_CALL resampler_modulated(
 */
 static EMU_INLINE sint32 EMU_CALL envelope_do(struct SPUCORE_ENVELOPE *env) {
   sint32 target = 0;
+  const float mult = 1;
   /*
   ** Clip envelope value in case it wrapped around
   */
@@ -871,10 +872,12 @@ attack:
       target = 0x7FFFFFFF;
       env->delta = ratelogtable[32+(MY_AR^0x7F)-0x18];
     }
+    env->delta *= mult;
   /* linear */
   } else {
     target = 0x7FFFFFFF;
     env->delta = ratelogtable[32+(MY_AR^0x7F)-0x10];
+    env->delta *= mult;
   }
   goto domax;
 
@@ -894,6 +897,7 @@ decay:
   case 6: env->delta = -ratelogtable[32+(4*(MY_DR^0x1F))-0x18+11]; break;
   case 7: env->delta = -ratelogtable[32+(4*(MY_DR^0x1F))-0x18+12]; break;
   }
+  env->delta *= mult;
   goto domax;
 
 sustain:
@@ -916,6 +920,7 @@ sustain:
       target = 0x7FFFFFFF;
       env->delta = ratelogtable[32+(MY_SR^0x7F)-0x10];
     }
+    env->delta *= mult;
   } else {
     if(env->level == 0x00000000) {
       env->delta = 0;
@@ -939,6 +944,7 @@ sustain:
       target = 0x00000000;
       env->delta = -ratelogtable[32+(MY_SR^0x7F)-0x0F];
     }
+    env->delta *= mult;
   }
   goto domax;
 
@@ -966,6 +972,7 @@ release:
     target = 0;
     env->delta = -ratelogtable[32+(4*(MY_RR^0x1F))-0x0C];
   }
+  env->delta *= mult;
   goto domax;
 
 domax:

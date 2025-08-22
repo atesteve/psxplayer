@@ -73,14 +73,14 @@ typedef struct upse_spu_state {
     upse_audio_callback_func_t cb;
     const void *cb_userdata;
 
-    u32 sampcount;
-    u32 decaybegin;
-    u32 decayend;
+    u64 cyclecount;
+    u64 decaybegin;
+    u64 decayend;
 
     s16 *pS;
 
-    u32 seektime;
-    s32 nextirq;
+    u64 seektime;
+    s64 nextirq;
 
     upse_spu_lowpass_info_t lowpass;
     upse_spu_nyquist_info_t nyquist;

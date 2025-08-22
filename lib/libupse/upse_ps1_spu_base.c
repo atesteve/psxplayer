@@ -50,8 +50,8 @@ void upse_ps1_spu_setlength(upse_spu_state_t *spu, s32 stop, s32 fade)
     }
     else
     {
-	stop = (stop * 441) / 10;
-	fade = (fade * 441) / 10;
+	stop = (stop * 169344ull) / 10;
+	fade = (fade * 169344ull) / 10;
 
 	spu->decaybegin = stop;
 	spu->decayend = stop + fade;
@@ -74,7 +74,7 @@ int upse_ps1_spu_seek(upse_module_instance_t *ins, u32 t)
     _ENTER;
 
     spu->seektime = t * 441 / 10;
-    if (spu->seektime > spu->sampcount)
+    if (spu->seektime > spu->cyclecount)
     {
         _LEAVE;
 	return 1;
@@ -92,39 +92,41 @@ int upse_ps1_spu_render(upse_spu_state_t *spu, u32 cycles)
     if ( spu == NULL )
       return (0);
 
-    s32 dosampies;
+    s32 dosamples;
     s32 temp;
 
+    const int multFactor = 384*1;
+
     spu->nextirq += cycles;
-    dosampies = spu->nextirq / 384;
-    if (!dosampies)
+    dosamples = spu->nextirq / multFactor;
+    if (!dosamples)
 	return (1);
-    spu->nextirq -= dosampies * 384;
-    temp = dosampies;
+    spu->nextirq -= dosamples * multFactor;
+    temp = dosamples;
 
 	spu_render( spu->pCore, spu->pS, temp );
 
-	for ( dosampies = 0; dosampies < temp; dosampies++ )
+	for ( dosamples = 0; dosamples < temp; dosamples++ )
 	{
-		if (spu->decaybegin != 0 && spu->sampcount >= spu->decaybegin)
+		if (spu->decaybegin != 0 && spu->cyclecount >= spu->decaybegin)
 		{
 			s32 dmul;
 			if (spu->decaybegin != 0)
 			{
-				s32 sl = spu->pS[dosampies * 2];
-				s32 sr = spu->pS[dosampies * 2 + 1];
-				if (spu->sampcount >= spu->decayend)
+				s32 sl = spu->pS[dosamples * 2];
+				s32 sr = spu->pS[dosamples * 2 + 1];
+				if (spu->cyclecount >= spu->decayend)
 					return (0);
-				dmul = 256 - (256 * (spu->sampcount - spu->decaybegin) / (spu->decayend - spu->decaybegin));
+				dmul = 256 - (256 * (spu->cyclecount - spu->decaybegin) / (spu->decayend - spu->decaybegin));
 				_DEBUG("dmul: %d", dmul);
 				sl = (sl * dmul) >> 8;
 				sr = (sr * dmul) >> 8;
-				spu->pS[dosampies * 2] = sl;
-				spu->pS[dosampies * 2 + 1] = sr;
+				spu->pS[dosamples * 2] = sl;
+				spu->pS[dosamples * 2 + 1] = sr;
 			}
 		}
 
-		spu->sampcount++;
+		spu->cyclecount += multFactor;
 	}
 
 	spu->pS += 2 * temp;
@@ -159,7 +161,7 @@ void upse_ps1_spu_set_audio_callback(upse_module_instance_t *ins, upse_audio_cal
 
 void upse_ps1_spu_finalize(upse_spu_state_t *spu)
 {
-    if ((spu->seektime != (u32) ~ 0) && spu->seektime > spu->sampcount)
+    if ((spu->seektime != (u32) ~ 0) && spu->seektime > spu->cyclecount)
     {
 	spu->pS = (s16 *) spu->pSpuBuffer;
 
@@ -185,7 +187,7 @@ void upse_ps1_spu_finalize(upse_spu_state_t *spu)
 
 int upse_ps1_spu_finalize_count(upse_spu_state_t *spu, s16 ** s)
 {
-    if ((spu->seektime != (u32) ~ 0) && spu->seektime > spu->sampcount)
+    if ((spu->seektime != (u32) ~ 0) && spu->seektime > spu->cyclecount)
     {
         spu->pS = (s16 *) spu->pSpuBuffer;
         *s = NULL;
@@ -241,7 +243,7 @@ upse_ps1_spu_open(upse_module_instance_t *ins)
 	spu->pCore = calloc(spu_get_state_size(1), 1);
 	spu_clear_state(spu->pCore, 1);
 
-    spu->sampcount = spu->nextirq = 0;
+    spu->cyclecount = spu->nextirq = 0;
     spu->seektime = (u32) ~ 0;
 
     spu->ins = ins;
