@@ -1,5 +1,7 @@
 #include "upse.h"
 
+#include <QAbstractEventDispatcher>
+
 namespace {
 
 upse_iofuncs_t stdio_funcs{
@@ -21,8 +23,9 @@ using upse_snapshot_ptr = std::unique_ptr<upse_snapshot_t, upse_snapshot_deleter
 
 } // namespace
 
-UpseModule::UpseModule(std::string const& file_name)
-    : _mod{upse_module_open(file_name.c_str(), &stdio_funcs)}
+UpseModule::UpseModule(std::string const& file_name, QObject* parent)
+    : QThread{parent}
+    , _mod{upse_module_open(file_name.c_str(), &stdio_funcs)}
 {
     if (!_mod) {
         return;
@@ -34,41 +37,47 @@ UpseModule::UpseModule(std::string const& file_name)
         _mod.reset();
         return;
     }
-
-    _thread.emplace([this] {
-        int16_t* buf;
-        int n, error;
-        do {
-            n = upse_eventloop_render(_mod.get(), &buf);
-            if (n > 0) {
-                pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
-            } else {
-                pa_simple_drain(_audio.get(), &error);
-            }
-            if (_pause) {
-                _continue->get();
-            }
-        } while (n > 0);
-    });
 }
 
-void UpseModule::seek(float pos)
+void UpseModule::run()
 {
     if (!_mod) {
         return;
     }
-    pos = std::min<float>(pos, 1);
-    pos = std::max<float>(pos, 0);
+
+    int16_t* buf;
+    int n, error;
+
+    while (!_shutdown) {
+        n = upse_eventloop_render(_mod.get(), &buf);
+
+        if (n > 0) {
+            pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
+        } else {
+            pa_simple_drain(_audio.get(), &error);
+        }
+
+        eventDispatcher()->processEvents((_paused || n == 0) ? QEventLoop::WaitForMoreEvents
+                                                             : QEventLoop::AllEvents);
+    }
+}
+
+void UpseModule::seek(int pos)
+{
+    if (!_mod) {
+        return;
+    }
+
+    float pos_f = pos / 100.0f;
+
+    pos_f = std::min<float>(pos_f, 1);
+    pos_f = std::max<float>(pos_f, 0);
 
     float const length = _mod->metadata->length;
 
-    upse_eventloop_seek(_mod.get(), static_cast<uint32_t>(length * pos));
+    upse_eventloop_seek(_mod.get(), static_cast<uint32_t>(length * pos_f));
 }
 
-UpseModule::~UpseModule()
-{
-    if (_mod) {
-        upse_eventloop_stop(_mod.get());
-        play();
-    }
-}
+void UpseModule::toggle_pause() { _paused = !_paused; }
+
+void UpseModule::shutdown() { _shutdown = true; }

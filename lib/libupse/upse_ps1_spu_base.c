@@ -73,7 +73,7 @@ int upse_ps1_spu_seek(upse_module_instance_t *ins, u32 t)
 
     _ENTER;
 
-    spu->seektime = t * 441 / 10;
+    spu->seektime = (t * 169344ull) / 10;
     if (spu->seektime > spu->cyclecount)
     {
         _LEAVE;

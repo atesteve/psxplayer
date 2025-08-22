@@ -12,10 +12,12 @@ class MainWindow : public QMainWindow {
 
 public:
     MainWindow(QWidget* parent = nullptr);
-    ~MainWindow() = default;
+    ~MainWindow();
 
 private:
     void open_file(QString const& file_name);
+    void connect_module_signals();
+    void shutdown_module();
 
     void dropEvent(QDropEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
