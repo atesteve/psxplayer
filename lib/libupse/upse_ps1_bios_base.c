@@ -1625,12 +1625,12 @@ void upse_ps1_bios_init(upse_module_instance_t *ins)
     ins->biosstate = biosstate;
 }
 
-void *upse_ps1_bios_take_snapshot(upse_module_instance_t *ins)
+void upse_ps1_bios_take_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot)
 {
     upse_ps1_bios_state_t *src_biosstate = ins->biosstate;
-    upse_ps1_bios_state_t *biosstate = malloc(sizeof(upse_ps1_bios_state_t));
+    upse_ps1_bios_state_t *biosstate = upse_snapshot_get_buffer(snapshot, sizeof(upse_ps1_bios_state_t));
     memcpy(biosstate, src_biosstate, sizeof(upse_ps1_bios_state_t));
-    return biosstate;
+    snapshot->instance.biosstate = biosstate;
 }
 
 void upse_ps1_bios_restore_snapshot(upse_module_instance_t *ins, void *snapshot_biosstate)

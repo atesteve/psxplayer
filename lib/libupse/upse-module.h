@@ -97,6 +97,8 @@ typedef struct upse_module {
 
 typedef struct {
     upse_module_instance_t instance;
+    size_t bump_ptr;
+    char storage[565112];
 } upse_snapshot_t;
 
 typedef struct upse_iofuncs upse_iofuncs_t;
@@ -110,6 +112,7 @@ void upse_module_close(upse_module_t *mod);
 upse_snapshot_t *upse_module_take_snapshot(upse_module_t *mod);
 void upse_module_restore_snapshot(upse_module_t *mod, upse_snapshot_t *snapshot);
 void upse_module_destroy_snapshot(upse_snapshot_t *snapshot);
+void *upse_snapshot_get_buffer(upse_snapshot_t *snapshot, size_t size);
 void upse_module_init(void);
 
 #endif

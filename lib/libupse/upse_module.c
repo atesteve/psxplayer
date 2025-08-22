@@ -17,6 +17,8 @@
 
 #include "upse-internal.h"
 
+#include <assert.h>
+
 static upse_loader_t *upse_loader_table_ = NULL;
 
 upse_loader_func_t
@@ -139,7 +141,21 @@ upse_module_restore_snapshot(upse_module_t *mod, upse_snapshot_t *snapshot)
 void
 upse_module_destroy_snapshot(upse_snapshot_t *snapshot)
 {
-    upse_ps1_destroy_snapshot(snapshot);
+    free(snapshot);
+}
+
+void *
+upse_snapshot_get_buffer(upse_snapshot_t *snapshot, size_t size)
+{
+    assert((snapshot->bump_ptr + size <= sizeof(snapshot->storage)) &&
+                "Snapshot storage size is not bit enough");
+    void *ret = snapshot->storage + snapshot->bump_ptr;
+    // Round to the next multiple of 8.
+    if (size % 8 != 0) {
+        size = (size & (~7ul)) + 8;
+    }
+    snapshot->bump_ptr += size;
+    return ret;
 }
 
 extern upse_module_t *upse_load_psf(void *fileptr, const char *path, const upse_iofuncs_t *funcs);

@@ -264,18 +264,18 @@ upse_ps1_spu_close(upse_spu_state_t *spu)
     free(spu);
 }
 
-upse_spu_state_t *
-upse_ps1_spu_take_snapshot(upse_module_instance_t *ins)
+void
+upse_ps1_spu_take_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot)
 {
-    upse_spu_state_t *spu = malloc(sizeof(upse_spu_state_t));
+    upse_spu_state_t *spu = upse_snapshot_get_buffer(snapshot, sizeof(upse_spu_state_t));
     upse_spu_state_t *src_spu = ins->spu;
     memcpy(spu, src_spu, sizeof(upse_spu_state_t));
 
     const size_t pCoreSize = spu_get_state_size(1);
-    spu->pCore = malloc(pCoreSize);
+    spu->pCore = upse_snapshot_get_buffer(snapshot, pCoreSize);
     memcpy(spu->pCore, src_spu->pCore, pCoreSize);
 
-    return spu;
+    snapshot->instance.spu = spu;
 }
 
 void

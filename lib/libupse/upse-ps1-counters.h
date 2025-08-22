@@ -37,7 +37,7 @@ typedef struct
 } upse_psx_counter_state_t;
 
 void upse_ps1_counter_init(upse_module_instance_t *ins);
-void *upse_ps1_counter_take_snapshot(upse_module_instance_t *ins);
+void upse_ps1_counter_take_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot);
 void upse_ps1_counter_restore_snapshot(upse_module_instance_t *ins, void *snapshot_ctrstate);
 void upse_ps1_counter_shutdown(upse_module_instance_t *ins);
 void upse_ps1_counter_update(upse_module_instance_t *ins);

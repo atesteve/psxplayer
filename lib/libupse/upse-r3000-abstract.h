@@ -80,7 +80,6 @@ void upse_ps1_branch_test(upse_module_instance_t *ins);
 void upse_ps1_execute_bios(upse_module_instance_t *ins);
 upse_snapshot_t *upse_ps1_take_snapshot(upse_module_instance_t *ins);
 void upse_ps1_restore_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot);
-void upse_ps1_destroy_snapshot(upse_snapshot_t *snapshot);
 
 int upse_r3000_cpu_init(upse_module_instance_t *ins);
 void upse_r3000_cpu_reset(upse_module_instance_t *ins);

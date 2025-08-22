@@ -8,7 +8,7 @@ upse_spu_state_t *upse_ps1_spu_open(upse_module_instance_t *ins);
 void upse_ps1_spu_setlength(upse_spu_state_t *spu, s32 stop, s32 fade);
 void upse_ps1_spu_close(upse_spu_state_t *spu);
 void upse_ps1_spu_finalize(upse_spu_state_t *spu);
-upse_spu_state_t *upse_ps1_spu_take_snapshot(upse_module_instance_t *ins);
+void upse_ps1_spu_take_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot);
 void upse_ps1_spu_restore_snapshot(upse_module_instance_t *ins, upse_spu_state_t *snapshot_spu);
 
 // External, called by SPU code.
