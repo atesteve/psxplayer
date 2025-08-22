@@ -63,6 +63,5 @@ find_package(ZLIB REQUIRED)
 target_link_libraries(${TARGET_LIBUPSE} PUBLIC ZLIB::ZLIB)
 
 set_target_properties(${TARGET} PROPERTIES
-    INTERPROCEDURAL_OPTIMIZATION TRUE
     CXX_STANDARD 23
 )
