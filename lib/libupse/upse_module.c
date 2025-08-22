@@ -127,9 +127,13 @@ upse_module_close(upse_module_t *mod)
 }
 
 upse_snapshot_t *
-upse_module_take_snapshot(upse_module_t *mod)
+upse_module_take_snapshot(upse_module_t *mod, upse_snapshot_t *snapshot)
 {
-    return upse_ps1_take_snapshot(&mod->instance);
+    if (snapshot == NULL) {
+        snapshot = (upse_snapshot_t *)malloc(sizeof(upse_snapshot_t));
+    }
+    upse_ps1_take_snapshot(&mod->instance, snapshot);
+    return snapshot;
 }
 
 void

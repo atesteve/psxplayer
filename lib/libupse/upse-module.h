@@ -109,7 +109,7 @@ int upse_module_is_supported(void *fileptr, const upse_iofuncs_t *funcs);
 int upse_file_is_supported(char *file, const upse_iofuncs_t *funcs);
 upse_module_t *upse_module_open(const char *file, const upse_iofuncs_t *funcs);
 void upse_module_close(upse_module_t *mod);
-upse_snapshot_t *upse_module_take_snapshot(upse_module_t *mod);
+upse_snapshot_t *upse_module_take_snapshot(upse_module_t *mod, upse_snapshot_t *snapshot);
 void upse_module_restore_snapshot(upse_module_t *mod, upse_snapshot_t *snapshot);
 void upse_module_destroy_snapshot(upse_snapshot_t *snapshot);
 void *upse_snapshot_get_buffer(upse_snapshot_t *snapshot, size_t size);

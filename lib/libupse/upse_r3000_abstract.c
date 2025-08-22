@@ -135,17 +135,14 @@ void upse_ps1_execute_bios(upse_module_instance_t *ins)
         upse_r3000_cpu_execute_block(ins);
 }
 
-upse_snapshot_t *upse_ps1_take_snapshot(upse_module_instance_t *ins)
+void upse_ps1_take_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot)
 {
-    upse_snapshot_t *snapshot = (upse_snapshot_t *)malloc(sizeof(upse_snapshot_t));
     memcpy(&snapshot->instance, ins, sizeof(upse_module_instance_t));
     snapshot->bump_ptr = 0;
 
     upse_ps1_spu_take_snapshot(ins, snapshot);
     upse_ps1_counter_take_snapshot(ins, snapshot);
     upse_ps1_bios_take_snapshot(ins, snapshot);
-
-    return snapshot;
 }
 
 void upse_ps1_restore_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot)
