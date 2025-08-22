@@ -152,7 +152,7 @@ void *
 upse_snapshot_get_buffer(upse_snapshot_t *snapshot, size_t size)
 {
     assert((snapshot->bump_ptr + size <= sizeof(snapshot->storage)) &&
-                "Snapshot storage size is not bit enough");
+                "Snapshot storage size is not big enough");
     void *ret = snapshot->storage + snapshot->bump_ptr;
     // Round to the next multiple of 8.
     if (size % 8 != 0) {
