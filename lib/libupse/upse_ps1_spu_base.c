@@ -87,6 +87,8 @@ int upse_ps1_spu_seek(upse_module_instance_t *ins, u32 t)
 
 #define CLIP(_x) {if(_x>32767) _x=32767; if(_x<-32767) _x=-32767;}
 
+extern float multiplier;
+
 int upse_ps1_spu_render(upse_spu_state_t *spu, u32 cycles)
 {
     if ( spu == NULL )
@@ -95,7 +97,7 @@ int upse_ps1_spu_render(upse_spu_state_t *spu, u32 cycles)
     s32 dosamples;
     s32 temp;
 
-    const int multFactor = 384*1;
+    const int multFactor = 384*multiplier;
 
     spu->nextirq += cycles;
     dosamples = spu->nextirq / multFactor;

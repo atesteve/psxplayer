@@ -8,6 +8,10 @@
 #include <QDropEvent>
 #include <QMimeData>
 
+extern "C" {
+float multiplier = 1;
+}
+
 static bool toggle{true};
 
 MainWindow::MainWindow(QWidget* parent)
@@ -39,10 +43,9 @@ MainWindow::MainWindow(QWidget* parent)
         toggle = !toggle;
     });
 
-    QObject::connect(_ui.horizontalSlider, &QSlider::sliderReleased, this, [this] {
-        float const pos =
-            static_cast<float>(_ui.horizontalSlider->value()) / _ui.horizontalSlider->maximum();
-        _module->seek(pos);
+    _ui.horizontalSlider->setTracking(false);
+    QObject::connect(_ui.horizontalSlider, &QSlider::valueChanged, this, [](int pos) {
+        multiplier = pos / 100.0;
     });
 }
 

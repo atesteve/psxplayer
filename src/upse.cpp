@@ -10,7 +10,16 @@ upse_iofuncs_t stdio_funcs{
     .tell_impl = (long (*)(void* file))ftell,
 };
 
-}
+struct upse_snapshot_deleter {
+    static void operator()(upse_snapshot_t* snapshot) noexcept
+    {
+        upse_module_destroy_snapshot(snapshot);
+    }
+};
+
+using upse_snapshot_ptr = std::unique_ptr<upse_snapshot_t, upse_snapshot_deleter>;
+
+} // namespace
 
 UpseModule::UpseModule(std::string const& file_name)
     : _mod{upse_module_open(file_name.c_str(), &stdio_funcs)}
@@ -28,11 +37,14 @@ UpseModule::UpseModule(std::string const& file_name)
 
     _thread.emplace([this] {
         int16_t* buf;
-        int n;
+        int n, error;
         do {
-            int error;
             n = upse_eventloop_render(_mod.get(), &buf);
-            pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
+            if (n > 0) {
+                pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
+            } else {
+                pa_simple_drain(_audio.get(), &error);
+            }
             if (_pause) {
                 _continue->get();
             }

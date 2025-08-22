@@ -12,10 +12,10 @@
 #include <atomic>
 
 struct upse_module_deleter {
-    void operator()(upse_module_t* mod) const noexcept { upse_module_close(mod); }
+    static void operator()(upse_module_t* mod) noexcept { upse_module_close(mod); }
 };
 
-using upse_unique_ptr = std::unique_ptr<upse_module_t, upse_module_deleter>;
+using upse_module_ptr = std::unique_ptr<upse_module_t, upse_module_deleter>;
 
 class UpseModule {
 public:
@@ -49,7 +49,7 @@ private:
     std::optional<std::promise<void>> _continue_promise;
     std::optional<std::future<void>> _continue;
     std::atomic_bool _pause;
-    upse_unique_ptr _mod;
+    upse_module_ptr _mod;
     pa_simple_unique_ptr _audio;
     std::optional<std::jthread> _thread;
 };

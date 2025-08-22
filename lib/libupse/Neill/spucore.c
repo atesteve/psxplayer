@@ -832,6 +832,8 @@ static uint32 EMU_CALL resampler_modulated(
 #define MY_RM (((env->reg_sr)>> 5)&0x01)
 #define MY_RR (((env->reg_sr)>> 0)&0x1F)
 
+extern float multiplier;
+
 /*
 ** - Sets the current envelope slope
 ** - Returns the max number of samples that can be processed at the current
@@ -839,7 +841,7 @@ static uint32 EMU_CALL resampler_modulated(
 */
 static EMU_INLINE sint32 EMU_CALL envelope_do(struct SPUCORE_ENVELOPE *env) {
   sint32 target = 0;
-  const float mult = 1;
+  const float mult = multiplier;
   /*
   ** Clip envelope value in case it wrapped around
   */
