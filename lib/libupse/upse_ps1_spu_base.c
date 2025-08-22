@@ -50,11 +50,11 @@ void upse_ps1_spu_setlength(upse_spu_state_t *spu, s32 stop, s32 fade)
     }
     else
     {
-	stop = (stop * 169344ull) / 10;
-	fade = (fade * 169344ull) / 10;
+	s64 stop_cycles = (stop * 169344ull) / 10;
+	s64 fade_cycles = (fade * 169344ull) / 10;
 
-	spu->decaybegin = stop;
-	spu->decayend = stop + fade;
+	spu->decaybegin = stop_cycles;
+	spu->decayend = stop_cycles + fade_cycles;
     }
 
     _LEAVE;
