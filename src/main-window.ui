@@ -28,7 +28,7 @@
        </widget>
       </item>
       <item>
-       <widget class="QSlider" name="horizontalSlider">
+       <widget class="QSliderMouseEvent" name="horizontalSlider">
         <property name="minimum">
          <number>0</number>
         </property>
@@ -137,6 +137,13 @@
    </property>
   </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QSliderMouseEvent</class>
+   <extends>QSlider</extends>
+   <header>slider-mouse-events.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

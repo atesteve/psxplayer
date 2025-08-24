@@ -26,6 +26,8 @@ qt6_add_executable(${TARGET}
   src/upse.h
   src/audio.cpp
   src/audio.h
+  src/slider-mouse-events.cpp
+  src/slider-mouse-events.h
 )
 qt_add_ui(${TARGET} SOURCES src/main-window.ui)
 
@@ -42,6 +44,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 target_include_directories(${TARGET} PRIVATE lib)
+target_include_directories(${TARGET} PRIVATE src)
 target_link_libraries(${TARGET} PRIVATE ${TARGET_LIBUPSE})
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

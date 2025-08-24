@@ -7,6 +7,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QToolTip>
 
 #include <filesystem>
 
@@ -43,6 +44,14 @@ MainWindow::MainWindow(QWidget* parent)
         _ui.horizontalSlider, &QSlider::sliderPressed, this, [this] { _movingSlider = true; });
     QObject::connect(
         _ui.horizontalSlider, &QSlider::sliderReleased, this, [this] { _movingSlider = false; });
+    QObject::connect(_ui.horizontalSlider, &QSlider::sliderMoved, [](int position) {
+        QToolTip::showText(
+            QCursor::pos(), ms_to_string(std::chrono::milliseconds{position}), nullptr);
+    });
+    QObject::connect(_ui.horizontalSlider, &QSliderMouseEvent::mouseMoved, [](int position) {
+        QToolTip::showText(
+            QCursor::pos(), ms_to_string(std::chrono::milliseconds{position}), nullptr);
+    });
 
     _ui.horizontalSlider->setTracking(false);
 
