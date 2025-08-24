@@ -8,6 +8,8 @@
 #include <QDropEvent>
 #include <QMimeData>
 
+#include <filesystem>
+
 namespace {
 
 QString ms_to_string(std::chrono::milliseconds ms)
@@ -60,6 +62,9 @@ void MainWindow::connect_module_signals()
 
 void MainWindow::load_file(QString const& file_name)
 {
+    this->setWindowTitle(QString::fromStdString(
+        std::filesystem::path{file_name.toStdString()}.filename().string() + " - PSXPlayer"));
+
     QMetaObject::invokeMethod(
         &_module, &UpseModule::load_file, Qt::ConnectionType::BlockingQueuedConnection, file_name);
 

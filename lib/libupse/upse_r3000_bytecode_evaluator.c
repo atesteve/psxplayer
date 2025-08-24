@@ -25,7 +25,7 @@ extern void upse_ps2_iop_call(u32 callnum);
 
 // These macros are used to assemble the repassembler functions
 
-//        if(!PSXM(ins->cpustate.pc)) puts("Whoops");   
+//        if(!PSXM(ins->cpustate.pc)) puts("Whoops");
 //        Fix this...
 
 //        printf("%08x ", ins->cpustate.pc);
@@ -88,7 +88,7 @@ static void delayReadWrite(upse_module_instance_t *ins, int reg, u32 bpc)
     upse_ps1_branch_test(ins);
 }
 
-// this defines shall be used with the tmp 
+// this defines shall be used with the tmp
 // of the next func (instead of _Funct_...)
 #define _tFunct_  ((tmp      ) & 0x3F)	// The funct part of the instruction register
 #define _tRd_     ((tmp >> 11) & 0x1F)	// The rd part of the instruction register
@@ -1085,8 +1085,16 @@ void upse_r3000_cpu_execute(upse_module_instance_t *ins)
 
 int upse_r3000_cpu_execute_render(upse_module_instance_t *ins, s16 **s)
 {
+    const u32 seek_start = upse_ps1_spu_tell_seek(ins);
+
     for (;;)
     {
+        const u32 seek_current = upse_ps1_spu_tell_seek(ins);
+        if (seek_current - seek_start > 5000) {
+            *s = NULL;
+            return 1;
+        }
+
         int r;
 
         if (!upse_ps1_counter_run(ins))

@@ -4,7 +4,11 @@
 
 #include <QAbstractEventDispatcher>
 
+#include <algorithm>
+#include <cassert>
+
 using namespace std::literals;
+using namespace std::chrono;
 
 extern "C" {
 float multiplier = 1;
@@ -19,6 +23,8 @@ upse_iofuncs_t stdio_funcs{
     .close_impl = (int (*)(void* file))fclose,
     .tell_impl = (long (*)(void* file))ftell,
 };
+
+constexpr auto SNAPSHOT_INTERVAL = 5s;
 
 } // namespace
 
@@ -48,15 +54,39 @@ void UpseModule::run()
     bool need_drain = false;
 
     while (!_shutdown) {
+        if (_seeking) {
+            multiplier = 10;
+            if (need_drain) {
+                pa_simple_drain(_audio.get(), &error);
+                need_drain = false;
+            }
+        }
+
         if (_mod) {
             n = upse_eventloop_render(_mod.get(), &buf);
+
+            auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
+            if (_snapshots.back().first + SNAPSHOT_INTERVAL < current_seek) {
+                take_snapshot();
+            }
+
+            if (n == 0) {
+                _seeking = false;
+                multiplier = 1;
+                slow_timer_fired();
+            }
         } else {
             n = 0;
         }
 
         if (n > 0 && buf) {
             pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
+            multiplier = 1;
             need_drain = true;
+            if (_seeking) {
+                _seeking = false;
+                slow_timer_fired();
+            }
         }
 
         if (need_drain && (n == 0 || !buf || _paused)) {
@@ -64,9 +94,19 @@ void UpseModule::run()
             need_drain = false;
         }
 
-        eventDispatcher()->processEvents((_paused || n == 0) ? QEventLoop::WaitForMoreEvents
-                                                             : QEventLoop::AllEvents);
+        eventDispatcher()->processEvents((!_seeking && (_paused || n == 0))
+                                             ? QEventLoop::WaitForMoreEvents
+                                             : QEventLoop::AllEvents);
     }
+}
+
+void UpseModule::take_snapshot()
+{
+    using pair = decltype(_snapshots)::value_type;
+
+    auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
+    _snapshots.emplace_back(pair{current_seek, {}});
+    upse_module_take_snapshot(_mod.get(), &_snapshots.back().second);
 }
 
 void UpseModule::seek(int pos)
@@ -77,15 +117,17 @@ void UpseModule::seek(int pos)
 
     int const current_seek = upse_eventloop_tell_seek(_mod.get());
 
-    if (pos < current_seek) {
-        upse_module_restore_snapshot(_mod.get(), &_snapshots.back().second);
+    auto it = std::ranges::upper_bound(_snapshots,
+                                       milliseconds{pos},
+                                       std::less<>{},
+                                       [](auto const& element) { return element.first; });
+    assert(it != _snapshots.begin());
+    if (pos < current_seek || prev(it)->first.count() > current_seek) {
+        upse_module_restore_snapshot(_mod.get(), &std::prev(it)->second);
     }
 
     upse_eventloop_seek(_mod.get(), pos);
-    int16_t* buf;
-    multiplier = 10;
-    upse_eventloop_render(_mod.get(), &buf);
-    multiplier = 1;
+    _seeking = true;
 }
 
 void UpseModule::load_file(QString const& file_name)
@@ -97,11 +139,12 @@ void UpseModule::load_file(QString const& file_name)
         return;
     }
 
-    _snapshots.emplace_back(std::pair<std::chrono::milliseconds, upse_snapshot_t>{0ms, {}});
-    upse_module_take_snapshot(_mod.get(), &_snapshots.back().second);
+    _snapshots.reserve(
+        (_mod->metadata->length / duration_cast<milliseconds>(SNAPSHOT_INTERVAL).count()) + 10);
+    take_snapshot();
 
     _paused = false;
-    emit total_time_changed(std::chrono::milliseconds{_mod->metadata->length});
+    emit total_time_changed(milliseconds{_mod->metadata->length});
     emit seek_changed(0ms);
 }
 
@@ -117,8 +160,8 @@ void UpseModule::shutdown()
 
 void UpseModule::slow_timer_fired()
 {
-    if (!_mod || _paused) {
+    if (!_mod || _seeking) {
         return;
     }
-    emit seek_changed(std::chrono::milliseconds{upse_eventloop_tell_seek(_mod.get())});
+    emit seek_changed(milliseconds{upse_eventloop_tell_seek(_mod.get())});
 }

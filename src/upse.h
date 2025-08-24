@@ -43,10 +43,13 @@ private slots:
     void slow_timer_fired();
 
 private:
+    void take_snapshot();
+
     upse_module_ptr _mod;
     pa_simple_unique_ptr _audio;
     bool _paused{};
     bool _shutdown{};
+    bool _seeking{};
     QTimer _slow_timer;
     std::vector<std::pair<std::chrono::milliseconds, upse_snapshot_t>> _snapshots;
 };
