@@ -85,6 +85,20 @@ int upse_ps1_spu_seek(upse_module_instance_t *ins, u32 t)
     return 0;
 }
 
+u32 upse_ps1_spu_tell_seek(upse_module_instance_t *ins)
+{
+    upse_spu_state_t *spu = ins->spu;
+    u32 ret;
+
+    _ENTER;
+
+    ret = (spu->cyclecount * 10) / 169344;
+
+    _LEAVE;
+
+    return ret;
+}
+
 #define CLIP(_x) {if(_x>32767) _x=32767; if(_x<-32767) _x=-32767;}
 
 extern float multiplier;

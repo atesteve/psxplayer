@@ -1,6 +1,10 @@
 #include "upse.h"
 
+#include <fmt/format.h>
+
 #include <QAbstractEventDispatcher>
+
+using namespace std::literals;
 
 namespace {
 
@@ -27,18 +31,26 @@ UpseModule::UpseModule(QObject* parent)
     : QThread{parent}
 {
     this->moveToThread(this);
+    _slow_timer.moveToThread(this);
 
     _audio = open_sound_device(44100);
 
     if (!_audio) {
         return;
     }
+
+    QObject::connect(&_slow_timer, &QTimer::timeout, this, &UpseModule::slow_timer_fired);
+    _slow_timer.setSingleShot(false);
 }
 
 void UpseModule::run()
 {
+    QThread::currentThread()->setObjectName("UpseModule");
+    _slow_timer.start(500);
+
     int16_t* buf;
     int n, error;
+    bool need_drain = false;
 
     while (!_shutdown) {
         if (_mod) {
@@ -49,8 +61,12 @@ void UpseModule::run()
 
         if (n > 0 && buf) {
             pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
-        } else {
+            need_drain = true;
+        }
+
+        if (need_drain && (n == 0 || !buf || _paused)) {
             pa_simple_drain(_audio.get(), &error);
+            need_drain = false;
         }
 
         eventDispatcher()->processEvents((_paused || n == 0) ? QEventLoop::WaitForMoreEvents
@@ -64,21 +80,36 @@ void UpseModule::seek(int pos)
         return;
     }
 
-    float pos_f = pos / 100.0f;
-
-    pos_f = std::min<float>(pos_f, 1);
-    pos_f = std::max<float>(pos_f, 0);
-
-    float const length = _mod->metadata->length;
-
-    upse_eventloop_seek(_mod.get(), static_cast<uint32_t>(length * pos_f));
+    upse_eventloop_seek(_mod.get(), pos);
 }
 
 void UpseModule::load_file(QString const& file_name)
 {
     _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs));
+
+    if (!_mod) {
+        return;
+    }
+
+    _paused = false;
+    emit total_time_changed(std::chrono::milliseconds{_mod->metadata->length});
+    emit seek_changed(0ms);
 }
 
 void UpseModule::toggle_pause() { _paused = !_paused; }
 
-void UpseModule::shutdown() { _shutdown = true; }
+void UpseModule::pause(bool state) { _paused = state; }
+
+void UpseModule::shutdown()
+{
+    _slow_timer.stop();
+    _shutdown = true;
+}
+
+void UpseModule::slow_timer_fired()
+{
+    if (!_mod || _paused) {
+        return;
+    }
+    emit seek_changed(std::chrono::milliseconds{upse_eventloop_tell_seek(_mod.get())});
+}

@@ -170,7 +170,7 @@ upse_parse_psf2_elf(upse_module_instance_t *ins, u8 *start, u32 len)
      *
      * ELF is the inspircd of binary formats.  It's everything COFF isn't.
      * Bloated, complex and poorly documented with lots of undocumented side
-     * effects.  Oh, and guess what!  SONY added more nonsense ontop like the 
+     * effects.  Oh, and guess what!  SONY added more nonsense ontop like the
      * .iopmod section which is some sort of codesigning verification that we
      * don't actually care about (and hey, neither does the console.)
      *
@@ -409,6 +409,7 @@ upse_load_psf2(void *fp, const char *path, const upse_iofuncs_t *iofuncs)
     ret->evloop_render = upse_r3000_cpu_execute_render;
     ret->evloop_setcb = upse_ps1_spu_set_audio_callback;
     ret->evloop_seek = upse_ps1_spu_seek;
+    ret->evloop_tell_seek = upse_ps1_spu_tell_seek;
 
     return ret;
 }

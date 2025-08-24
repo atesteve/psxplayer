@@ -55,3 +55,12 @@ upse_eventloop_seek(upse_module_t *mod, u32 time)
 
     return 0;
 }
+
+u32
+upse_eventloop_tell_seek(upse_module_t *mod)
+{
+    if (mod->evloop_tell_seek)
+        return mod->evloop_tell_seek(&mod->instance);
+
+    return 0;
+}

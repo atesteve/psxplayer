@@ -341,6 +341,7 @@ upse_load_psf(void *fp, const char *path, const upse_iofuncs_t * iofuncs)
     ret->evloop_render = upse_r3000_cpu_execute_render;
     ret->evloop_setcb = upse_ps1_spu_set_audio_callback;
     ret->evloop_seek = upse_ps1_spu_seek;
+    ret->evloop_tell_seek = upse_ps1_spu_tell_seek;
 
     _LEAVE;
     return ret;
