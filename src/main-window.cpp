@@ -8,10 +8,6 @@
 #include <QDropEvent>
 #include <QMimeData>
 
-extern "C" {
-float multiplier = 1;
-}
-
 namespace {
 
 QString ms_to_string(std::chrono::milliseconds ms)

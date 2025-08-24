@@ -6,6 +6,10 @@
 
 using namespace std::literals;
 
+extern "C" {
+float multiplier = 1;
+}
+
 namespace {
 
 upse_iofuncs_t stdio_funcs{
@@ -15,15 +19,6 @@ upse_iofuncs_t stdio_funcs{
     .close_impl = (int (*)(void* file))fclose,
     .tell_impl = (long (*)(void* file))ftell,
 };
-
-struct upse_snapshot_deleter {
-    static void operator()(upse_snapshot_t* snapshot) noexcept
-    {
-        upse_module_destroy_snapshot(snapshot);
-    }
-};
-
-using upse_snapshot_ptr = std::unique_ptr<upse_snapshot_t, upse_snapshot_deleter>;
 
 } // namespace
 
@@ -80,16 +75,30 @@ void UpseModule::seek(int pos)
         return;
     }
 
+    int const current_seek = upse_eventloop_tell_seek(_mod.get());
+
+    if (pos < current_seek) {
+        upse_module_restore_snapshot(_mod.get(), &_snapshots.back().second);
+    }
+
     upse_eventloop_seek(_mod.get(), pos);
+    int16_t* buf;
+    multiplier = 10;
+    upse_eventloop_render(_mod.get(), &buf);
+    multiplier = 1;
 }
 
 void UpseModule::load_file(QString const& file_name)
 {
     _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs));
+    _snapshots.clear();
 
     if (!_mod) {
         return;
     }
+
+    _snapshots.emplace_back(std::pair<std::chrono::milliseconds, upse_snapshot_t>{0ms, {}});
+    upse_module_take_snapshot(_mod.get(), &_snapshots.back().second);
 
     _paused = false;
     emit total_time_changed(std::chrono::milliseconds{_mod->metadata->length});

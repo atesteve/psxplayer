@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <chrono>
+#include <vector>
 
 struct upse_module_deleter {
     static void operator()(upse_module_t* mod) noexcept { upse_module_close(mod); }
@@ -47,4 +48,5 @@ private:
     bool _paused{};
     bool _shutdown{};
     QTimer _slow_timer;
+    std::vector<std::pair<std::chrono::milliseconds, upse_snapshot_t>> _snapshots;
 };
