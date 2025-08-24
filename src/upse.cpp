@@ -24,7 +24,7 @@ upse_iofuncs_t stdio_funcs{
     .tell_impl = (long (*)(void* file))ftell,
 };
 
-constexpr auto SNAPSHOT_INTERVAL = 5s;
+constexpr auto SNAPSHOT_INTERVAL = 30s;
 
 } // namespace
 
@@ -134,6 +134,7 @@ void UpseModule::load_file(QString const& file_name)
 {
     _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs));
     _snapshots.clear();
+    _snapshots.shrink_to_fit();
 
     if (!_mod) {
         return;
