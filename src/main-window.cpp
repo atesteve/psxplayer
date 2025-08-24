@@ -24,40 +24,29 @@ MainWindow::MainWindow(QWidget* parent)
             return;
         }
 
-        open_file(name);
+        load_file(name);
     });
 
     _ui.horizontalSlider->setTracking(false);
+
+    connect_module_signals();
+    _module.start();
 }
 
 void MainWindow::connect_module_signals()
 {
-    UpseModule& module = *_module;
-    QObject::connect(_ui.horizontalSlider, &QSlider::valueChanged, &module, &UpseModule::seek);
-    QObject::connect(_ui.playButton, &QPushButton::clicked, &module, &UpseModule::toggle_pause);
+    QObject::connect(_ui.horizontalSlider, &QSlider::valueChanged, &_module, &UpseModule::seek);
+    QObject::connect(_ui.playButton, &QPushButton::clicked, &_module, &UpseModule::toggle_pause);
 }
 
-void MainWindow::open_file(QString const& file_name)
+void MainWindow::load_file(QString const& file_name)
 {
-    shutdown_module();
+    QMetaObject::invokeMethod(
+        &_module, &UpseModule::load_file, Qt::ConnectionType::BlockingQueuedConnection, file_name);
 
-    _module.emplace(file_name.toStdString());
-    _module->moveToThread(&(*_module));
-
-    if (!*_module) {
+    if (!_module) {
         QMessageBox::critical(this, "Cannot open file", "Cannot open file");
         return;
-    }
-
-    connect_module_signals();
-    _module->start();
-}
-
-void MainWindow::shutdown_module()
-{
-    if (_module) {
-        QMetaObject::invokeMethod(&(*_module), &UpseModule::shutdown);
-        _module->wait();
     }
 }
 
@@ -74,7 +63,11 @@ void MainWindow::dropEvent(QDropEvent* event)
     if (list.empty()) {
         return;
     }
-    open_file(list[0].toLocalFile());
+    load_file(list[0].toLocalFile());
 }
 
-MainWindow::~MainWindow() { shutdown_module(); }
+MainWindow::~MainWindow()
+{
+    QMetaObject::invokeMethod(&_module, &UpseModule::shutdown);
+    _module.wait();
+}

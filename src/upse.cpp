@@ -23,35 +23,31 @@ using upse_snapshot_ptr = std::unique_ptr<upse_snapshot_t, upse_snapshot_deleter
 
 } // namespace
 
-UpseModule::UpseModule(std::string const& file_name, QObject* parent)
+UpseModule::UpseModule(QObject* parent)
     : QThread{parent}
-    , _mod{upse_module_open(file_name.c_str(), &stdio_funcs)}
 {
-    if (!_mod) {
-        return;
-    }
+    this->moveToThread(this);
 
-    _audio = open_sound_device(_mod->metadata->rate);
+    _audio = open_sound_device(44100);
 
     if (!_audio) {
-        _mod.reset();
         return;
     }
 }
 
 void UpseModule::run()
 {
-    if (!_mod) {
-        return;
-    }
-
     int16_t* buf;
     int n, error;
 
     while (!_shutdown) {
-        n = upse_eventloop_render(_mod.get(), &buf);
+        if (_mod) {
+            n = upse_eventloop_render(_mod.get(), &buf);
+        } else {
+            n = 0;
+        }
 
-        if (n > 0) {
+        if (n > 0 && buf) {
             pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
         } else {
             pa_simple_drain(_audio.get(), &error);
@@ -76,6 +72,11 @@ void UpseModule::seek(int pos)
     float const length = _mod->metadata->length;
 
     upse_eventloop_seek(_mod.get(), static_cast<uint32_t>(length * pos_f));
+}
+
+void UpseModule::load_file(QString const& file_name)
+{
+    _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs));
 }
 
 void UpseModule::toggle_pause() { _paused = !_paused; }

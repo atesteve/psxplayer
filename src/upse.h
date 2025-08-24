@@ -7,7 +7,6 @@
 #include <QThread>
 
 #include <memory>
-#include <string>
 
 struct upse_module_deleter {
     static void operator()(upse_module_t* mod) noexcept { upse_module_close(mod); }
@@ -19,7 +18,7 @@ class UpseModule : public QThread {
     Q_OBJECT
 
 public:
-    explicit UpseModule(std::string const& file_name, QObject *parent = nullptr);
+    explicit UpseModule(QObject *parent = nullptr);
     ~UpseModule() = default;
 
     void run() override;
@@ -30,6 +29,7 @@ public slots:
     void seek(int pos);
     void toggle_pause();
     void shutdown();
+    void load_file(QString const& file_name);
 
 private:
     upse_module_ptr _mod;
