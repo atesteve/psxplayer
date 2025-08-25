@@ -36,13 +36,15 @@
 #define PS '\\'
 #endif
 
+#include <stdio.h>
+
 #include <zlib.h>
 
 #include <sys/types.h>
 #include "upse-types.h"
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "control.h"
 #endif
 
 void __Log(char *fmt, ...);
@@ -67,6 +69,17 @@ void __Log(char *fmt, ...);
 #include "upse-container-xsf.h"
 #include "upse-filesystem.h"
 #include "upse-module.h"
+
+#define ASSERT(cond, format, ...) \
+    do { \
+        if (!(cond)) { \
+            fprintf(stderr, __FILE__ ":%d: %s: Assertion: ", __LINE__, __func__); \
+            fprintf(stderr, format __VA_OPT__(,) __VA_ARGS__); \
+            fprintf(stderr, "\n"); \
+            fflush(stderr); \
+            abort(); \
+        } \
+    } while(0)
 
 u8 *upse_get_buffer(void *fp, const upse_iofuncs_t *funcs, u32 *len);
 

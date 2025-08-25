@@ -101,8 +101,6 @@ u32 upse_ps1_spu_tell_seek(upse_module_instance_t *ins)
 
 #define CLIP(_x) {if(_x>32767) _x=32767; if(_x<-32767) _x=-32767;}
 
-extern float multiplier;
-
 int upse_ps1_spu_render(upse_spu_state_t *spu, u32 cycles)
 {
     if ( spu == NULL )
@@ -111,7 +109,7 @@ int upse_ps1_spu_render(upse_spu_state_t *spu, u32 cycles)
     s32 dosamples;
     s32 temp;
 
-    const int multFactor = 384*multiplier;
+    const int multFactor = 384 * spu->control->input.speed_multiplier;
 
     spu->nextirq += cycles;
     dosamples = spu->nextirq / multFactor;
@@ -243,7 +241,7 @@ upse_ps1_spu_setup_streams(upse_spu_state_t *spu)
 }
 
 upse_spu_state_t *
-upse_ps1_spu_open(upse_module_instance_t *ins)
+upse_ps1_spu_open(upse_module_instance_t *ins, emulation_control_t *control)
 {
 	static int initialized = 0;
 
@@ -257,7 +255,7 @@ upse_ps1_spu_open(upse_module_instance_t *ins)
 	}
 
 	spu->pCore = upse_ps1_alloc(ins, spu_get_state_size(1));
-	spu_clear_state(spu->pCore, 1);
+	spu_clear_state(spu->pCore, 1, control);
 
     spu->cyclecount = spu->nextirq = 0;
     spu->seektime = (u32) ~ 0;
@@ -267,6 +265,8 @@ upse_ps1_spu_open(upse_module_instance_t *ins)
     upse_ps1_spu_setup_streams(spu);		// prepare streaming
 
     upse_spu_lowpass_filter_redesign(spu, 44100);
+
+    spu->control = control;
 
     return spu;
 }

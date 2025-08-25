@@ -17,8 +17,6 @@
 
 #include "upse-internal.h"
 
-#include <assert.h>
-
 static upse_loader_t *upse_loader_table_ = NULL;
 
 upse_loader_func_t
@@ -89,7 +87,7 @@ upse_file_is_supported(char *file, const upse_iofuncs_t *funcs)
 }
 
 upse_module_t *
-upse_module_open(const char *file, const upse_iofuncs_t *funcs)
+upse_module_open(const char *file, const upse_iofuncs_t *funcs, emulation_control_t *control)
 {
     void *fileptr;
     upse_module_t *ret;
@@ -109,7 +107,7 @@ upse_module_open(const char *file, const upse_iofuncs_t *funcs)
     }
 
     funcs->seek_impl(fileptr, 0, SEEK_SET);
-    ret = functor(fileptr, file, funcs);
+    ret = functor(fileptr, file, funcs, control);
     funcs->close_impl(fileptr);
 
     return ret;
@@ -147,8 +145,8 @@ upse_module_destroy_snapshot(upse_snapshot_t *snapshot)
     free(snapshot);
 }
 
-extern upse_module_t *upse_load_psf(void *fileptr, const char *path, const upse_iofuncs_t *funcs);
-extern upse_module_t *upse_load_psf2(void *fileptr, const char *path, const upse_iofuncs_t *funcs);
+extern upse_module_t *upse_load_psf(void *fileptr, const char *path, const upse_iofuncs_t *funcs, emulation_control_t *control);
+extern upse_module_t *upse_load_psf2(void *fileptr, const char *path, const upse_iofuncs_t *funcs, emulation_control_t *control);
 
 void
 upse_module_init(void)

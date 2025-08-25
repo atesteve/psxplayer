@@ -305,7 +305,7 @@ upse_parse_psf2_elf(upse_module_instance_t *ins, u8 *start, u32 len)
 }
 
 upse_module_t *
-upse_load_psf2(void *fp, const char *path, const upse_iofuncs_t *iofuncs)
+upse_load_psf2(void *fp, const char *path, const upse_iofuncs_t *iofuncs, emulation_control_t *control)
 {
     upse_psf_t *psfi;
     upse_xsf_t *xsf;
@@ -369,7 +369,7 @@ upse_load_psf2(void *fp, const char *path, const upse_iofuncs_t *iofuncs)
         return NULL;
 
     upse_ps1_init(ins);
-    upse_ps1_reset(ins, UPSE_PSX_REV_PS2_IOP);
+    upse_ps1_reset(ins, UPSE_PSX_REV_PS2_IOP, control);
 
     initialPC = upse_parse_psf2_elf(&ret->instance, buf, buflen);
     initialSP = 0x801ffff0;

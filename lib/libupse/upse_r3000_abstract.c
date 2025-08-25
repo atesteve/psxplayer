@@ -20,7 +20,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 #include "upse-internal.h"
 
@@ -36,12 +35,14 @@ int upse_ps1_init(upse_module_instance_t *ins)
     return ret;
 }
 
-void upse_ps1_reset(upse_module_instance_t *ins, upse_psx_revision_t rev)
+void upse_ps1_reset(upse_module_instance_t *ins, upse_psx_revision_t rev, emulation_control_t *control)
 {
     upse_r3000_cpu_reset(ins);
     upse_ps1_memory_reset(ins);
 
-    ins->spu = upse_ps1_spu_open(ins);
+    ins->control = control;
+
+    ins->spu = upse_ps1_spu_open(ins, control);
 
     memset(&ins->cpustate, 0, sizeof(ins->cpustate));
 
@@ -126,8 +127,10 @@ void upse_ps1_execute_bios(upse_module_instance_t *ins)
 
 void *upse_ps1_alloc(upse_module_instance_t *ins, size_t size)
 {
-    assert((ins->bump_ptr + size <= sizeof(ins->storage)) &&
-                "Snapshot storage size is not big enough");
+    ASSERT((ins->bump_ptr + size <= sizeof(ins->storage)),
+                "Snapshot storage size is not big enough (needed: %lu, available: %lu)",
+                ins->bump_ptr + size, sizeof(ins->storage));
+
     char *ret = ins->storage + ins->bump_ptr;
     memset(ret, 0, size);
 

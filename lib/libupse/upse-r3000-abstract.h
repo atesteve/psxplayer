@@ -73,7 +73,7 @@ typedef enum
 #define _SetLink(x)     ins->cpustate.GPR.r[x] = _PC_ + 4;	// Sets the return address in the link register
 
 int upse_ps1_init(upse_module_instance_t *ins);
-void upse_ps1_reset(upse_module_instance_t *ins, upse_psx_revision_t rev);
+void upse_ps1_reset(upse_module_instance_t *ins, upse_psx_revision_t rev, emulation_control_t *control);
 void upse_ps1_exception(upse_module_instance_t *ins, u32 code, u32 bd);
 void upse_ps1_branch_test(upse_module_instance_t *ins);
 void upse_ps1_execute_bios(upse_module_instance_t *ins);

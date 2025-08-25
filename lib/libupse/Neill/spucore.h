@@ -8,6 +8,7 @@
 #define __PSX_SPUCORE_H__
 
 #include "emuconfig.h"
+#include "emucontrol.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,7 +16,7 @@ extern "C" {
 
 sint32 EMU_CALL spucore_init(void);
 uint32 EMU_CALL spucore_get_state_size(void);
-void   EMU_CALL spucore_clear_state(void *state);
+void   EMU_CALL spucore_clear_state(void *state, emulation_control_t *control);
 
 void   EMU_CALL spucore_set_mem_size(void *state, uint32 size);
 

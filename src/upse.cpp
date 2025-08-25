@@ -10,10 +10,6 @@
 using namespace std::literals;
 using namespace std::chrono;
 
-extern "C" {
-float multiplier = 1;
-}
-
 namespace {
 
 upse_iofuncs_t stdio_funcs{
@@ -55,7 +51,7 @@ void UpseModule::run()
 
     while (!_shutdown) {
         if (_seeking) {
-            multiplier = 10;
+            _control.input.speed_multiplier = 10;
             if (need_drain) {
                 pa_simple_drain(_audio.get(), &error);
                 need_drain = false;
@@ -72,7 +68,7 @@ void UpseModule::run()
 
             if (n == 0) {
                 _seeking = false;
-                multiplier = 1;
+                _control.input.speed_multiplier = 1;
                 slow_timer_fired();
             }
         } else {
@@ -81,7 +77,7 @@ void UpseModule::run()
 
         if (n > 0 && buf) {
             pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
-            multiplier = 1;
+            _control.input.speed_multiplier = 1;
             need_drain = true;
             if (_seeking) {
                 _seeking = false;
@@ -132,7 +128,7 @@ void UpseModule::seek(int pos)
 
 void UpseModule::load_file(QString const& file_name)
 {
-    _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs));
+    _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs, &_control));
     _snapshots.clear();
     _snapshots.shrink_to_fit();
 

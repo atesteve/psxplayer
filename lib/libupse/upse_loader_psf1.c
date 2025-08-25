@@ -280,7 +280,7 @@ upse_get_psf_metadata(const char *path, const upse_iofuncs_t * iofuncs)
 }
 
 upse_module_t *
-upse_load_psf(void *fp, const char *path, const upse_iofuncs_t * iofuncs)
+upse_load_psf(void *fp, const char *path, const upse_iofuncs_t * iofuncs, emulation_control_t *control)
 {
     upse_psf_t *psf;
     upse_module_t *ret;
@@ -292,7 +292,7 @@ upse_load_psf(void *fp, const char *path, const upse_iofuncs_t * iofuncs)
     ins = &ret->instance;
 
     upse_ps1_init(ins);
-    upse_ps1_reset(ins, UPSE_PSX_REV_PS1);
+    upse_ps1_reset(ins, UPSE_PSX_REV_PS1, control);
 
     if (!(psf = _upse_load_psf(ins, fp, path, 0, 0, iofuncs)))
     {

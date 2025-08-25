@@ -15,7 +15,6 @@
  * UPSE is offered without any warranty of any kind, explicit or implicit.
  */
 
-#include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -41,11 +40,11 @@
  *    this list of conditions and the following disclaimer.
  *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation and/or other 
+ *    this list of conditions and the following disclaimer in the documentation and/or other
  *    materials provided with the distribution.
  *
  * 3. Neither the names of R. Belmont and Richard Bannister nor the names of its contributors
- *    may be used to endorse or promote products derived from this software 
+ *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -111,32 +110,32 @@ upse_xsf_decode(u8 *input, u32 input_len, u8 **output, u64 *size)
 	u8 *decomp_dat, *tag_dec;
 	uLongf decomp_length, comp_length;
 	upse_xsf_t *c = NULL;
-	
+
 	// 32-bit pointer to data
 	buf = (u32 *)input;
-	
+
 	// Check we have a PSF format file.
 	if ((input[0] != 'P') || (input[1] != 'S') || (input[2] != 'F'))
 	{
 		return NULL;
 	}
-	
+
 	// Get our values
 	res_area = BFLIP32(buf[1]);
 	comp_length = BFLIP32(buf[2]);
 	comp_crc = BFLIP32(buf[3]);
-		
+
 	if (comp_length > 0)
 	{
 		// Check length
 		if (input_len < comp_length + 16)
 			return NULL;
-	
+
 		// Check CRC is correct
 		actual_crc = crc32(0, (unsigned char *)&buf[4+(res_area/4)], comp_length);
 		if (actual_crc != comp_crc)
 			return NULL;
-	
+
 		// Decompress data if any
 		decomp_dat = malloc(DECOMP_MAX_SIZE);
 		decomp_length = DECOMP_MAX_SIZE;
@@ -145,7 +144,7 @@ upse_xsf_decode(u8 *input, u32 input_len, u8 **output, u64 *size)
 			free(decomp_dat);
 			return NULL;
 		}
-	   	
+
 		// Resize memory buffer to what we actually need
 		decomp_dat = realloc(decomp_dat, (size_t)decomp_length + 1);
 	}
@@ -173,7 +172,7 @@ upse_xsf_decode(u8 *input, u32 input_len, u8 **output, u64 *size)
 	// set reserved section pointer
 	c->res_section = &buf[4];
 	c->res_size = res_area;
-	
+
 	// Return it
 	if (output != NULL && size != NULL)
 	{
@@ -187,12 +186,12 @@ upse_xsf_decode(u8 *input, u32 input_len, u8 **output, u64 *size)
 	input_len -= (comp_length + 16 + res_area);
 	if (input_len < 5)
 		return c;
-		
+
 	tag_dec = input + (comp_length + res_area + 16);
 	if ((tag_dec[0] == '[') && (tag_dec[1] == 'T') && (tag_dec[2] == 'A') && (tag_dec[3] == 'G') && (tag_dec[4] == ']'))
 	{
 		int tag, l, num_tags, data;
-		
+
 		// Tags found!
 		tag_dec += 5;
 		input_len -= 5;
@@ -230,14 +229,14 @@ upse_xsf_decode(u8 *input, u32 input_len, u8 **output, u64 *size)
 					c->tag_name[num_tags][l++] = *tag_dec;
 				}
 			}
-			
+
 			tag_dec++;
 			input_len--;
 		}
-				
+
 		// Now, process that tag array into what we expect
 		for (num_tags = 0; num_tags < MAX_UNKNOWN_TAGS; num_tags++)
-		{			
+		{
 			// See if tag belongs in one of the special fields we have
 			if (!strcasecmp(c->tag_name[num_tags], "_lib"))
 			{
@@ -313,7 +312,7 @@ upse_xsf_decode(u8 *input, u32 input_len, u8 **output, u64 *size)
 			}
 		}
 	}
-	
+
 	// Bingo
 	return c;
 }

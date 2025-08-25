@@ -92,6 +92,8 @@ typedef struct upse_spu_state {
     int dbpos, ubpos;
 
     s32 RateTable[160];
+
+    emulation_control_t *control;
 } upse_spu_state_t;
 
 extern void upse_spu_lowpass_filter_reset(upse_spu_state_t *spu);

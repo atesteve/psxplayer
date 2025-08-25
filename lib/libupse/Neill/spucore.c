@@ -469,6 +469,7 @@ struct SPUCORE_STATE {
   sint32 noiseval;
   uint32 irq_decoder_clock;
   uint32 irq_triggered_cycle;
+  emulation_control_t *control;
 };
 
 struct SPUCORE_IRQ_STATE {
@@ -483,7 +484,7 @@ uint32 EMU_CALL spucore_get_state_size(void) {
 /*
 ** Initialize SPU CORE state
 */
-void EMU_CALL spucore_clear_state(void *state) {
+void EMU_CALL spucore_clear_state(void *state, emulation_control_t *control) {
   /*
   ** Clear to zero
   */
@@ -501,6 +502,7 @@ void EMU_CALL spucore_clear_state(void *state) {
   spucore_setflag(state, SPUREG_FLAG_SINL, 1);
   spucore_setflag(state, SPUREG_FLAG_SINR, 1);
   SPUCORESTATE->irq_triggered_cycle = 0xFFFFFFFF;
+  SPUCORESTATE->control = control;
 }
 
 void EMU_CALL spucore_set_mem_size(void *state, uint32 size) {
@@ -832,16 +834,14 @@ static uint32 EMU_CALL resampler_modulated(
 #define MY_RM (((env->reg_sr)>> 5)&0x01)
 #define MY_RR (((env->reg_sr)>> 0)&0x1F)
 
-extern float multiplier;
-
 /*
 ** - Sets the current envelope slope
 ** - Returns the max number of samples that can be processed at the current
 **   slope
 */
-static EMU_INLINE sint32 EMU_CALL envelope_do(struct SPUCORE_ENVELOPE *env) {
+static EMU_INLINE sint32 EMU_CALL envelope_do(struct SPUCORE_ENVELOPE *env, emulation_control_t *control) {
   sint32 target = 0;
-  const float mult = multiplier;
+  const float mult = control ? control->input.speed_multiplier : 1;
   /*
   ** Clip envelope value in case it wrapped around
   */
@@ -1105,7 +1105,8 @@ static void EMU_CALL voices_off(struct SPUCORE_STATE *state, uint32 bits) {
 static int EMU_CALL enveloper(
   struct SPUCORE_ENVELOPE *env,
   sint32 *buf,
-  int samples
+  int samples,
+  emulation_control_t *control
 ) {
   int i = 0;
   while(i < samples) {
@@ -1113,7 +1114,7 @@ static int EMU_CALL enveloper(
     if(env->state == ENVELOPE_STATE_OFF) break;
     max = env->cachemax;
     if(!max) {
-      max = envelope_do(env);
+      max = envelope_do(env, control);
       env->cachemax = max;
     }
     e = env->level;
@@ -1160,7 +1161,8 @@ static int EMU_CALL render_channel_raw(
   sint32 *fmbuf,
   sint32 *nbuf,
   int samples,
-  struct SPUCORE_IRQ_STATE *irq_state
+  struct SPUCORE_IRQ_STATE *irq_state,
+  emulation_control_t *control
 ) {
   int r = samples;
   /* If the envelope is dead, don't bother anyway */
@@ -1173,7 +1175,7 @@ static int EMU_CALL render_channel_raw(
     if(buf) memcpy(buf, nbuf, 4 * r);
   }
   /* Do enveloping */
-  r = enveloper(&(c->env), buf, r);
+  r = enveloper(&(c->env), buf, r, control);
   /* If we were cut short by _either_, then the envelope state must be set
   ** to OFF */
   if(r < samples) c->env.state = ENVELOPE_STATE_OFF;
@@ -1195,7 +1197,8 @@ static int EMU_CALL render_channel_mono(
   sint32 *fmbuf,
   sint32 *nbuf,
   sint32 samples,
-  struct SPUCORE_IRQ_STATE *irq_state
+  struct SPUCORE_IRQ_STATE *irq_state,
+  emulation_control_t *control
 ) {
   sint32 n;
   sint32 r, r2;
@@ -1206,7 +1209,7 @@ static int EMU_CALL render_channel_mono(
   n = c->samples_until_pending_keyon;
 
   if(!n) {
-    return render_channel_raw(ram, memmax, c, buf, fmbuf, nbuf, samples, irq_state);
+    return render_channel_raw(ram, memmax, c, buf, fmbuf, nbuf, samples, irq_state, control);
   }
 
   //
@@ -1223,7 +1226,7 @@ static int EMU_CALL render_channel_mono(
   /*
   ** r = how many samples we actually will process
   */
-  r = render_channel_raw(ram, memmax, c, buf, fmbuf, nbuf, n, irq_state);
+  r = render_channel_raw(ram, memmax, c, buf, fmbuf, nbuf, n, irq_state, control);
 
   defer_remaining = c->samples_until_pending_keyon;
   if(buf) {
@@ -1267,7 +1270,7 @@ static int EMU_CALL render_channel_mono(
       s = &spare_state;
       spare_state.offset = irq_state->offset;
     }
-    r2 = render_channel_raw(ram, memmax, c, buf, fmbuf, nbuf, samples, s);
+    r2 = render_channel_raw(ram, memmax, c, buf, fmbuf, nbuf, samples, s, control);
 	if(irq_state && irq_state->triggered_cycle == 0xFFFFFFFF && spare_state.triggered_cycle != 0xFFFFFFFF) irq_state->triggered_cycle = spare_state.triggered_cycle + r * 768;
   }
 
@@ -1818,7 +1821,7 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
     sint32 *noise = (chanbit & masknoise) ? ibufn : NULL;
     if(!(main_l | main_r | verb_l | verb_r)) b = NULL;
     r = render_channel_mono(
-      ram, state->memsize, state->chan + ch, b, fm, noise, samples, irq_state_ptr
+      ram, state->memsize, state->chan + ch, b, fm, noise, samples, irq_state_ptr, state->control
     );
     if(!b) {
       memset(ibuffm, 0, 4 * samples);
@@ -2163,8 +2166,8 @@ void EMU_CALL spucore_setreg_voice(void *state, uint32 voice, uint32 n, uint32 v
   case SPUREG_VOICE_VOLL : volume_setmode(SPUCORESTATE->chan[voice].vol+0, value); break;
   case SPUREG_VOICE_VOLR : volume_setmode(SPUCORESTATE->chan[voice].vol+1, value); break;
   case SPUREG_VOICE_PITCH: SPUCORESTATE->chan[voice].voice_pitch = value; break;
-  case SPUREG_VOICE_ADSR1: SPUCORESTATE->chan[voice].env.reg_ad = value; SPUCORESTATE->chan[voice].env.cachemax = envelope_do(&SPUCORESTATE->chan[voice].env); break;
-  case SPUREG_VOICE_ADSR2: SPUCORESTATE->chan[voice].env.reg_sr = value; SPUCORESTATE->chan[voice].env.cachemax = envelope_do(&SPUCORESTATE->chan[voice].env); break;
+  case SPUREG_VOICE_ADSR1: SPUCORESTATE->chan[voice].env.reg_ad = value; SPUCORESTATE->chan[voice].env.cachemax = envelope_do(&SPUCORESTATE->chan[voice].env, SPUCORESTATE->control); break;
+  case SPUREG_VOICE_ADSR2: SPUCORESTATE->chan[voice].env.reg_sr = value; SPUCORESTATE->chan[voice].env.cachemax = envelope_do(&SPUCORESTATE->chan[voice].env, SPUCORESTATE->control); break;
 
   case SPUREG_VOICE_SSA:
     SPUCORESTATE->chan[voice].sample.start_block_addr &= ~mask;

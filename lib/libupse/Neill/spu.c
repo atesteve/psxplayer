@@ -47,6 +47,7 @@ struct SPU_STATE {
 
   uint16 mystery_dma[2];
 
+  emulation_control_t *control;
 };
 
 /*
@@ -72,7 +73,7 @@ uint32 EMU_CALL spu_get_state_size(uint8 version) {
 /*
 ** Initialize SPU state
 */
-void EMU_CALL spu_clear_state(void *state, uint8 version) {
+void EMU_CALL spu_clear_state(void *state, uint8 version, emulation_control_t *control) {
   uint32 offset;
   if(version != 2) { version = 1; }
   /*
@@ -83,6 +84,7 @@ void EMU_CALL spu_clear_state(void *state, uint8 version) {
   ** Set version
   */
   SPUSTATE->version = version;
+  SPUSTATE->control = control;
   /*
   ** Set offsets
   */
@@ -112,13 +114,13 @@ void EMU_CALL spu_clear_state(void *state, uint8 version) {
   */
   switch(version) {
   case 1:
-    spucore_clear_state(CORESTATE(0));
+    spucore_clear_state(CORESTATE(0), control);
     spucore_set_mem_size(CORESTATE(0), 0x80000);
     memset(SPURAM, 0, 0x80000);
     break;
   case 2:
-    spucore_clear_state(CORESTATE(0));
-    spucore_clear_state(CORESTATE(1));
+    spucore_clear_state(CORESTATE(0), control);
+    spucore_clear_state(CORESTATE(1), control);
     spucore_set_mem_size(CORESTATE(0), 0x200000);
     spucore_set_mem_size(CORESTATE(1), 0x200000);
     memset(SPURAM, 0, 0x200000);

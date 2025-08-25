@@ -20,8 +20,9 @@
 
 typedef struct upse_iofuncs upse_iofuncs_t;
 typedef struct upse_module upse_module_t;
+typedef struct emulation_config emulation_control_t;
 
-typedef upse_module_t *(*upse_loader_func_t)(void *fileptr, const char *path, const upse_iofuncs_t *iofuncs);
+typedef upse_module_t *(*upse_loader_func_t)(void *fileptr, const char *path, const upse_iofuncs_t *iofuncs, emulation_control_t *control);
 
 void upse_loader_add_magic(const char *bytes, int length, int offset, upse_loader_func_t loader);
 void upse_loader_del_magic(const char *bytes, int length, int offset);

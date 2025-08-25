@@ -8,6 +8,7 @@
 #define __PSX_SPU_H__
 
 #include "emuconfig.h"
+#include "emucontrol.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,7 +17,7 @@ extern "C" {
 sint32 EMU_CALL spu_init(void);
 /* version = 1 for PS1, 2 for PS2 */
 uint32 EMU_CALL spu_get_state_size(uint8 version);
-void   EMU_CALL spu_clear_state(void *state, uint8 version);
+void   EMU_CALL spu_clear_state(void *state, uint8 version, emulation_control_t *control);
 
 void   EMU_CALL spu_render    (void *state, sint16 *buf, uint32 samples);
 void   EMU_CALL spu_render_ext(void *state, sint16 *buf, sint16 *ext, uint32 samples);

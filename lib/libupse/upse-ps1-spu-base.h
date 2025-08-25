@@ -4,7 +4,7 @@
 
 #include "upse-spu-internal.h"
 
-upse_spu_state_t *upse_ps1_spu_open(upse_module_instance_t *ins);
+upse_spu_state_t *upse_ps1_spu_open(upse_module_instance_t *ins, emulation_control_t *control);
 void upse_ps1_spu_setlength(upse_spu_state_t *spu, s32 stop, s32 fade);
 void upse_ps1_spu_close(upse_spu_state_t *spu);
 void upse_ps1_spu_finalize(upse_spu_state_t *spu);

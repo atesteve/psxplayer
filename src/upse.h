@@ -21,7 +21,7 @@ class UpseModule : public QThread {
     Q_OBJECT
 
 public:
-    explicit UpseModule(QObject *parent = nullptr);
+    explicit UpseModule(QObject* parent = nullptr);
     ~UpseModule() = default;
 
     void run() override;
@@ -52,4 +52,11 @@ private:
     bool _seeking{};
     QTimer _slow_timer;
     std::vector<std::pair<std::chrono::milliseconds, upse_snapshot_t>> _snapshots;
+    emulation_control_t _control{
+        .input =
+            {
+                .speed_multiplier = 1,
+            },
+        .output = {},
+    };
 };
