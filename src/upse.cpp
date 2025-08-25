@@ -68,7 +68,7 @@ void UpseModule::run()
 
             if (n == 0) {
                 _seeking = false;
-                _control.input.speed_multiplier = 1;
+                _control.input.speed_multiplier = _speed;
                 slow_timer_fired();
             }
         } else {
@@ -77,7 +77,7 @@ void UpseModule::run()
 
         if (n > 0 && buf) {
             pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
-            _control.input.speed_multiplier = 1;
+            _control.input.speed_multiplier = _speed;
             need_drain = true;
             if (_seeking) {
                 _seeking = false;
@@ -148,6 +148,13 @@ void UpseModule::load_file(QString const& file_name)
 void UpseModule::toggle_pause() { _paused = !_paused; }
 
 void UpseModule::pause(bool state) { _paused = state; }
+
+void UpseModule::set_speed(float speed) {
+    _speed = speed;
+    if (!_seeking) {
+        _control.input.speed_multiplier = _speed;
+    }
+}
 
 void UpseModule::shutdown()
 {

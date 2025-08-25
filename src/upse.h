@@ -38,6 +38,7 @@ public slots:
     void pause(bool state);
     void shutdown();
     void load_file(QString const& file_name);
+    void set_speed(float speed);
 
 private slots:
     void slow_timer_fired();
@@ -50,6 +51,7 @@ private:
     bool _paused{};
     bool _shutdown{};
     bool _seeking{};
+    float _speed{1};
     QTimer _slow_timer;
     std::vector<std::pair<std::chrono::milliseconds, upse_snapshot_t>> _snapshots;
     emulation_control_t _control{

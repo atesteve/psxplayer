@@ -41,19 +41,25 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     QObject::connect(
-        _ui.horizontalSlider, &QSlider::sliderPressed, this, [this] { _movingSlider = true; });
+        _ui.seekSlider, &QSlider::sliderPressed, this, [this] { _movingSlider = true; });
     QObject::connect(
-        _ui.horizontalSlider, &QSlider::sliderReleased, this, [this] { _movingSlider = false; });
-    QObject::connect(_ui.horizontalSlider, &QSlider::sliderMoved, [](int position) {
+        _ui.seekSlider, &QSlider::sliderReleased, this, [this] { _movingSlider = false; });
+
+    QObject::connect(_ui.seekSlider, &QSlider::sliderMoved, [](int position) {
         QToolTip::showText(
             QCursor::pos(), ms_to_string(std::chrono::milliseconds{position}), nullptr);
     });
-    QObject::connect(_ui.horizontalSlider, &QSliderMouseEvent::mouseMoved, [](int position) {
+    QObject::connect(_ui.seekSlider, &QSliderMouseEvent::mouseMoved, [](int position) {
         QToolTip::showText(
             QCursor::pos(), ms_to_string(std::chrono::milliseconds{position}), nullptr);
     });
 
-    _ui.horizontalSlider->setTracking(false);
+    QObject::connect(_ui.speedSlider, &QSlider::sliderMoved, [](int position) {
+        QToolTip::showText(QCursor::pos(), QString::asprintf("%d%%", position * 5), nullptr);
+    });
+    QObject::connect(_ui.speedSlider, &QSliderMouseEvent::mouseMoved, [](int position) {
+        QToolTip::showText(QCursor::pos(), QString::asprintf("%d%%", position * 5), nullptr);
+    });
 
     connect_module_signals();
     _module.start();
@@ -61,12 +67,23 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::connect_module_signals()
 {
-    QObject::connect(_ui.horizontalSlider, &QSlider::valueChanged, &_module, &UpseModule::seek);
+    QObject::connect(_ui.seekSlider, &QSlider::valueChanged, &_module, &UpseModule::seek);
     QObject::connect(_ui.playButton, &QPushButton::clicked, &_module, &UpseModule::toggle_pause);
 
     QObject::connect(
         &_module, &UpseModule::total_time_changed, this, &MainWindow::total_time_changed);
     QObject::connect(&_module, &UpseModule::seek_changed, this, &MainWindow::seek_changed);
+
+    QObject::connect(_ui.speedSlider, &QSlider::valueChanged, [this](int position) {
+        position *= 5;
+        position = std::max(5, position);
+        _ui.speedLabel->setText(QString::asprintf("%d%%", position));
+
+        float const multiplier = position / 100.f;
+        _ui.seekSlider->setSingleStep(5000 * multiplier);
+
+        QMetaObject::invokeMethod(&_module, &UpseModule::set_speed, multiplier);
+    });
 }
 
 void MainWindow::load_file(QString const& file_name)
@@ -85,12 +102,12 @@ void MainWindow::load_file(QString const& file_name)
 
 void MainWindow::total_time_changed(std::chrono::milliseconds ms)
 {
-    _ui.horizontalSlider->blockSignals(true);
-    _ui.horizontalSlider->setSingleStep(5000);
-    _ui.horizontalSlider->setPageStep(10000);
-    _ui.horizontalSlider->setMaximum(ms.count());
-    _ui.horizontalSlider->setTickInterval(ms.count() / 4);
-    _ui.horizontalSlider->blockSignals(false);
+    _ui.seekSlider->blockSignals(true);
+    _ui.seekSlider->setSingleStep(5000);
+    _ui.seekSlider->setPageStep(10000);
+    _ui.seekSlider->setMaximum(ms.count());
+    _ui.seekSlider->setTickInterval(ms.count() / 4);
+    _ui.seekSlider->blockSignals(false);
 
     _ui.totalTime->setText(ms_to_string(ms));
 }
@@ -101,9 +118,9 @@ void MainWindow::seek_changed(std::chrono::milliseconds ms)
         return;
     }
 
-    _ui.horizontalSlider->blockSignals(true);
-    _ui.horizontalSlider->setValue(ms.count());
-    _ui.horizontalSlider->blockSignals(false);
+    _ui.seekSlider->blockSignals(true);
+    _ui.seekSlider->setValue(ms.count());
+    _ui.seekSlider->blockSignals(false);
     _ui.remainingTime->setText(ms_to_string(ms));
 }
 
