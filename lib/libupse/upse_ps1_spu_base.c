@@ -247,7 +247,7 @@ upse_ps1_spu_open(upse_module_instance_t *ins)
 {
 	static int initialized = 0;
 
-    upse_spu_state_t *spu = calloc(sizeof(upse_spu_state_t), 1);
+    upse_spu_state_t *spu = upse_ps1_alloc(ins, sizeof(upse_spu_state_t));
 
 	if ( !initialized )
 	{
@@ -256,7 +256,7 @@ upse_ps1_spu_open(upse_module_instance_t *ins)
 		initialized = 1;
 	}
 
-	spu->pCore = calloc(spu_get_state_size(1), 1);
+	spu->pCore = upse_ps1_alloc(ins, spu_get_state_size(1));
 	spu_clear_state(spu->pCore, 1);
 
     spu->cyclecount = spu->nextirq = 0;
@@ -280,28 +280,4 @@ upse_ps1_spu_close(upse_spu_state_t *spu)
 	free(spu->pCore);
 
     free(spu);
-}
-
-void
-upse_ps1_spu_take_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot)
-{
-    upse_spu_state_t *spu = upse_snapshot_get_buffer(snapshot, sizeof(upse_spu_state_t));
-    upse_spu_state_t *src_spu = ins->spu;
-    memcpy(spu, src_spu, sizeof(upse_spu_state_t));
-
-    const size_t pCoreSize = spu_get_state_size(1);
-    spu->pCore = upse_snapshot_get_buffer(snapshot, pCoreSize);
-    memcpy(spu->pCore, src_spu->pCore, pCoreSize);
-
-    snapshot->instance.spu = spu;
-}
-
-void
-upse_ps1_spu_restore_snapshot(upse_module_instance_t *ins, upse_spu_state_t *snapshot_spu)
-{
-    upse_spu_state_t *dst_spu = ins->spu;
-    void* pCore = dst_spu->pCore;
-    memcpy(dst_spu, snapshot_spu, sizeof(upse_spu_state_t));
-    dst_spu->pCore = pCore;
-    memcpy(dst_spu->pCore, snapshot_spu->pCore, spu_get_state_size(1));
 }

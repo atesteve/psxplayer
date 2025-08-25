@@ -1075,7 +1075,6 @@ void upse_r3000_cpu_execute(upse_module_instance_t *ins)
     {
 	if (!upse_ps1_counter_run(ins))
 	{
-	    upse_ps1_shutdown(ins);
 	    return;
 	}
 	upse_ps1_spu_finalize(ins->spu);
@@ -1118,9 +1117,5 @@ void upse_r3000_cpu_execute_block(upse_module_instance_t *ins)
 }
 
 void upse_r3000_cpu_clear(upse_module_instance_t *ins, u32 Addr, u32 Size)
-{
-}
-
-void upse_r3000_cpu_shutdown(upse_module_instance_t *ins)
 {
 }

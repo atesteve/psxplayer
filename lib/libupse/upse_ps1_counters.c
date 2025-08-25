@@ -89,7 +89,7 @@ void upse_ps1_counter_init(upse_module_instance_t *ins)
 {
     upse_psx_counter_state_t *ctrstate;
 
-    ctrstate = calloc(sizeof(upse_psx_counter_state_t), 1);
+    ctrstate = upse_ps1_alloc(ins, sizeof(upse_psx_counter_state_t));
 
     ctrstate->psxCounters[0].rate = 1;
     ctrstate->psxCounters[0].interrupt = 0x10;
@@ -112,26 +112,6 @@ void upse_ps1_counter_init(upse_module_instance_t *ins)
     upse_ps1_counter_update_fast(ins, 3);
     upse_ps1_counter_set(ins);
     ctrstate->last = 0;
-}
-
-void upse_ps1_counter_take_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot)
-{
-    upse_psx_counter_state_t *src_ctrstate = ins->ctrstate;
-    upse_psx_counter_state_t *ctrstate = upse_snapshot_get_buffer(snapshot, sizeof(upse_psx_counter_state_t));
-    memcpy(ctrstate, src_ctrstate, sizeof(upse_psx_counter_state_t));
-    snapshot->instance.ctrstate = ctrstate;
-}
-
-void upse_ps1_counter_restore_snapshot(upse_module_instance_t *ins, void *snapshot_ctrstate)
-{
-    upse_psx_counter_state_t *dst_ctrstate = ins->ctrstate;
-    upse_psx_counter_state_t *src_ctrstate = snapshot_ctrstate;
-    memcpy(dst_ctrstate, src_ctrstate, sizeof(upse_psx_counter_state_t));
-}
-
-void upse_ps1_counter_shutdown(upse_module_instance_t *ins)
-{
-    free(ins->ctrstate);
 }
 
 void upse_ps1_counter_sleep(upse_module_instance_t *ins)

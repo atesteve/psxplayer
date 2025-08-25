@@ -1347,7 +1347,7 @@ void upse_ps1_bios_init(upse_module_instance_t *ins)
     if (upse_has_custom_bios())
         return;
 
-    biosstate = calloc(sizeof(upse_ps1_bios_state_t), 1);
+    biosstate = upse_ps1_alloc(ins, sizeof(upse_ps1_bios_state_t));
     biosstate->heap_addr = 0;
     biosstate->CurThread = 0;
     biosstate->jmp_int = NULL;
@@ -1623,26 +1623,6 @@ void upse_ps1_bios_init(upse_module_instance_t *ins)
     PSXMu32(ins, 0x0894) = BFLIP32((0x3b << 26) | 0);
 
     ins->biosstate = biosstate;
-}
-
-void upse_ps1_bios_take_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot)
-{
-    upse_ps1_bios_state_t *src_biosstate = ins->biosstate;
-    upse_ps1_bios_state_t *biosstate = upse_snapshot_get_buffer(snapshot, sizeof(upse_ps1_bios_state_t));
-    memcpy(biosstate, src_biosstate, sizeof(upse_ps1_bios_state_t));
-    snapshot->instance.biosstate = biosstate;
-}
-
-void upse_ps1_bios_restore_snapshot(upse_module_instance_t *ins, void *snapshot_biosstate)
-{
-    upse_ps1_bios_state_t *dst_biosstate = ins->biosstate;
-    upse_ps1_bios_state_t *src_biosstate = snapshot_biosstate;
-    memcpy(dst_biosstate, src_biosstate, sizeof(upse_ps1_bios_state_t));
-}
-
-void upse_ps1_bios_shutdown(upse_module_instance_t *ins)
-{
-    free(ins->biosstate);
 }
 
 void biosInterrupt(upse_module_instance_t *ins)

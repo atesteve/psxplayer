@@ -28,9 +28,6 @@ extern char *biosB0n[256];
 extern char *biosC0n[256];
 
 void upse_ps1_bios_init(upse_module_instance_t *ins);
-void upse_ps1_bios_take_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot);
-void upse_ps1_bios_restore_snapshot(upse_module_instance_t *ins, void *snapshot_biosstate);
-void upse_ps1_bios_shutdown(upse_module_instance_t *ins);
 void upse_ps1_bios_exception(upse_module_instance_t *ins);
 
 extern void (*biosA0[256]) (upse_module_instance_t *ins);

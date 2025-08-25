@@ -75,7 +75,12 @@ typedef struct {
     u32 highest_addr_size;
 
     void (*spu_irq_callback)(void);
+
+    size_t bump_ptr;
+    char storage[565128];
 } upse_module_instance_t;
+
+void *upse_ps1_alloc(upse_module_instance_t *ins, size_t size);
 
 typedef void (*upse_eventloop_func_t)(upse_module_instance_t *ins);
 typedef int (*upse_eventloop_render_func_t)(upse_module_instance_t *ins, s16 **samples);
@@ -99,8 +104,6 @@ typedef struct upse_module {
 
 typedef struct {
     upse_module_instance_t instance;
-    size_t bump_ptr;
-    char storage[565132];
 } upse_snapshot_t;
 
 typedef struct upse_iofuncs upse_iofuncs_t;
@@ -114,7 +117,6 @@ void upse_module_close(upse_module_t *mod);
 upse_snapshot_t *upse_module_take_snapshot(upse_module_t *mod, upse_snapshot_t *snapshot);
 void upse_module_restore_snapshot(upse_module_t *mod, upse_snapshot_t *snapshot);
 void upse_module_destroy_snapshot(upse_snapshot_t *snapshot);
-void *upse_snapshot_get_buffer(upse_snapshot_t *snapshot, size_t size);
 void upse_module_init(void);
 
 #endif

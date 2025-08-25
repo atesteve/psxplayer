@@ -72,7 +72,6 @@ static inline s16 BFLIP16S(s16 x)
 
 int upse_ps1_memory_init(upse_module_instance_t *ins);
 void upse_ps1_memory_reset(upse_module_instance_t *ins);
-void upse_ps1_memory_shutdown(upse_module_instance_t *ins);
 
 u8 upse_ps1_memory_read_8(upse_module_instance_t *ins, u32 mem);
 u16 upse_ps1_memory_read_16(upse_module_instance_t *ins, u32 mem);

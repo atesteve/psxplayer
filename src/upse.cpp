@@ -141,7 +141,7 @@ void UpseModule::load_file(QString const& file_name)
     }
 
     _snapshots.reserve(
-        (_mod->metadata->length / duration_cast<milliseconds>(SNAPSHOT_INTERVAL).count()) + 10);
+        (_mod->metadata->length / duration_cast<milliseconds>(SNAPSHOT_INTERVAL).count()) + 1);
     take_snapshot();
 
     _paused = false;

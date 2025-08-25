@@ -122,7 +122,6 @@ upse_module_close(upse_module_t *mod)
         return;
 
     upse_free_psf_metadata(mod->metadata); /* XXX */
-    upse_ps1_shutdown(&mod->instance);
     free(mod);
 }
 
@@ -146,20 +145,6 @@ void
 upse_module_destroy_snapshot(upse_snapshot_t *snapshot)
 {
     free(snapshot);
-}
-
-void *
-upse_snapshot_get_buffer(upse_snapshot_t *snapshot, size_t size)
-{
-    assert((snapshot->bump_ptr + size <= sizeof(snapshot->storage)) &&
-                "Snapshot storage size is not big enough");
-    void *ret = snapshot->storage + snapshot->bump_ptr;
-    // Round to the next multiple of 8.
-    if (size % 8 != 0) {
-        size = (size & (~7ul)) + 8;
-    }
-    snapshot->bump_ptr += size;
-    return ret;
 }
 
 extern upse_module_t *upse_load_psf(void *fileptr, const char *path, const upse_iofuncs_t *funcs);

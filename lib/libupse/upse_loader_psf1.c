@@ -296,7 +296,6 @@ upse_load_psf(void *fp, const char *path, const upse_iofuncs_t * iofuncs)
 
     if (!(psf = _upse_load_psf(ins, fp, path, 0, 0, iofuncs)))
     {
-	upse_ps1_shutdown(ins);
         free(ret);
 	return NULL;
     }

@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include "upse-internal.h"
 
@@ -63,18 +64,6 @@ void upse_ps1_reset(upse_module_instance_t *ins, upse_psx_revision_t rev)
     /* start up the bios */
     if (upse_has_custom_bios())
         upse_ps1_execute_bios(ins);
-}
-
-void upse_ps1_shutdown(upse_module_instance_t *ins)
-{
-    upse_ps1_memory_shutdown(ins);
-    upse_ps1_bios_shutdown(ins);
-    upse_ps1_counter_shutdown(ins);
-
-    upse_r3000_cpu_shutdown(ins);
-
-    upse_ps1_spu_close(ins->spu);
-    ins->spu = NULL;
 }
 
 void upse_ps1_exception(upse_module_instance_t *ins, u32 code, u32 bd)
@@ -135,29 +124,27 @@ void upse_ps1_execute_bios(upse_module_instance_t *ins)
         upse_r3000_cpu_execute_block(ins);
 }
 
+void *upse_ps1_alloc(upse_module_instance_t *ins, size_t size)
+{
+    assert((ins->bump_ptr + size <= sizeof(ins->storage)) &&
+                "Snapshot storage size is not big enough");
+    char *ret = ins->storage + ins->bump_ptr;
+    memset(ret, 0, size);
+
+    // Round to the next multiple of 8.
+    if (size % 8 != 0) {
+        size = (size & (~7ul)) + 8;
+    }
+    ins->bump_ptr += size;
+    return ret;
+}
+
 void upse_ps1_take_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot)
 {
     memcpy(&snapshot->instance, ins, sizeof(upse_module_instance_t));
-    snapshot->bump_ptr = 0;
-
-    upse_ps1_spu_take_snapshot(ins, snapshot);
-    upse_ps1_counter_take_snapshot(ins, snapshot);
-    upse_ps1_bios_take_snapshot(ins, snapshot);
 }
 
 void upse_ps1_restore_snapshot(upse_module_instance_t *ins, upse_snapshot_t *snapshot)
 {
-    void *spu = ins->spu;
-    void *ctrstate = ins->ctrstate;
-    void *biosstate = ins->biosstate;
-
     memcpy(ins, &snapshot->instance, sizeof(upse_module_instance_t));
-
-    ins->spu = spu;
-    ins->ctrstate = ctrstate;
-    ins->biosstate = biosstate;
-
-    upse_ps1_spu_restore_snapshot(ins, snapshot->instance.spu);
-    upse_ps1_counter_restore_snapshot(ins, snapshot->instance.ctrstate);
-    upse_ps1_bios_restore_snapshot(ins, snapshot->instance.biosstate);
 }

@@ -136,10 +136,6 @@ void upse_ps1_memory_reset(upse_module_instance_t *ins)
     }
 }
 
-void upse_ps1_memory_shutdown(upse_module_instance_t *ins)
-{
-}
-
 u8 upse_ps1_memory_read_8(upse_module_instance_t *ins, u32 mem)
 {
     char *p;
