@@ -7,8 +7,14 @@
     <x>0</x>
     <y>0</y>
     <width>102</width>
-    <height>154</height>
+    <height>159</height>
    </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
   </property>
   <property name="windowTitle">
    <string>Form</string>
@@ -42,7 +48,7 @@
         <enum>QFrame::Shape::StyledPanel</enum>
        </property>
        <property name="frameShadow">
-        <enum>QFrame::Shadow::Raised</enum>
+        <enum>QFrame::Shadow::Sunken</enum>
        </property>
       </widget>
      </item>

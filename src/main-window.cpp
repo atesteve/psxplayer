@@ -8,6 +8,7 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QToolTip>
+#include <QWindowStateChangeEvent>
 
 #include <filesystem>
 
@@ -37,13 +38,18 @@ MainWindow::MainWindow(QWidget* parent)
         _channelWidgets.push_back(widget);
     }
 
-    this->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    this->setFixedHeight(sizeHint().height());
+    this->adjustSize();
 
-    QObject::connect(_ui.channelsCollapsableContainer,
-                     &KCollapsibleGroupBox::sizeChanged,
-                     this,
-                     [this] { this->setFixedHeight(sizeHint().height()); });
+    QObject::connect(
+        _ui.channelsCollapsableContainer, &KCollapsibleGroupBox::sizeChanged, this, [this] {
+            if (!(this->windowState() & Qt::WindowState::WindowMaximized)) {
+                auto const expanding = _ui.channelsCollapsableContainer->isExpanded();
+                this->resize(QSize{this->size().width(),
+                                   expanding
+                                       ? std::max(this->sizeHint().height(), this->size().height())
+                                       : this->sizeHint().height()});
+            }
+        });
 
     QObject::connect(_ui.actionOpen, &QAction::triggered, this, [this] {
         auto const name = QFileDialog::getOpenFileName(this);
@@ -153,6 +159,28 @@ void MainWindow::dropEvent(QDropEvent* event)
         return;
     }
     load_file(list[0].toLocalFile());
+}
+
+void MainWindow::keyPressEvent(QKeyEvent* event)
+{
+    auto const key = event->key();
+    if (key == Qt::Key_Space) {
+        event->setAccepted(true);
+        emit _ui.playButton->clicked();
+    }
+}
+
+void MainWindow::changeEvent(QEvent* event)
+{
+    QMainWindow::changeEvent(event);
+
+    if (event->type() == QEvent::WindowStateChange) {
+        if (this->windowState() & Qt::WindowState::WindowMaximized) {
+            _ui.channelsCollapsableContainer->setExpanded(true);
+        } else {
+            this->resize(QSize{this->size().width(), this->sizeHint().height()});
+        }
+    }
 }
 
 MainWindow::~MainWindow()

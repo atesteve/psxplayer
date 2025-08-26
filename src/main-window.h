@@ -4,7 +4,7 @@
 #include "upse.h"
 #include "channel-widget.h"
 
-#include <QMainWindow>
+#include <QWindow>
 
 #include <vector>
 
@@ -23,8 +23,10 @@ private:
     void load_file(QString const& file_name);
     void connect_module_signals();
 
+    void keyPressEvent(QKeyEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
     Ui::MainWindow _ui;
     UpseModule _module;

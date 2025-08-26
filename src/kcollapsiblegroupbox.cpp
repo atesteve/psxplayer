@@ -116,6 +116,7 @@ void KCollapsibleGroupBox::setExpanded(bool expanded)
         const int duration = qMax(1, style()->styleHint(QStyle::SH_Widget_Animation_Duration));
         d->animation->stop();
         d->animation->setDuration(duration);
+        d->animation->setUpdateInterval(0);
         d->animation->start();
 
         // when going from collapsed to expanded changing the child visibility calls an updateGeometry
