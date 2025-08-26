@@ -28,8 +28,12 @@ qt6_add_executable(${TARGET}
   src/audio.h
   src/slider-mouse-events.cpp
   src/slider-mouse-events.h
+  src/channel-widget.cpp
+  src/channel-widget.h
+  src/kcollapsiblegroupbox.cpp
+  src/kcollapsiblegroupbox.h
 )
-qt_add_ui(${TARGET} SOURCES src/main-window.ui)
+qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
 
 target_compile_options(${TARGET} PRIVATE -Wall -Wextra -pedantic)
 

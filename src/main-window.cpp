@@ -30,6 +30,21 @@ MainWindow::MainWindow(QWidget* parent)
 {
     _ui.setupUi(this);
 
+    for (int i = 0; i < 24; ++i) {
+        auto* const widget = new ChannelWidget(_ui.channelsCollapsableContainer);
+        widget->ui.title->setText(QString::asprintf("Channel %d", i));
+        _ui.channelsLayout->addWidget(widget, i / 8, i % 8);
+        _channelWidgets.push_back(widget);
+    }
+
+    this->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    this->setFixedHeight(sizeHint().height());
+
+    QObject::connect(_ui.channelsCollapsableContainer,
+                     &KCollapsibleGroupBox::sizeChanged,
+                     this,
+                     [this] { this->setFixedHeight(sizeHint().height()); });
+
     QObject::connect(_ui.actionOpen, &QAction::triggered, this, [this] {
         auto const name = QFileDialog::getOpenFileName(this);
 

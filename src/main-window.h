@@ -2,8 +2,11 @@
 
 #include "ui_main-window.h"
 #include "upse.h"
+#include "channel-widget.h"
 
 #include <QMainWindow>
+
+#include <vector>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -26,5 +29,5 @@ private:
     Ui::MainWindow _ui;
     UpseModule _module;
     bool _movingSlider{};
-    int _clips{};
+    std::vector<ChannelWidget*> _channelWidgets;
 };
