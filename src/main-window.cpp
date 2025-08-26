@@ -9,6 +9,7 @@
 #include <QMimeData>
 #include <QToolTip>
 #include <QWindowStateChangeEvent>
+#include <QStyle>
 
 #include <filesystem>
 
@@ -30,6 +31,8 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow{parent}
 {
     _ui.setupUi(this);
+    _ui.playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+    _ui.stopButton->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
 
     for (int i = 0; i < 24; ++i) {
         auto* const widget = new ChannelWidget(_ui.channelsCollapsableContainer);
