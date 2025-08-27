@@ -62,7 +62,7 @@ void UpseModule::run()
             }
         }
 
-        if (_mod) {
+        if (_mod && (!_paused || _seeking)) {
             n = upse_eventloop_render(_mod.get(), &buf);
 
             auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
