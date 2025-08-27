@@ -122,10 +122,6 @@ void MainWindow::connect_module_signals()
     QObject::connect(_ui.seekSlider, &QSlider::valueChanged, &_module, &UpseModule::seek);
     QObject::connect(_ui.playButton, &QPushButton::clicked, &_module, &UpseModule::toggle_pause);
 
-    QObject::connect(
-        &_module, &UpseModule::total_time_changed, this, &MainWindow::total_time_changed);
-    QObject::connect(&_module, &UpseModule::seek_changed, this, &MainWindow::seek_changed);
-
     QObject::connect(_ui.speedSlider, &QSlider::valueChanged, [this](int position) {
         position *= 5;
         position = std::max(5, position);
@@ -135,6 +131,43 @@ void MainWindow::connect_module_signals()
         _ui.seekSlider->setSingleStep(5000 * multiplier);
 
         QMetaObject::invokeMethod(&_module, &UpseModule::set_speed, multiplier);
+    });
+
+    QObject::connect(
+        &_module, &UpseModule::total_time_changed, this, &MainWindow::total_time_changed);
+    QObject::connect(&_module, &UpseModule::seek_changed, this, &MainWindow::seek_changed);
+
+    static void (*set_all_disabled)(QObject*, bool) = [](QObject* o, bool disabled) {
+        if (auto* widget = dynamic_cast<QWidget*>(o)) {
+            widget->setDisabled(disabled);
+        }
+        for (auto* child : o->children()) {
+            set_all_disabled(child, disabled);
+        }
+    };
+
+    using State = UpseModule::State;
+    QObject::connect(&_module, &UpseModule::state_changed, this, [this](State new_state) {
+        if (new_state == State::Unloaded) {
+            set_all_disabled(_ui.seekContainer, true);
+            set_all_disabled(_ui.controlsContainer, true);
+            return;
+        }
+        set_all_disabled(_ui.seekContainer, false);
+        set_all_disabled(_ui.controlsContainer, false);
+
+        switch (new_state) {
+        case State::Paused:
+        case State::Stopped:
+            _ui.playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+            break;
+        case State::Playing:
+            _ui.playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
+            break;
+        case State::Seeking:
+        case State::Unloaded:
+            ; // Do nothing.
+        }
     });
 }
 

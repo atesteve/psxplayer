@@ -47,6 +47,7 @@ UpseModule::UpseModule(QObject* parent)
 void UpseModule::run()
 {
     QThread::currentThread()->setObjectName("UpseModule");
+    emit state_changed(_state);
     _slow_timer.start(500);
 
     int16_t* buf;
@@ -54,7 +55,7 @@ void UpseModule::run()
     bool need_drain = false;
 
     while (!_shutdown) {
-        if (_seeking) {
+        if (_state == State::Seeking) {
             _control.input.speed_multiplier = 10;
             if (need_drain) {
                 pa_simple_drain(_audio.get(), &error);
@@ -62,7 +63,7 @@ void UpseModule::run()
             }
         }
 
-        if (_mod && (!_paused || _seeking)) {
+        if (_mod && (_state == State::Playing || _state == State::Seeking)) {
             n = upse_eventloop_render(_mod.get(), &buf);
 
             auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
@@ -71,7 +72,7 @@ void UpseModule::run()
             }
 
             if (n == 0) {
-                _seeking = false;
+                set_state(State::Playing);
                 _control.input.speed_multiplier = _speed;
                 slow_timer_fired();
             }
@@ -83,20 +84,20 @@ void UpseModule::run()
             pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
             _control.input.speed_multiplier = _speed;
             need_drain = true;
-            if (_seeking) {
-                _seeking = false;
+            if (_state == State::Seeking) {
+                set_state(_paused ? State::Paused : State::Playing);
                 slow_timer_fired();
             }
         }
 
-        if (need_drain && (n == 0 || !buf || _paused)) {
+        if (need_drain && _state != State::Playing) {
             pa_simple_drain(_audio.get(), &error);
             need_drain = false;
         }
 
-        eventDispatcher()->processEvents((!_seeking && (_paused || n == 0))
-                                             ? QEventLoop::WaitForMoreEvents
-                                             : QEventLoop::AllEvents);
+        eventDispatcher()->processEvents((_state == State::Seeking || _state == State::Playing)
+                                             ? QEventLoop::AllEvents
+                                             : QEventLoop::WaitForMoreEvents);
     }
 }
 
@@ -127,7 +128,7 @@ void UpseModule::seek(int pos)
     }
 
     upse_eventloop_seek(_mod.get(), pos);
-    _seeking = true;
+    set_state(State::Seeking);
 }
 
 void UpseModule::load_file(QString const& file_name)
@@ -137,6 +138,7 @@ void UpseModule::load_file(QString const& file_name)
     _snapshots.shrink_to_fit();
 
     if (!_mod) {
+        set_state(State::Unloaded);
         return;
     }
 
@@ -145,28 +147,49 @@ void UpseModule::load_file(QString const& file_name)
     take_snapshot();
 
     _paused = false;
+    set_state(State::Playing);
     emit total_time_changed(milliseconds{_mod->metadata->length});
     emit seek_changed(0ms);
 }
 
-void UpseModule::toggle_pause() { _paused = !_paused; }
+void UpseModule::toggle_pause()
+{
+    if (!_mod) {
+        return;
+    }
 
-void UpseModule::pause(bool state) { _paused = state; }
+    _paused = !_paused;
+
+    switch (_state) {
+    case State::Seeking:
+    case State::Playing:
+        set_state(State::Paused);
+        break;
+
+    case State::Stopped:
+    case State::Paused:
+        set_state(State::Playing);
+        break;
+
+    case State::Unloaded:
+        // Do nothing
+        break;
+    }
+}
 
 void UpseModule::set_speed(float speed)
 {
     _speed = speed;
-    if (!_seeking) {
+    if (_state != State::Seeking) {
         _control.input.speed_multiplier = _speed;
     }
 }
 
-void UpseModule::mute_channel(int ch, bool muted) {
-    _control.input.channel[ch].mute = muted;
-}
+void UpseModule::mute_channel(int ch, bool muted) { _control.input.channel[ch].mute = muted; }
 
-void UpseModule::set_channel_vol(int ch, float vol) {
-    _control.input.channel[ch].vol_multiplier  = vol;
+void UpseModule::set_channel_vol(int ch, float vol)
+{
+    _control.input.channel[ch].vol_multiplier = vol;
 }
 
 void UpseModule::shutdown()
@@ -177,8 +200,17 @@ void UpseModule::shutdown()
 
 void UpseModule::slow_timer_fired()
 {
-    if (!_mod || _seeking) {
+    if (!_mod || _state == State::Seeking) {
         return;
     }
     emit seek_changed(milliseconds{upse_eventloop_tell_seek(_mod.get())});
+}
+
+void UpseModule::set_state(State new_state)
+{
+    auto const old_state = _state;
+    _state = new_state;
+    if (old_state != new_state) {
+        state_changed(new_state);
+    }
 }
