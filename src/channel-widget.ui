@@ -44,6 +44,9 @@
     <layout class="QHBoxLayout" name="horizontalLayout_2">
      <item>
       <widget class="QPushButton" name="muteButton">
+       <property name="toolTip">
+        <string>Mute channel</string>
+       </property>
        <property name="text">
         <string/>
        </property>
@@ -54,6 +57,9 @@
      </item>
      <item>
       <widget class="QPushButton" name="soloButton">
+       <property name="toolTip">
+        <string>Solo channel</string>
+       </property>
        <property name="text">
         <string/>
        </property>
