@@ -2,20 +2,6 @@
 <ui version="4.0">
  <class>ChannelWidget</class>
  <widget class="QWidget" name="ChannelWidget">
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>102</width>
-    <height>159</height>
-   </rect>
-  </property>
-  <property name="sizePolicy">
-   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-    <horstretch>0</horstretch>
-    <verstretch>0</verstretch>
-   </sizepolicy>
-  </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
@@ -23,7 +9,7 @@
    <item>
     <widget class="QLabel" name="title">
      <property name="text">
-      <string>Channel #</string>
+      <string>Ch #</string>
      </property>
     </widget>
    </item>
@@ -57,10 +43,7 @@
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_2">
      <item>
-      <widget class="QToolButton" name="muteButton">
-       <property name="toolTip">
-        <string>Mute channel</string>
-       </property>
+      <widget class="QPushButton" name="muteButton">
        <property name="text">
         <string/>
        </property>
@@ -70,10 +53,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QToolButton" name="soloButton">
-       <property name="toolTip">
-        <string>Solo channel</string>
-       </property>
+      <widget class="QPushButton" name="soloButton">
        <property name="text">
         <string/>
        </property>

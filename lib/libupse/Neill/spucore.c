@@ -8,6 +8,8 @@
 #error "Hi I forgot to set EMU_COMPILE"
 #endif
 
+#include <math.h>
+
 #include "spucore.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1834,6 +1836,18 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
     for(i = 0; i < r; i++) {
       sint32 q_l = (v_l * ibuf[i]) >> 16;
       sint32 q_r = (v_r * ibuf[i]) >> 16;
+      if (state->control->input.channel[ch].mute) {
+        q_l = 0;
+        q_r = 0;
+      } else {
+        float vol = state->control->input.channel[ch].vol_multiplier;
+        const float a = 3.1623e-2;
+        const float b = 3.485;
+        const float bias = -0.03162;
+        vol = a * exp(vol * b) + bias;
+        q_l *= vol;
+        q_r *= vol;
+      }
       if(main_l) ibufmix[2*i+0] += q_l;
       if(main_r) ibufmix[2*i+1] += q_r;
       if(verb_l) ibufrvb[2*i+0] += q_l;

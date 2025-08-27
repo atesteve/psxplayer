@@ -36,9 +36,37 @@ MainWindow::MainWindow(QWidget* parent)
 
     for (int i = 0; i < 24; ++i) {
         auto* const widget = new ChannelWidget(_ui.channelsCollapsableContainer);
-        widget->ui.title->setText(QString::asprintf("Channel %d", i));
+        widget->ui.title->setText(QString::asprintf("Ch %d", i));
         _ui.channelsLayout->addWidget(widget, i / 8, i % 8);
         _channelWidgets.push_back(widget);
+        QObject::connect(
+            widget->ui.volumeBar, &QSlider::valueChanged, this, [this, ch = i](int value) {
+                QMetaObject::invokeMethod(
+                    &_module, &UpseModule::set_channel_vol, ch, value / 100.f);
+            });
+
+        QObject::connect(
+            widget->ui.muteButton, &QPushButton::toggled, this, [this, ch = i](bool checked) {
+                QMetaObject::invokeMethod(&_module, &UpseModule::mute_channel, ch, checked);
+                _channelWidgets[ch]->ui.volumeBar->setDisabled(checked);
+                _channelWidgets[ch]->ui.title->setDisabled(checked);
+            });
+
+        QObject::connect(
+            widget->ui.soloButton, &QPushButton::toggled, this, [this, ch = i](bool checked) {
+                for (int i = 0; i < 24; ++i) {
+                    if (i == ch) {
+                        if (checked) {
+                            _channelWidgets[i]->ui.muteButton->setChecked(false);
+                        }
+                        continue;
+                    }
+                    _channelWidgets[i]->ui.muteButton->setChecked(checked);
+                    _channelWidgets[i]->ui.soloButton->blockSignals(true);
+                    _channelWidgets[i]->ui.soloButton->setChecked(false);
+                    _channelWidgets[i]->ui.soloButton->blockSignals(false);
+                }
+            });
     }
 
     this->adjustSize();

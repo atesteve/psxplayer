@@ -38,6 +38,10 @@ UpseModule::UpseModule(QObject* parent)
 
     QObject::connect(&_slow_timer, &QTimer::timeout, this, &UpseModule::slow_timer_fired);
     _slow_timer.setSingleShot(false);
+
+    for (auto& channel : _control.input.channel) {
+        channel.vol_multiplier = 1.f;
+    }
 }
 
 void UpseModule::run()
@@ -149,11 +153,20 @@ void UpseModule::toggle_pause() { _paused = !_paused; }
 
 void UpseModule::pause(bool state) { _paused = state; }
 
-void UpseModule::set_speed(float speed) {
+void UpseModule::set_speed(float speed)
+{
     _speed = speed;
     if (!_seeking) {
         _control.input.speed_multiplier = _speed;
     }
+}
+
+void UpseModule::mute_channel(int ch, bool muted) {
+    _control.input.channel[ch].mute = muted;
+}
+
+void UpseModule::set_channel_vol(int ch, float vol) {
+    _control.input.channel[ch].vol_multiplier  = vol;
 }
 
 void UpseModule::shutdown()

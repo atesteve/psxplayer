@@ -39,6 +39,8 @@ public slots:
     void shutdown();
     void load_file(QString const& file_name);
     void set_speed(float speed);
+    void mute_channel(int ch, bool muted);
+    void set_channel_vol(int ch, float vol);
 
 private slots:
     void slow_timer_fired();
@@ -58,6 +60,7 @@ private:
         .input =
             {
                 .speed_multiplier = 1,
+                .channel = {},
             },
         .output = {},
     };
