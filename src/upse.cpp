@@ -72,7 +72,8 @@ void UpseModule::run()
             }
 
             if (n == 0) {
-                set_state(State::Playing);
+                set_state(State::Stopped);
+                _paused = true;
                 _control.input.speed_multiplier = _speed;
                 slow_timer_fired();
             }
@@ -158,16 +159,16 @@ void UpseModule::toggle_pause()
         return;
     }
 
-    _paused = !_paused;
-
     switch (_state) {
     case State::Seeking:
     case State::Playing:
+        _paused = true;
         set_state(State::Paused);
         break;
 
     case State::Stopped:
     case State::Paused:
+        _paused = false;
         set_state(State::Playing);
         break;
 

@@ -4,6 +4,7 @@
 #include "upse.h"
 #include "channel-widget.h"
 
+#include <QTimer>
 #include <QWindow>
 
 #include <vector>
@@ -30,6 +31,7 @@ private:
 
     Ui::MainWindow _ui;
     UpseModule _module;
+    QTimer _cursorTimer;
     bool _movingSlider{};
     std::vector<ChannelWidget*> _channelWidgets;
 };

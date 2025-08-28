@@ -7,5 +7,8 @@ ChannelWidget::ChannelWidget(QWidget* parent)
 {
     ui.setupUi(this);
     ui.muteButton->setIcon(style()->standardIcon(QStyle::SP_MediaVolumeMuted));
-    ui.soloButton->setIcon(style()->standardIcon(QStyle::SP_MediaVolume));
+    ui.muteButton->setFixedWidth(ui.muteButton->height());
+
+    ui.soloButton->setText("S");
+    ui.soloButton->setFixedWidth(ui.soloButton->height());
 }

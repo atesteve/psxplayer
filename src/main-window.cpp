@@ -156,6 +156,22 @@ void MainWindow::connect_module_signals()
         set_all_disabled(_ui.seekContainer, false);
         set_all_disabled(_ui.controlsContainer, false);
 
+        if (new_state == State::Seeking) {
+            _cursorTimer.disconnect();
+            QObject::connect(&_cursorTimer, &QTimer::timeout, this, [this] {
+                this->setCursor(Qt::BusyCursor);
+                _ui.remainingTime->setEnabled(false);
+            });
+            _cursorTimer.setInterval(500);
+            _cursorTimer.setSingleShot(true);
+            _cursorTimer.start();
+            return;
+        }
+
+        _cursorTimer.stop();
+        this->setCursor(Qt::ArrowCursor);
+        _ui.remainingTime->setEnabled(true);
+
         switch (new_state) {
         case State::Paused:
         case State::Stopped:
