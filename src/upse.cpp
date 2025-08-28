@@ -175,6 +175,9 @@ void UpseModule::toggle_pause()
         break;
 
     case State::Stopped:
+        seek(0);
+        [[fallthrough]];
+
     case State::Paused:
         _paused = false;
         set_state(State::Playing);
