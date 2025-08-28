@@ -121,6 +121,7 @@ void MainWindow::connect_module_signals()
 {
     QObject::connect(_ui.seekSlider, &QSlider::valueChanged, &_module, &UpseModule::seek);
     QObject::connect(_ui.playButton, &QPushButton::clicked, &_module, &UpseModule::toggle_pause);
+    QObject::connect(_ui.stopButton, &QPushButton::clicked, &_module, &UpseModule::stop);
 
     QObject::connect(_ui.speedSlider, &QSlider::valueChanged, [this](int position) {
         position *= 5;

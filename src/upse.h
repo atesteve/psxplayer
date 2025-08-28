@@ -44,6 +44,7 @@ signals:
 public slots:
     void seek(int pos);
     void toggle_pause();
+    void stop();
     void shutdown();
     void load_file(QString const& file_name);
     void set_speed(float speed);

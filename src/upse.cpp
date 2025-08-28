@@ -119,13 +119,21 @@ void UpseModule::seek(int pos)
 
     int const current_seek = upse_eventloop_tell_seek(_mod.get());
 
+    if (pos == current_seek) {
+        return;
+    }
+
     auto it = std::ranges::upper_bound(_snapshots,
                                        milliseconds{pos},
                                        std::less<>{},
                                        [](auto const& element) { return element.first; });
     assert(it != _snapshots.begin());
     if (pos < current_seek || prev(it)->first.count() > current_seek) {
-        upse_module_restore_snapshot(_mod.get(), &std::prev(it)->second);
+        upse_module_restore_snapshot(_mod.get(), &prev(it)->second);
+
+        if (prev(it)->first.count() == pos) {
+            return;
+        }
     }
 
     upse_eventloop_seek(_mod.get(), pos);
@@ -176,6 +184,17 @@ void UpseModule::toggle_pause()
         // Do nothing
         break;
     }
+}
+
+void UpseModule::stop()
+{
+    if (!_mod) {
+        return;
+    }
+
+    seek(0);
+    set_state(State::Stopped);
+    _paused = true;
 }
 
 void UpseModule::set_speed(float speed)
