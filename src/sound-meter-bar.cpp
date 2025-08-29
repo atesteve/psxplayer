@@ -32,8 +32,10 @@ SoundMeterBar::SoundMeterBar(QWidget* p)
 
 void SoundMeterBar::set_level(float l, float r)
 {
-    _l = toDB(l);
-    _r = toDB(r);
+    auto new_l = toDB(l);
+    auto new_r = toDB(r);
+    _l += (new_l - _l) * 0.75;
+    _r += (new_r - _r) * 0.75;
     update();
 }
 
@@ -45,6 +47,18 @@ void SoundMeterBar::paintEvent(QPaintEvent*)
     auto const rect = this->rect();
     painter.fillRect(rect, palette.alternateBase());
 
+    if (_orientation == Qt::Orientation::Horizontal) {
+        paint_horizontal(painter);
+    } else {
+        paint_vertical(painter);
+    }
+}
+
+void SoundMeterBar::paint_horizontal(QPainter& painter)
+{
+    auto const rect = this->rect();
+    auto const& palette = this->palette();
+
     auto font = painter.font();
     auto const fontHeight = QFontMetricsF{font}.ascent();
 
@@ -55,9 +69,9 @@ void SoundMeterBar::paintEvent(QPaintEvent*)
     textColor.setAlphaF(.5);
 
     painter.setPen(textColor);
-    painter.drawText(rect.topLeft() + QPointF{MARGIN, rect.height() * 0.3 + QFontMetricsF{font}.ascent() / 2},
+    painter.drawText(rect.topLeft() + QPointF{MARGIN, rect.height() * 0.3 + desiredFontHeight / 2},
                      "L");
-    painter.drawText(rect.topLeft() + QPointF{MARGIN, rect.height() * 0.7 + QFontMetricsF{font}.ascent() / 2},
+    painter.drawText(rect.topLeft() + QPointF{MARGIN, rect.height() * 0.7 + desiredFontHeight / 2},
                      "R");
 
     auto const draw_bar = [&](float value, QPointF base, int max_length) {
@@ -77,4 +91,43 @@ void SoundMeterBar::paintEvent(QPaintEvent*)
     draw_bar(_r,
              rect.topLeft() + QPointF{MARGIN * 2 + text_width, rect.height() * 0.7},
              rect.width() - MARGIN * 3 - text_width);
+}
+
+void SoundMeterBar::paint_vertical(QPainter& painter)
+{
+    auto const rect = this->rect();
+    auto const& palette = this->palette();
+
+    auto font = painter.font();
+    auto const fontWidth = QFontMetricsF{font}.horizontalAdvance("L");
+
+    auto const desiredFontWidth = rect.width() * 0.15;
+    font.setPointSizeF(font.pointSizeF() * (desiredFontWidth / fontWidth));
+    painter.setFont(font);
+    auto textColor = palette.text().color();
+    textColor.setAlphaF(.5);
+
+    painter.setPen(textColor);
+    painter.drawText(
+        rect.bottomLeft() + QPointF{rect.width() * 0.3 - desiredFontWidth / 2, -MARGIN}, "L");
+    painter.drawText(
+        rect.bottomLeft() + QPointF{rect.width() * 0.7 - desiredFontWidth / 2, -MARGIN}, "R");
+
+    auto const draw_bar = [&](float value, QPointF base, int max_length) {
+        QPainterStateGuard guard{&painter};
+        painter.setPen(Qt::NoPen);
+        painter.fillRect(QRectF{base.x() - rect.width() * (BAR_WIDTH / 2),
+                                base.y(),
+                                rect.width() * BAR_WIDTH,
+                                -std::lerp(0, max_length, value)},
+                         palette.highlight());
+    };
+
+    auto const text_height = QFontMetricsF{font}.ascent();
+    draw_bar(_l,
+             rect.bottomLeft() + QPointF{rect.width() * 0.3, -MARGIN * 2 - text_height},
+             rect.height() - MARGIN * 3 - text_height);
+    draw_bar(_r,
+             rect.bottomLeft() + QPointF{rect.width() * 0.7, -MARGIN * 2 - text_height},
+             rect.height() - MARGIN * 3 - text_height);
 }

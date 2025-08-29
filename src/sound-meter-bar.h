@@ -18,6 +18,8 @@ public slots:
 
 private:
     void paintEvent(QPaintEvent*) override;
+    void paint_horizontal(QPainter& painter);
+    void paint_vertical(QPainter& painter);
 
     Qt::Orientation _orientation = Qt::Orientation::Horizontal;
     float _l{};

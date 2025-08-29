@@ -29,14 +29,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QFrame" name="frame">
-       <property name="frameShape">
-        <enum>QFrame::Shape::StyledPanel</enum>
-       </property>
-       <property name="frameShadow">
-        <enum>QFrame::Shadow::Sunken</enum>
-       </property>
-      </widget>
+      <widget class="SoundMeterBar" name="soundMeterBar" native="true"/>
      </item>
     </layout>
    </item>
@@ -85,6 +78,14 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SoundMeterBar</class>
+   <extends>QWidget</extends>
+   <header>sound-meter-bar.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

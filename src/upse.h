@@ -41,6 +41,7 @@ signals:
     void seek_changed(std::chrono::milliseconds ms);
     void state_changed(State state);
     void sound_level_changed(float l, float r);
+    void channel_sound_level_changed(int ch, float l, float r);
 
 public slots:
     void seek(int pos);

@@ -37,8 +37,11 @@ MainWindow::MainWindow(QWidget* parent)
     for (int i = 0; i < 24; ++i) {
         auto* const widget = new ChannelWidget(_ui.channelsCollapsableContainer);
         widget->ui.title->setText(QString::asprintf("Ch %d", i));
+        widget->ui.soundMeterBar->setOrientation(Qt::Orientation::Vertical);
+        widget->setFixedWidth(75);
         _ui.channelsLayout->addWidget(widget, i / 8, i % 8);
         _channelWidgets.push_back(widget);
+
         QObject::connect(
             widget->ui.volumeBar, &QSlider::valueChanged, this, [this, ch = i](int value) {
                 QMetaObject::invokeMethod(
@@ -188,6 +191,12 @@ void MainWindow::connect_module_signals()
 
     QObject::connect(
         &_module, &UpseModule::sound_level_changed, _ui.soundMeterBar, &SoundMeterBar::set_level);
+
+    QObject::connect(
+        &_module, &UpseModule::channel_sound_level_changed, [this](int channel, float l, float r) {
+            QMetaObject::invokeMethod(
+                _channelWidgets[channel]->ui.soundMeterBar, &SoundMeterBar::set_level, l, r);
+        });
 }
 
 void MainWindow::load_file(QString const& file_name)

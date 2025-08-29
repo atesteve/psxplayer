@@ -1842,9 +1842,28 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
     if(r < samples) memset(ibuffm + r, 0, 4 * (samples-r));
     v_l = volume_getlevel(state->chan[ch].vol+0);
     v_r = volume_getlevel(state->chan[ch].vol+1);
+    if (r == 0) {
+      for (int i = 0; i < samples; ++i) {
+        push_sample(0, 0,
+                state->control->output.channel_window[ch].l, state->control->output.channel_window[ch].r,
+                &state->control->output.channel_window[ch].p,
+                ARRAY_SIZE(state->control->output.channel_window[ch].l));
+      }
+    }
     for(i = 0; i < r; i++) {
       sint32 q_l = (v_l * ibuf[i]) >> 16;
       sint32 q_r = (v_r * ibuf[i]) >> 16;
+
+      {
+        sint16 l = q_l;
+        sint16 r = q_r;
+        CLIP_PCM_2(l,r);
+        push_sample(l, r,
+                state->control->output.channel_window[ch].l, state->control->output.channel_window[ch].r,
+                &state->control->output.channel_window[ch].p,
+                ARRAY_SIZE(state->control->output.channel_window[ch].l));
+      }
+
       if (state->control->input.channel[ch].mute) {
         q_l = 0;
         q_r = 0;
@@ -1857,6 +1876,7 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
         q_l *= vol;
         q_r *= vol;
       }
+
       if(main_l) ibufmix[2*i+0] += q_l;
       if(main_r) ibufmix[2*i+1] += q_r;
       if(verb_l) ibufrvb[2*i+0] += q_l;

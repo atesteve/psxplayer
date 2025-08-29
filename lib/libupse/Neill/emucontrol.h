@@ -18,6 +18,8 @@
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]) + __must_be_array(arr))
 
+#define SAMPLE_WINDOW_SIZE (1024)
+
 typedef struct emulation_config {
     struct {
         float speed_multiplier;
@@ -28,9 +30,15 @@ typedef struct emulation_config {
     } input;
 
     struct {
-        int16_t window_l[735];
-        int16_t window_r[735];
+        int16_t window_l[SAMPLE_WINDOW_SIZE];
+        int16_t window_r[SAMPLE_WINDOW_SIZE];
         int window_p;
+
+        struct {
+            int16_t l[SAMPLE_WINDOW_SIZE];
+            int16_t r[SAMPLE_WINDOW_SIZE];
+            int p;
+        } channel_window[24];
     } output;
 } emulation_control_t;
 

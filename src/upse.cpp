@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <ranges>
 
 using namespace std::literals;
 using namespace std::chrono;
@@ -257,6 +258,13 @@ void UpseModule::fast_timer_fired()
         }
         return std::sqrt(rms / std::size(buf));
     };
+
     emit sound_level_changed(compute_rms(_control.output.window_l) / 32768,
                              compute_rms(_control.output.window_r) / 32768);
+
+    for (auto const& [ch, channel_window] :
+         std::ranges::enumerate_view{_control.output.channel_window}) {
+        emit channel_sound_level_changed(
+            ch, compute_rms(channel_window.l) / 32768, compute_rms(channel_window.r) / 32768);
+    }
 }
