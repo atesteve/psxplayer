@@ -38,7 +38,7 @@ MainWindow::MainWindow(QWidget* parent)
         auto* const widget = new ChannelWidget(_ui.channelsCollapsableContainer);
         widget->ui.title->setText(QString::asprintf("Ch %d", i));
         widget->ui.soundMeterBar->setOrientation(Qt::Orientation::Vertical);
-        widget->ui.soundMeterBar->setLowpassDecay(0.66);
+        widget->ui.soundMeterBar->setLowpassDecay(0.5);
         widget->setFixedWidth(75);
         _ui.channelsLayout->addWidget(widget, i / 8, i % 8);
         _channelWidgets.push_back(widget);
@@ -55,6 +55,20 @@ MainWindow::MainWindow(QWidget* parent)
                 _channelWidgets[ch]->ui.volumeBar->setDisabled(checked);
                 _channelWidgets[ch]->ui.title->setDisabled(checked);
                 _channelWidgets[ch]->ui.soundMeterBar->setDisabled(checked);
+                if (checked) {
+                    _channelWidgets[ch]->ui.soloButton->blockSignals(true);
+                    _channelWidgets[ch]->ui.soloButton->setChecked(false);
+                    _channelWidgets[ch]->ui.soloButton->blockSignals(false);
+                } else {
+                    for (int i = 0; i < 24; ++i) {
+                        if (i == ch) {
+                            continue;
+                        }
+                        _channelWidgets[i]->ui.soloButton->blockSignals(true);
+                        _channelWidgets[i]->ui.soloButton->setChecked(false);
+                        _channelWidgets[i]->ui.soloButton->blockSignals(false);
+                    }
+                }
             });
 
         QObject::connect(
