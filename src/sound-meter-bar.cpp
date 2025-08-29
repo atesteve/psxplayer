@@ -42,19 +42,23 @@ void SoundMeterBar::set_level(float l, float r)
 void SoundMeterBar::paintEvent(QPaintEvent*)
 {
     auto const& palette = this->palette();
-    QPainter painter(this);
+    QPainter painter{this};
 
     auto const rect = this->rect();
     painter.fillRect(rect, palette.alternateBase());
+    auto bar_color = palette.highlight().color();
+    if (palette.currentColorGroup() == QPalette::ColorGroup::Disabled) {
+        bar_color.setAlphaF(.5);
+    }
 
     if (_orientation == Qt::Orientation::Horizontal) {
-        paint_horizontal(painter);
+        paint_horizontal(painter, bar_color);
     } else {
-        paint_vertical(painter);
+        paint_vertical(painter, bar_color);
     }
 }
 
-void SoundMeterBar::paint_horizontal(QPainter& painter)
+void SoundMeterBar::paint_horizontal(QPainter& painter, QColor bar_color)
 {
     auto const rect = this->rect();
     auto const& palette = this->palette();
@@ -81,7 +85,7 @@ void SoundMeterBar::paint_horizontal(QPainter& painter)
                                 base.y() - rect.height() * (BAR_WIDTH / 2),
                                 std::lerp(0, max_length, value),
                                 rect.height() * BAR_WIDTH},
-                         palette.highlight());
+                         bar_color);
     };
 
     auto const text_width = QFontMetricsF{font}.horizontalAdvance("L");
@@ -93,7 +97,7 @@ void SoundMeterBar::paint_horizontal(QPainter& painter)
              rect.width() - MARGIN * 3 - text_width);
 }
 
-void SoundMeterBar::paint_vertical(QPainter& painter)
+void SoundMeterBar::paint_vertical(QPainter& painter, QColor bar_color)
 {
     auto const rect = this->rect();
     auto const& palette = this->palette();
@@ -120,7 +124,7 @@ void SoundMeterBar::paint_vertical(QPainter& painter)
                                 base.y(),
                                 rect.width() * BAR_WIDTH,
                                 -std::lerp(0, max_length, value)},
-                         palette.highlight());
+                         bar_color);
     };
 
     auto const text_height = QFontMetricsF{font}.ascent();

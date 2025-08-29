@@ -54,6 +54,7 @@ MainWindow::MainWindow(QWidget* parent)
                 QMetaObject::invokeMethod(&_module, &UpseModule::mute_channel, ch, checked);
                 _channelWidgets[ch]->ui.volumeBar->setDisabled(checked);
                 _channelWidgets[ch]->ui.title->setDisabled(checked);
+                _channelWidgets[ch]->ui.soundMeterBar->setDisabled(checked);
             });
 
         QObject::connect(
