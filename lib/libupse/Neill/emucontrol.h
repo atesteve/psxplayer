@@ -4,6 +4,20 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* Copied from kernel.h and compiler-gcc.h */
+
+/* Force a compilation error if condition is true, but also produce a
+   result (of value 0 and type size_t), so the expression can be used
+   e.g. in a structure initializer (or where-ever else comma expressions
+   aren't permitted). */
+#define BUILD_BUG_ON_ZERO(e) (sizeof(char[1 - 2 * !!(e)]) - 1)
+
+/* &a[0] degrades to a pointer: a different type from an array */
+#define __must_be_array(a) \
+  BUILD_BUG_ON_ZERO(__builtin_types_compatible_p(typeof(a), typeof(&a[0])))
+
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]) + __must_be_array(arr))
+
 typedef struct emulation_config {
     struct {
         float speed_multiplier;
@@ -14,7 +28,9 @@ typedef struct emulation_config {
     } input;
 
     struct {
-
+        int16_t window_l[735];
+        int16_t window_r[735];
+        int window_p;
     } output;
 } emulation_control_t;
 

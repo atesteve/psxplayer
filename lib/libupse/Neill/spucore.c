@@ -1746,6 +1746,15 @@ static void EMU_CALL reverb_process(struct SPUCORE_STATE *state, uint16 *ram, si
 
 //int spucore_frq[RENDERMAX];
 
+static void push_sample(int16_t l, int16_t r, int16_t *lbuf, int16_t *rbuf, int* p, size_t buf_size) {
+  lbuf[*p] = l;
+  rbuf[*p] = r;
+  *p += 1;
+  if (*p >= buf_size) {
+    *p = 0;
+  }
+}
+
 /*
 ** Renderer
 */
@@ -1908,6 +1917,10 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
       CLIP_PCM_2(q_l,q_r);
       *buf++ = (sint16)q_l;
       *buf++ = (sint16)q_r;
+      push_sample(q_l, q_r,
+                  state->control->output.window_l, state->control->output.window_r,
+                  &state->control->output.window_p,
+                  ARRAY_SIZE(state->control->output.window_l));
     }
   } else {
     for(i = 0; i < samples; i++) {
@@ -1928,6 +1941,10 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
       CLIP_PCM_2(q_l, q_r);
       *buf++ = (sint16)q_l;
       *buf++ = (sint16)q_r;
+      push_sample(q_l, q_r,
+                  state->control->output.window_l, state->control->output.window_r,
+                  &state->control->output.window_p,
+                  ARRAY_SIZE(state->control->output.window_l));
     }
   }
 }

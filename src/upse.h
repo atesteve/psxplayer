@@ -40,6 +40,7 @@ signals:
     void total_time_changed(std::chrono::milliseconds ms);
     void seek_changed(std::chrono::milliseconds ms);
     void state_changed(State state);
+    void sound_level_changed(float l, float r);
 
 public slots:
     void seek(int pos);
@@ -53,6 +54,7 @@ public slots:
 
 private slots:
     void slow_timer_fired();
+    void fast_timer_fired();
 
 private:
     void take_snapshot();
@@ -65,6 +67,7 @@ private:
     bool _shutdown{};
     float _speed{1};
     QTimer _slow_timer;
+    QTimer _fast_timer;
     std::vector<std::pair<std::chrono::milliseconds, upse_snapshot_t>> _snapshots;
     emulation_control_t _control{
         .input =

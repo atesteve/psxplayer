@@ -29,6 +29,7 @@ UpseModule::UpseModule(QObject* parent)
 {
     this->moveToThread(this);
     _slow_timer.moveToThread(this);
+    _fast_timer.moveToThread(this);
 
     _audio = open_sound_device(44100);
 
@@ -38,6 +39,8 @@ UpseModule::UpseModule(QObject* parent)
 
     QObject::connect(&_slow_timer, &QTimer::timeout, this, &UpseModule::slow_timer_fired);
     _slow_timer.setSingleShot(false);
+    QObject::connect(&_fast_timer, &QTimer::timeout, this, &UpseModule::fast_timer_fired);
+    _fast_timer.setSingleShot(false);
 
     for (auto& channel : _control.input.channel) {
         channel.vol_multiplier = 1.f;
@@ -218,7 +221,23 @@ void UpseModule::set_channel_vol(int ch, float vol)
 void UpseModule::shutdown()
 {
     _slow_timer.stop();
+    _fast_timer.stop();
     _shutdown = true;
+}
+
+void UpseModule::set_state(State new_state)
+{
+    if (new_state == State::Playing) {
+        _fast_timer.start(0);
+    } else {
+        _fast_timer.stop();
+    }
+
+    auto const old_state = _state;
+    _state = new_state;
+    if (old_state != new_state) {
+        state_changed(new_state);
+    }
 }
 
 void UpseModule::slow_timer_fired()
@@ -229,11 +248,15 @@ void UpseModule::slow_timer_fired()
     emit seek_changed(milliseconds{upse_eventloop_tell_seek(_mod.get())});
 }
 
-void UpseModule::set_state(State new_state)
+void UpseModule::fast_timer_fired()
 {
-    auto const old_state = _state;
-    _state = new_state;
-    if (old_state != new_state) {
-        state_changed(new_state);
-    }
+    auto const compute_rms = [](auto&& buf) {
+        double rms = 0;
+        for (auto s : buf) {
+            rms += s * s;
+        }
+        return std::sqrt(rms / std::size(buf));
+    };
+    emit sound_level_changed(compute_rms(_control.output.window_l) / 32768,
+                             compute_rms(_control.output.window_r) / 32768);
 }

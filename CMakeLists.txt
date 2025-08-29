@@ -32,6 +32,8 @@ qt6_add_executable(${TARGET}
   src/channel-widget.h
   src/kcollapsiblegroupbox.cpp
   src/kcollapsiblegroupbox.h
+  src/sound-meter-bar.cpp
+  src/sound-meter-bar.h
 )
 qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
 

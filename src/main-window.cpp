@@ -182,10 +182,12 @@ void MainWindow::connect_module_signals()
             _ui.playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
             break;
         case State::Seeking:
-        case State::Unloaded:
-            ; // Do nothing.
+        case State::Unloaded:; // Do nothing.
         }
     });
+
+    QObject::connect(
+        &_module, &UpseModule::sound_level_changed, _ui.soundMeterBar, &SoundMeterBar::set_level);
 }
 
 void MainWindow::load_file(QString const& file_name)
@@ -248,6 +250,12 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
     if (key == Qt::Key_Space) {
         event->setAccepted(true);
         emit _ui.playButton->clicked();
+    } else if (key == Qt::Key_Left) {
+        event->setAccepted(true);
+        _ui.seekSlider->triggerAction(QSlider::SliderSingleStepSub);
+    } else if (key == Qt::Key_Right) {
+        event->setAccepted(true);
+        _ui.seekSlider->triggerAction(QSlider::SliderSingleStepAdd);
     }
 }
 

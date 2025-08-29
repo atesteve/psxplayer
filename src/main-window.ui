@@ -173,6 +173,22 @@
          </property>
         </widget>
        </item>
+       <item>
+        <widget class="SoundMeterBar" name="soundMeterBar" native="true">
+         <property name="minimumSize">
+          <size>
+           <width>100</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>100</width>
+           <height>16777215</height>
+          </size>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
     </item>
@@ -215,6 +231,12 @@
    <class>QSliderMouseEvent</class>
    <extends>QSlider</extends>
    <header>slider-mouse-events.h</header>
+  </customwidget>
+  <customwidget>
+   <class>SoundMeterBar</class>
+   <extends>QWidget</extends>
+   <header>sound-meter-bar.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources/>
