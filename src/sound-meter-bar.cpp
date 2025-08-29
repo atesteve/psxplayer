@@ -34,8 +34,8 @@ void SoundMeterBar::set_level(float l, float r)
 {
     auto new_l = toDB(l);
     auto new_r = toDB(r);
-    _l += (new_l - _l) * 0.75;
-    _r += (new_r - _r) * 0.75;
+    _l += (new_l - _l) * _decay;
+    _r += (new_r - _r) * _decay;
     update();
 }
 

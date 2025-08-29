@@ -38,6 +38,7 @@ MainWindow::MainWindow(QWidget* parent)
         auto* const widget = new ChannelWidget(_ui.channelsCollapsableContainer);
         widget->ui.title->setText(QString::asprintf("Ch %d", i));
         widget->ui.soundMeterBar->setOrientation(Qt::Orientation::Vertical);
+        widget->ui.soundMeterBar->setLowpassDecay(0.66);
         widget->setFixedWidth(75);
         _ui.channelsLayout->addWidget(widget, i / 8, i % 8);
         _channelWidgets.push_back(widget);
