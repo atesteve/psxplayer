@@ -32,10 +32,13 @@ SoundMeterBar::SoundMeterBar(QWidget* p)
 
 void SoundMeterBar::set_level(float l, float r)
 {
-    auto new_l = toDB(l);
-    auto new_r = toDB(r);
-    _l += (new_l - _l) * _decay;
-    _r += (new_r - _r) * _decay;
+    auto const new_l = toDB(l);
+    auto const new_r = toDB(r);
+
+    auto const decay = (new_l == 0 && new_r == 0) ? _decay * 0.33 : _decay;
+
+    _l += (new_l - _l) * decay;
+    _r += (new_r - _r) * decay;
     update();
 }
 

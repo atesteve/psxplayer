@@ -67,6 +67,7 @@ private:
     bool _paused{};
     bool _shutdown{};
     float _speed{1};
+    int _stopped_cycles{};
     QTimer _slow_timer;
     QTimer _fast_timer;
     std::vector<std::pair<std::chrono::milliseconds, upse_snapshot_t>> _snapshots;

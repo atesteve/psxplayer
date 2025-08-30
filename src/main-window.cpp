@@ -25,6 +25,8 @@ QString ms_to_string(std::chrono::milliseconds ms)
     return QString{fmt::format("{:02}:{:02}", min, secs).c_str()};
 }
 
+constexpr auto NUM_CHANNELS = 24;
+
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent)
@@ -34,7 +36,7 @@ MainWindow::MainWindow(QWidget* parent)
     _ui.playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
     _ui.stopButton->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
 
-    for (int i = 0; i < 24; ++i) {
+    for (int i = 0; i < NUM_CHANNELS; ++i) {
         auto* const widget = new ChannelWidget(_ui.channelsCollapsableContainer);
         widget->ui.title->setText(QString::asprintf("Ch %d", i));
         widget->ui.soundMeterBar->setOrientation(Qt::Orientation::Vertical);
@@ -60,7 +62,7 @@ MainWindow::MainWindow(QWidget* parent)
                     _channelWidgets[ch]->ui.soloButton->setChecked(false);
                     _channelWidgets[ch]->ui.soloButton->blockSignals(false);
                 } else {
-                    for (int i = 0; i < 24; ++i) {
+                    for (int i = 0; i < NUM_CHANNELS; ++i) {
                         if (i == ch) {
                             continue;
                         }
@@ -73,7 +75,7 @@ MainWindow::MainWindow(QWidget* parent)
 
         QObject::connect(
             widget->ui.soloButton, &QPushButton::toggled, this, [this, ch = i](bool checked) {
-                for (int i = 0; i < 24; ++i) {
+                for (int i = 0; i < NUM_CHANNELS; ++i) {
                     if (i == ch) {
                         if (checked) {
                             _channelWidgets[i]->ui.muteButton->setChecked(false);
@@ -210,6 +212,9 @@ void MainWindow::connect_module_signals()
 
     QObject::connect(
         &_module, &UpseModule::channel_sound_level_changed, [this](int channel, float l, float r) {
+            if (channel >= NUM_CHANNELS) {
+                return;
+            }
             QMetaObject::invokeMethod(
                 _channelWidgets[channel]->ui.soundMeterBar, &SoundMeterBar::set_level, l, r);
         });

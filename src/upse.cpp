@@ -229,9 +229,9 @@ void UpseModule::shutdown()
 void UpseModule::set_state(State new_state)
 {
     if (new_state == State::Playing) {
-        _fast_timer.start(0);
+        _fast_timer.start(33);
     } else {
-        _fast_timer.stop();
+        _stopped_cycles = 0;
     }
 
     auto const old_state = _state;
@@ -243,6 +243,11 @@ void UpseModule::set_state(State new_state)
 
 void UpseModule::slow_timer_fired()
 {
+    if (_state != State::Playing && _stopped_cycles > 2) {
+        _fast_timer.stop();
+    }
+    _stopped_cycles++;
+
     if (!_mod || _state == State::Seeking) {
         return;
     }
@@ -259,12 +264,20 @@ void UpseModule::fast_timer_fired()
         return std::sqrt(rms / std::size(buf));
     };
 
-    emit sound_level_changed(compute_rms(_control.output.window_l) / 32768,
-                             compute_rms(_control.output.window_r) / 32768);
+    if (_state == State::Playing) {
+        emit sound_level_changed(compute_rms(_control.output.window_l) / 32768,
+                                 compute_rms(_control.output.window_r) / 32768);
+    } else {
+        emit sound_level_changed(0, 0);
+    }
 
     for (auto const& [ch, channel_window] :
          std::ranges::enumerate_view{_control.output.channel_window}) {
-        emit channel_sound_level_changed(
-            ch, compute_rms(channel_window.l) / 32768, compute_rms(channel_window.r) / 32768);
+        if (_state == State::Playing) {
+            emit channel_sound_level_changed(
+                ch, compute_rms(channel_window.l) / 32768, compute_rms(channel_window.r) / 32768);
+        } else {
+            emit channel_sound_level_changed(ch, 0, 0);
+        }
     }
 }
