@@ -42,6 +42,7 @@ signals:
     void state_changed(State state);
     void sound_level_changed(float l, float r);
     void channel_sound_level_changed(int ch, float l, float r);
+    void channel_fired(int ch);
 
 public slots:
     void seek(int pos);

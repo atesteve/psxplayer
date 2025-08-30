@@ -20,6 +20,13 @@
 
 #define SAMPLE_WINDOW_SIZE (1024)
 
+typedef struct out_channel {
+    int16_t l[SAMPLE_WINDOW_SIZE];
+    int16_t r[SAMPLE_WINDOW_SIZE];
+    int p;
+    bool fired;
+} out_channel_t;
+
 typedef struct emulation_config {
     struct {
         float speed_multiplier;
@@ -34,11 +41,7 @@ typedef struct emulation_config {
         int16_t window_r[SAMPLE_WINDOW_SIZE];
         int window_p;
 
-        struct {
-            int16_t l[SAMPLE_WINDOW_SIZE];
-            int16_t r[SAMPLE_WINDOW_SIZE];
-            int p;
-        } channel_window[24];
+        out_channel_t channel[24];
     } output;
 } emulation_control_t;
 

@@ -994,7 +994,7 @@ domax:
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static void EMU_CALL envelope_prime(struct SPUCORE_ENVELOPE *env) {
+static void EMU_CALL envelope_prime(struct SPUCORE_ENVELOPE *env, out_channel_t *control) {
 //  if(env->state != ENVELOPE_STATE_OFF) {
 //if(env->state!=ENVELOPE_STATE_RELEASE){
 //    OutputDebugString("envelope re-prime\n");
@@ -1008,6 +1008,8 @@ static void EMU_CALL envelope_prime(struct SPUCORE_ENVELOPE *env) {
   env->delta = 1;
 
   env->cachemax = 0;
+
+  control->fired = true;
 }
 
 static void EMU_CALL envelope_release(struct SPUCORE_ENVELOPE *env) {
@@ -1032,7 +1034,7 @@ static void EMU_CALL sample_prime(struct SPUCORE_SAMPLE *sample) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static void EMU_CALL voice_on(struct SPUCORE_CHAN *c) {
+static void EMU_CALL voice_on(struct SPUCORE_CHAN *c, out_channel_t *control) {
 
   // FOR DEBUGGING PURPOSES ONLY.
 //  if(c->sample.state == SAMPLE_STATE_ON)return;
@@ -1051,7 +1053,7 @@ static void EMU_CALL voice_on(struct SPUCORE_CHAN *c) {
   } else {
 //    EMUTRACE0("prime");
     sample_prime(&(c->sample));
-    envelope_prime(&(c->env));
+    envelope_prime(&(c->env), control);
   }
 //  EMUTRACE0("\n");
 }
@@ -1079,7 +1081,7 @@ static void EMU_CALL voices_on(struct SPUCORE_STATE *state, uint32 bits) {
 //    sint32 extvol_l = ((sint16)(state->avol[0]));
 //    sint32 extvol_r = ((sint16)(state->avol[1]));
 
-      voice_on(state->chan + a);
+      voice_on(state->chan + a, &state->control->output.channel[a]);
     }
     bits >>= 1;
   }
@@ -1192,6 +1194,7 @@ static int EMU_CALL render_channel_raw(
 // render_channel_raw() is also
 //
 static int EMU_CALL render_channel_mono(
+  int ch,
   uint16 *ram,
   uint32 memmax,
   struct SPUCORE_CHAN *c,
@@ -1254,7 +1257,7 @@ static int EMU_CALL render_channel_mono(
   */
   if(!defer_remaining) {
     sample_prime(&(c->sample));
-    envelope_prime(&(c->env));
+    envelope_prime(&(c->env), &control->output.channel[ch]);
   }
 
   /*
@@ -1832,7 +1835,7 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
     sint32 *noise = (chanbit & masknoise) ? ibufn : NULL;
     if(!(main_l | main_r | verb_l | verb_r)) b = NULL;
     r = render_channel_mono(
-      ram, state->memsize, state->chan + ch, b, fm, noise, samples, irq_state_ptr, state->control
+      ch, ram, state->memsize, state->chan + ch, b, fm, noise, samples, irq_state_ptr, state->control
     );
     if(!b) {
       memset(ibuffm, 0, 4 * samples);
@@ -1845,9 +1848,9 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
     if (r == 0) {
       for (int i = 0; i < samples; ++i) {
         push_sample(0, 0,
-                state->control->output.channel_window[ch].l, state->control->output.channel_window[ch].r,
-                &state->control->output.channel_window[ch].p,
-                ARRAY_SIZE(state->control->output.channel_window[ch].l));
+                state->control->output.channel[ch].l, state->control->output.channel[ch].r,
+                &state->control->output.channel[ch].p,
+                ARRAY_SIZE(state->control->output.channel[ch].l));
       }
     }
     for(i = 0; i < r; i++) {
@@ -1859,9 +1862,9 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
         sint16 r = q_r;
         CLIP_PCM_2(l,r);
         push_sample(l, r,
-                state->control->output.channel_window[ch].l, state->control->output.channel_window[ch].r,
-                &state->control->output.channel_window[ch].p,
-                ARRAY_SIZE(state->control->output.channel_window[ch].l));
+                state->control->output.channel[ch].l, state->control->output.channel[ch].r,
+                &state->control->output.channel[ch].p,
+                ARRAY_SIZE(state->control->output.channel[ch].l));
       }
 
       if (state->control->input.channel[ch].mute) {

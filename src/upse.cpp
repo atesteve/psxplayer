@@ -95,6 +95,15 @@ void UpseModule::run()
             }
         }
 
+        if (_state == State::Playing) {
+            for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
+                if (channel.fired) {
+                    channel.fired = false;
+                    emit channel_fired(ch);
+                }
+            }
+        }
+
         if (need_drain && _state != State::Playing) {
             pa_simple_drain(_audio.get(), &error);
             need_drain = false;
@@ -271,11 +280,10 @@ void UpseModule::fast_timer_fired()
         emit sound_level_changed(0, 0);
     }
 
-    for (auto const& [ch, channel_window] :
-         std::ranges::enumerate_view{_control.output.channel_window}) {
+    for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
         if (_state == State::Playing) {
             emit channel_sound_level_changed(
-                ch, compute_rms(channel_window.l) / 32768, compute_rms(channel_window.r) / 32768);
+                ch, compute_rms(channel.l) / 32768, compute_rms(channel.r) / 32768);
         } else {
             emit channel_sound_level_changed(ch, 0, 0);
         }

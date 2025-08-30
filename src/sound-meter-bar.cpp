@@ -42,6 +42,11 @@ void SoundMeterBar::set_level(float l, float r)
     update();
 }
 
+void SoundMeterBar::channel_fired()
+{
+    _fire = 200;
+}
+
 void SoundMeterBar::paintEvent(QPaintEvent*)
 {
     auto const& palette = this->palette();
@@ -53,6 +58,9 @@ void SoundMeterBar::paintEvent(QPaintEvent*)
     if (palette.currentColorGroup() == QPalette::ColorGroup::Disabled) {
         bar_color.setAlphaF(.5);
     }
+
+    bar_color = bar_color.lighter(_fire);
+    _fire += (100 - _fire) * 0.5;
 
     if (_orientation == Qt::Orientation::Horizontal) {
         paint_horizontal(painter, bar_color);

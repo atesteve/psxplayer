@@ -19,6 +19,7 @@ public:
 
 public slots:
     void set_level(float l, float r);
+    void channel_fired();
 
 private:
     void paintEvent(QPaintEvent*) override;
@@ -29,4 +30,5 @@ private:
     float _l{};
     float _r{};
     float _decay = 1;
+    float _fire = 100;
 };

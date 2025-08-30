@@ -218,6 +218,15 @@ void MainWindow::connect_module_signals()
             QMetaObject::invokeMethod(
                 _channelWidgets[channel]->ui.soundMeterBar, &SoundMeterBar::set_level, l, r);
         });
+
+    QObject::connect(
+        &_module, &UpseModule::channel_fired, [this](int channel) {
+            if (channel >= NUM_CHANNELS) {
+                return;
+            }
+            QMetaObject::invokeMethod(
+                _channelWidgets[channel]->ui.soundMeterBar, &SoundMeterBar::channel_fired);
+        });
 }
 
 void MainWindow::load_file(QString const& file_name)
