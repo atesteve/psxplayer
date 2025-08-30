@@ -32,7 +32,7 @@ UpseModule::UpseModule(QObject* parent)
     _slow_timer.moveToThread(this);
     _fast_timer.moveToThread(this);
 
-    _audio = open_sound_device(44100);
+    _audio = Audio::open(44100);
 
     if (!_audio) {
         return;
@@ -55,16 +55,11 @@ void UpseModule::run()
     _slow_timer.start(500);
 
     int16_t* buf;
-    int n, error;
-    bool need_drain = false;
+    size_t n;
 
     while (!_shutdown) {
         if (_state == State::Seeking) {
             _control.input.speed_multiplier = 10;
-            if (need_drain) {
-                pa_simple_drain(_audio.get(), &error);
-                need_drain = false;
-            }
         }
 
         if (_mod && (_state == State::Playing || _state == State::Seeking)) {
@@ -86,10 +81,11 @@ void UpseModule::run()
         }
 
         if (n > 0 && buf) {
-            pa_simple_write(_audio.get(), buf, n * 2 * sizeof(int16_t), &error);
-            _control.input.speed_multiplier = _speed;
-            need_drain = true;
+            if (_state != State::Seeking) {
+                _audio->write({buf, n * 2});
+            }
             if (_state == State::Seeking) {
+                _control.input.speed_multiplier = _speed;
                 set_state(_paused ? State::Paused : State::Playing);
                 slow_timer_fired();
             }
@@ -102,11 +98,6 @@ void UpseModule::run()
                     emit channel_fired(ch);
                 }
             }
-        }
-
-        if (need_drain && _state != State::Playing) {
-            pa_simple_drain(_audio.get(), &error);
-            need_drain = false;
         }
 
         eventDispatcher()->processEvents((_state == State::Seeking || _state == State::Playing)

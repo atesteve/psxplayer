@@ -63,8 +63,7 @@ target_link_libraries(${TARGET} PUBLIC fmt::fmt)
 find_package(spdlog REQUIRED)
 target_link_libraries(${TARGET} PUBLIC spdlog::spdlog)
 
-find_package(PulseAudio REQUIRED)
-target_link_libraries(${TARGET} PRIVATE pulse-simple pulse)
+target_link_libraries(${TARGET} PRIVATE portaudio)
 
 target_link_libraries(${TARGET} PRIVATE Qt6::Widgets)
 

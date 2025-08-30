@@ -63,7 +63,7 @@ private:
     void set_state(State new_state);
 
     upse_module_ptr _mod;
-    pa_simple_unique_ptr _audio;
+    std::unique_ptr<Audio> _audio;
     State _state{};
     bool _paused{};
     bool _shutdown{};
