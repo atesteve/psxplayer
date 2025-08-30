@@ -1869,10 +1869,7 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
         q_r = 0;
       } else {
         float vol = state->control->input.channel[ch].vol_multiplier;
-        const float a = 3.1623e-2;
-        const float b = 3.485;
-        const float bias = -0.03162;
-        vol = a * exp(vol * b) + bias;
+        vol = vol * vol;
         q_l *= vol;
         q_r *= vol;
       }
