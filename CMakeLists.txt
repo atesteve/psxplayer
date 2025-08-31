@@ -60,9 +60,6 @@ include(CPack)
 find_package(fmt REQUIRED)
 target_link_libraries(${TARGET} PUBLIC fmt::fmt)
 
-find_package(spdlog REQUIRED)
-target_link_libraries(${TARGET} PUBLIC spdlog::spdlog)
-
 target_link_libraries(${TARGET} PRIVATE portaudio)
 
 target_link_libraries(${TARGET} PRIVATE Qt6::Widgets)
