@@ -1,5 +1,9 @@
 #include "audio.h"
 
+#include <QMediaDevices>
+
+#include <generator>
+
 namespace {
 constexpr auto BUF_SAMPLE_SIZE = 1024u;
 
@@ -9,23 +13,15 @@ constexpr size_t advance(size_t p, size_t n = 1) { return (p + n) % (BUF_SAMPLE_
 
 Audio::Audio() = default;
 
-Audio::~Audio()
-{
-    if (_stream) {
-        Pa_StopStream(_stream);
-        Pa_CloseStream(_stream);
-    }
-}
-
 void Audio::init()
 {
-    _buffer.reserve(BUF_SAMPLE_SIZE * 2);
-    for (auto i = 0u; i < BUF_SAMPLE_SIZE * 2; ++i) {
-        _buffer.push_back(0);
-    }
+    _buffer.resize(BUF_SAMPLE_SIZE * 2);
+    setOpenMode(QIODevice::OpenModeFlag::ReadOnly);
+    _sink->start(this);
 }
 
-void Audio::write(std::span<int16_t> samples)
+template<typename T>
+void Audio::write_impl(T&& samples)
 {
     using namespace std::chrono_literals;
 
@@ -49,9 +45,10 @@ void Audio::write(std::span<int16_t> samples)
             _write_p = write_p;
 
             std::unique_lock lock{_mutex};
-            auto const status = _cv.wait_for(lock, 1s, [this, next_write_p = advance(write_p, 2)] {
-                return _read_p != next_write_p;
-            });
+            auto const status =
+                _cv.wait_for(lock, 100ms, [this, next_write_p = advance(write_p, 2)] {
+                    return _read_p != next_write_p;
+                });
 
             if (!status) {
                 _write_p = write_p;
@@ -69,68 +66,79 @@ void Audio::write(std::span<int16_t> samples)
     _write_p = write_p;
 }
 
-int Audio::pa_stream_callback(int16_t* output, unsigned long frame_count)
+void Audio::write(std::span<int16_t> samples) { return write_impl(samples); }
+
+void Audio::flush()
+{
+    // Insert silence to force any remaining data to be flushed.
+    auto const silence_generator = [this]() -> std::generator<int16_t> {
+        for (auto i = 0u; i < _buffer.size(); ++i) {
+            co_yield 0;
+        }
+    };
+    return write_impl(silence_generator());
+}
+
+qint64 Audio::readData(char* output, qint64 maxlen)
 {
     size_t current_write_p = _write_p;
     size_t read_p = _read_p;
+    qint64 written = 0;
+    auto* const output_s16 = reinterpret_cast<int16_t*>(output);
 
-    for (auto i = 0u; i < frame_count; ++i) {
+    for (auto i = 0u; i < maxlen / 2; ++i) {
         if (read_p == current_write_p) {
             current_write_p = _write_p;
         }
         if (read_p == current_write_p) {
-            // There is no audio data, so write just silence.
-            output[i * 2] = 0;
-            output[i * 2 + 1] = 0;
-            continue;
+            break;
         }
 
-        output[i * 2] = _buffer[read_p];
-        output[i * 2 + 1] = _buffer[advance(read_p)];
+        output_s16[i * 2] = _buffer[read_p];
+        output_s16[i * 2 + 1] = _buffer[advance(read_p)];
 
         read_p = advance(read_p, 2);
+        written += 4;
+
+        _read_p = read_p;
+        _cv.notify_all();
     }
 
     _read_p = read_p;
     _cv.notify_all();
 
-    return 0;
+    return written;
 }
 
-int Audio::pa_stream_callback(const void*,
-                              void* output,
-                              unsigned long frame_count,
-                              const PaStreamCallbackTimeInfo*,
-                              PaStreamCallbackFlags,
-                              void* user_data)
+qint64 Audio::bytesAvailable() const
 {
-    return static_cast<Audio*>(user_data)->pa_stream_callback((int16_t*)output, frame_count);
+    size_t const current_write_p = _write_p;
+    size_t const current_read_p = _read_p;
+    static constexpr auto element_size = sizeof(decltype(_buffer)::value_type);
+
+    if (current_write_p >= current_read_p) {
+        return (current_write_p - current_read_p) * element_size;
+    }
+
+    return (current_write_p + _buffer.size() - current_read_p) * element_size;
 }
 
 std::unique_ptr<Audio> Audio::open(int rate)
 {
     std::unique_ptr<Audio> _ret{new Audio};
 
-    PaError err;
+    QAudioFormat format{};
+    format.setSampleRate(rate);
+    format.setChannelCount(2);
+    format.setSampleFormat(QAudioFormat::Int16);
 
-    err = Pa_OpenDefaultStream(&_ret->_stream,
-                               0, // No input channels
-                               2, // Stereo output
-                               paInt16,
-                               rate,
-                               256, // Samples per request
-                               Audio::pa_stream_callback,
-                               _ret.get());
-    if (err != paNoError) {
+    QAudioDevice info{QMediaDevices::defaultAudioOutput()};
+
+    if (!info.isFormatSupported(format)) {
         return nullptr;
     }
 
-    err = Pa_StartStream(_ret->_stream);
-
-    if (err != paNoError) {
-        return nullptr;
-    }
-
+    _ret->_sink = std::make_unique<QAudioSink>(format, _ret.get());
     _ret->init();
 
     return _ret;

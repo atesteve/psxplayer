@@ -1,6 +1,7 @@
 #pragma once
 
-#include <portaudio.h>
+#include <QAudioSink>
+#include <QIODevice>
 
 #include <memory>
 #include <vector>
@@ -9,28 +10,30 @@
 #include <atomic>
 #include <span>
 
-class Audio {
+class Audio : public QIODevice {
+    Q_OBJECT
+
 public:
     static std::unique_ptr<Audio> open(int rate);
-    ~Audio();
+    ~Audio() = default;
 
     void write(std::span<int16_t> samples);
+    void flush();
+
+    qint64 readData(char *data, qint64 maxlen) override;
+    qint64 writeData(const char *, qint64) override { return 0; };
+    qint64 bytesAvailable() const override;
+    qint64 size() const override { return 0; }
 
 private:
     explicit Audio();
     void init();
 
-    int pa_stream_callback(int16_t* output, unsigned long frame_count);
-
-    static int pa_stream_callback(const void*,
-                                  void* output,
-                                  unsigned long frame_count,
-                                  const PaStreamCallbackTimeInfo* time_info,
-                                  PaStreamCallbackFlags status_flags,
-                                  void* user_data);
+    template <typename T>
+    void write_impl(T&& samples);
 
     std::vector<int16_t> _buffer;
-    PaStream* _stream{};
+    std::unique_ptr<QAudioSink> _sink;
 
     std::condition_variable _cv;
     std::mutex _mutex;

@@ -230,6 +230,9 @@ void UpseModule::set_state(State new_state)
     if (new_state == State::Playing) {
         _fast_timer.start(33);
     } else {
+        if (_state == State::Playing) {
+            _audio->flush();
+        }
         _stopped_cycles = 0;
     }
 

@@ -15,7 +15,7 @@ if(FSANITIZE)
   add_link_options(-fsanitize=${FSANITIZE})
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 qt_standard_project_setup()
 
 qt6_add_executable(${TARGET}
@@ -60,9 +60,7 @@ include(CPack)
 find_package(fmt REQUIRED)
 target_link_libraries(${TARGET} PUBLIC fmt::fmt)
 
-target_link_libraries(${TARGET} PRIVATE portaudio)
-
-target_link_libraries(${TARGET} PRIVATE Qt6::Widgets)
+target_link_libraries(${TARGET} PRIVATE Qt6::Widgets Qt6::Multimedia)
 
 find_package(ZLIB REQUIRED)
 target_link_libraries(${TARGET_LIBUPSE} PUBLIC ZLIB::ZLIB)
