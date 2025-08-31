@@ -22,7 +22,7 @@ QString ms_to_string(std::chrono::milliseconds ms)
     int min = duration_cast<minutes>(ms).count();
     int secs = duration_cast<seconds>(ms).count() % 60;
 
-    return QString{fmt::format("{:02}:{:02}", min, secs).c_str()};
+    return QString::asprintf("%02d:%2d", min, secs);
 }
 
 constexpr auto NUM_CHANNELS = 24;
