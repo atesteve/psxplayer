@@ -108,11 +108,10 @@ void UpseModule::run()
 
 void UpseModule::take_snapshot()
 {
-    using pair = decltype(_snapshots)::value_type;
-
     auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
-    _snapshots.emplace_back(pair{current_seek, {}});
-    upse_module_take_snapshot(_mod.get(), &_snapshots.back().second);
+    auto& emplaced = _snapshots.emplace_back();
+    emplaced.first = current_seek;
+    upse_module_take_snapshot(_mod.get(), &emplaced.second);
 }
 
 void UpseModule::seek(int pos)
