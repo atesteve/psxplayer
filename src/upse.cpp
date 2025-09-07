@@ -23,10 +23,20 @@ upse_iofuncs_t stdio_funcs{
 
 constexpr auto SNAPSHOT_INTERVAL = 30s;
 
+uint32_t read_psx_mem(upse_module_instance_t* ins, uint32_t addr)
+{
+    char const* const ptr = ins->upse_ps1_memory_LUT[addr >> 16];
+    if (!ptr) {
+        return 0;
+    }
+    return *reinterpret_cast<uint32_t const*>(ptr + (addr & 0xffffu));
+}
+
 } // namespace
 
 UpseModule::UpseModule(QObject* parent)
     : QThread{parent}
+    , _channel_state{32}
 {
     this->moveToThread(this);
     _slow_timer.moveToThread(this);
@@ -46,6 +56,56 @@ UpseModule::UpseModule(QObject* parent)
     for (auto& channel : _control.input.channel) {
         channel.vol_multiplier = 1.f;
     }
+}
+
+void UpseModule::jal_hook(void* self, upse_module_instance_t* ins)
+{
+    static_cast<UpseModule*>(self)->jal_hook(ins);
+}
+
+void UpseModule::jal_hook(upse_module_instance_t* ins)
+{
+    if (_channel_map.empty() && ins->cpustate.pc == 0x800585e0) {
+        // a0 constains the interesting pointer.
+        auto const base_ptr = ins->cpustate.GPR.n.a0;
+        // First channel at offset 0x118
+        auto const channel_base_ptr = base_ptr + 0x118;
+
+        // Each channel every 0x134 bytes.
+        for (int i = 0; i < 32; ++i) {
+            auto const channel_ptr = channel_base_ptr + i * 0x134;
+            _channel_map[channel_ptr] = {i, read_psx_mem(ins, channel_ptr)};
+            fmt::println("({:#08x}) {} -> {}",
+                         channel_ptr,
+                         _channel_map[channel_ptr].first,
+                         _channel_map[channel_ptr].second);
+        }
+    }
+}
+
+void UpseModule::sw_hook(void* self,
+                         upse_module_instance_t* ins,
+                         mem_access_size_t size,
+                         uint32_t addr,
+                         uint32_t data)
+{
+    static_cast<UpseModule*>(self)->sw_hook(ins, size, addr, data);
+}
+
+void UpseModule::sw_hook(upse_module_instance_t* ins,
+                         mem_access_size_t size,
+                         uint32_t addr,
+                         uint32_t data)
+{
+    (void)ins;
+    (void)size;
+
+    auto const it = _channel_map.find(addr);
+    if (it == _channel_map.cend()) {
+        return;
+    }
+    it->second.second = data;
+    update_mapped_channels();
 }
 
 void UpseModule::run()
@@ -95,7 +155,16 @@ void UpseModule::run()
             for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
                 if (channel.fired) {
                     channel.fired = false;
-                    emit channel_fired(ch);
+                    if (_channel_map.empty()) {
+                        emit channel_fired(ch);
+                    } else {
+                        auto const it = std::ranges::find_if(_channel_map, [&](auto const& entry) {
+                            return entry.second.second == ch;
+                        });
+                        if (it != _channel_map.cend()) {
+                            emit channel_fired(it->second.first);
+                        }
+                    }
                 }
             }
         }
@@ -146,8 +215,10 @@ void UpseModule::seek(int pos)
 void UpseModule::load_file(QString const& file_name)
 {
     _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs, &_control));
+
     _snapshots.clear();
     _snapshots.shrink_to_fit();
+    _channel_map.clear();
 
     if (!_mod) {
         set_state(State::Unloaded);
@@ -211,11 +282,38 @@ void UpseModule::set_speed(float speed)
     }
 }
 
-void UpseModule::mute_channel(int ch, bool muted) { _control.input.channel[ch].mute = muted; }
+void UpseModule::update_mapped_channels()
+{
+    for (auto const& mapped_channel : _channel_map) {
+        auto const [log_channel, hw_channel] = mapped_channel.second;
+        if (hw_channel >= 24) {
+            continue;
+        }
+        _control.input.channel[hw_channel].mute = _channel_state[log_channel].muted;
+        _control.input.channel[hw_channel].vol_multiplier = _channel_state[log_channel].vol;
+    }
+}
+
+void UpseModule::mute_channel(int ch, bool muted)
+{
+    _channel_state[ch].muted = muted;
+
+    if (_channel_map.empty()) {
+        _control.input.channel[ch].mute = muted;
+    } else {
+        update_mapped_channels();
+    }
+}
 
 void UpseModule::set_channel_vol(int ch, float vol)
 {
-    _control.input.channel[ch].vol_multiplier = vol;
+    _channel_state[ch].vol = vol;
+
+    if (_channel_map.empty()) {
+        _control.input.channel[ch].vol_multiplier = vol;
+    } else {
+        update_mapped_channels();
+    }
 }
 
 void UpseModule::shutdown()
@@ -273,12 +371,26 @@ void UpseModule::fast_timer_fired()
         emit sound_level_changed(0, 0);
     }
 
-    for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
-        if (_state == State::Playing) {
-            emit channel_sound_level_changed(
-                ch, compute_rms(channel.l) / 32768, compute_rms(channel.r) / 32768);
-        } else {
-            emit channel_sound_level_changed(ch, 0, 0);
+    if (_channel_map.empty()) {
+        for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
+            if (_state == State::Playing) {
+                emit channel_sound_level_changed(
+                    ch, compute_rms(channel.l) / 32768, compute_rms(channel.r) / 32768);
+            } else {
+                emit channel_sound_level_changed(ch, 0, 0);
+            }
+        }
+    } else {
+        for (auto const& mapped_channel : _channel_map) {
+            auto const [log_channel, hw_channel] = mapped_channel.second;
+            if (_state == State::Playing && hw_channel < 24) {
+                emit channel_sound_level_changed(
+                    log_channel,
+                    compute_rms(_control.output.channel[hw_channel].l) / 32768,
+                    compute_rms(_control.output.channel[hw_channel].r) / 32768);
+            } else {
+                emit channel_sound_level_changed(log_channel, 0, 0);
+            }
         }
     }
 }

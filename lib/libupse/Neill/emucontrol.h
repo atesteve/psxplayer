@@ -27,6 +27,16 @@ typedef struct out_channel {
     bool fired;
 } out_channel_t;
 
+typedef enum mem_access_size {
+    MEM_ACCESS_WORD,
+    MEM_ACCESS_HALF,
+    MEM_ACCESS_BYTE,
+} mem_access_size_t;
+
+typedef struct upse_module_instance upse_module_instance_t;
+typedef void (*jal_hook_ptr)(void* hook_data, upse_module_instance_t *ins);
+typedef void (*sw_hook_ptr)(void* hook_data, upse_module_instance_t *ins, mem_access_size_t size, uint32_t addr, uint32_t data);
+
 typedef struct emulation_config {
     struct {
         float speed_multiplier;
@@ -43,6 +53,12 @@ typedef struct emulation_config {
 
         out_channel_t channel[24];
     } output;
+
+    struct {
+        void* data;
+        jal_hook_ptr jal;
+        sw_hook_ptr sw;
+    } hooks;
 } emulation_control_t;
 
 #endif // __PSX_EMUCONTROL_H__

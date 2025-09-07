@@ -57,7 +57,7 @@ typedef struct
     u32 branchPC;
 } upse_r3000_cpu_registers_t;
 
-typedef struct {
+typedef struct upse_module_instance {
     void *spu;
     void *ctrstate;
     void *biosstate;

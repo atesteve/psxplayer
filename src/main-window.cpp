@@ -25,7 +25,7 @@ QString ms_to_string(std::chrono::milliseconds ms)
     return QString::asprintf("%02d:%02d", min, secs);
 }
 
-constexpr auto NUM_CHANNELS = 24;
+constexpr auto NUM_CHANNELS = 32;
 
 } // namespace
 
