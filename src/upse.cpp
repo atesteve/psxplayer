@@ -169,6 +169,9 @@ void UpseModule::run()
             }
         }
 
+        // QEventLoop::AllEvents returns immediately if there are no events to dispatch.
+        // QEventLoop::WaitForMoreEvents blocks until there is at least one event, then dispatches
+        // it and returns.
         eventDispatcher()->processEvents((_state == State::Seeking || _state == State::Playing)
                                              ? QEventLoop::AllEvents
                                              : QEventLoop::WaitForMoreEvents);
