@@ -75,10 +75,6 @@ void UpseModule::jal_hook(upse_module_instance_t* ins)
         for (int i = 0; i < 32; ++i) {
             auto const channel_ptr = channel_base_ptr + i * 0x134;
             _channel_map[channel_ptr] = {i, read_psx_mem(ins, channel_ptr)};
-            fmt::println("({:#08x}) {} -> {}",
-                         channel_ptr,
-                         _channel_map[channel_ptr].first,
-                         _channel_map[channel_ptr].second);
         }
     }
 }
@@ -241,7 +237,16 @@ void UpseModule::load_file(QString const& file_name)
     take_snapshot();
 
     _paused = false;
-    emit supported_channels(32);
+
+    std::string_view game_name{_mod->metadata->game};
+    if (game_name == "Final Fantasy 9") {
+        emit supported_channels(32);
+    } else if (game_name == "Final Fantasy 7") {
+        emit supported_channels(16);
+    } else {
+        emit supported_channels(24);
+    }
+
     set_state(State::Playing);
     emit total_time_changed(milliseconds{_mod->metadata->length});
     emit seek_changed(0ms);
