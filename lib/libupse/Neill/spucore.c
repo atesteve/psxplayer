@@ -1854,8 +1854,8 @@ static void EMU_CALL render(struct SPUCORE_STATE *state, uint16 *ram, sint16 *bu
       }
     }
     for(i = 0; i < r; i++) {
-      sint32 q_l = (v_l * ibuf[i]) >> 16;
-      sint32 q_r = (v_r * ibuf[i]) >> 16;
+      sint32 q_l = (v_l * ibuf[i]) >> 15;
+      sint32 q_r = (v_r * ibuf[i]) >> 15;
 
       {
         sint16 l = q_l;
