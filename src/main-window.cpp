@@ -12,6 +12,7 @@
 #include <QStyle>
 
 #include <filesystem>
+#include <ranges>
 
 namespace {
 
@@ -25,8 +26,6 @@ QString ms_to_string(std::chrono::milliseconds ms)
     return QString::asprintf("%02d:%02d", min, secs);
 }
 
-constexpr auto NUM_CHANNELS = 32;
-
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent)
@@ -35,60 +34,6 @@ MainWindow::MainWindow(QWidget* parent)
     _ui.setupUi(this);
     _ui.playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
     _ui.stopButton->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
-
-    for (int i = 0; i < NUM_CHANNELS; ++i) {
-        auto* const widget = new ChannelWidget(_ui.channelsCollapsableContainer);
-        widget->ui.title->setText(QString::asprintf("Ch %d", i));
-        widget->ui.soundMeterBar->setOrientation(Qt::Orientation::Vertical);
-        widget->ui.soundMeterBar->setLowpassDecay(0.5);
-        widget->setFixedWidth(75);
-        _ui.channelsLayout->addWidget(widget, i / 8, i % 8);
-        _channelWidgets.push_back(widget);
-
-        QObject::connect(
-            widget->ui.volumeBar, &QSlider::valueChanged, this, [this, ch = i](int value) {
-                QMetaObject::invokeMethod(
-                    &_module, &UpseModule::set_channel_vol, ch, value / 100.f);
-            });
-
-        QObject::connect(
-            widget->ui.muteButton, &QPushButton::toggled, this, [this, ch = i](bool checked) {
-                QMetaObject::invokeMethod(&_module, &UpseModule::mute_channel, ch, checked);
-                _channelWidgets[ch]->ui.volumeBar->setDisabled(checked);
-                _channelWidgets[ch]->ui.title->setDisabled(checked);
-                _channelWidgets[ch]->ui.soundMeterBar->setDisabled(checked);
-                if (checked) {
-                    _channelWidgets[ch]->ui.soloButton->blockSignals(true);
-                    _channelWidgets[ch]->ui.soloButton->setChecked(false);
-                    _channelWidgets[ch]->ui.soloButton->blockSignals(false);
-                } else {
-                    for (int i = 0; i < NUM_CHANNELS; ++i) {
-                        if (i == ch) {
-                            continue;
-                        }
-                        _channelWidgets[i]->ui.soloButton->blockSignals(true);
-                        _channelWidgets[i]->ui.soloButton->setChecked(false);
-                        _channelWidgets[i]->ui.soloButton->blockSignals(false);
-                    }
-                }
-            });
-
-        QObject::connect(
-            widget->ui.soloButton, &QPushButton::toggled, this, [this, ch = i](bool checked) {
-                for (int i = 0; i < NUM_CHANNELS; ++i) {
-                    if (i == ch) {
-                        if (checked) {
-                            _channelWidgets[i]->ui.muteButton->setChecked(false);
-                        }
-                        continue;
-                    }
-                    _channelWidgets[i]->ui.muteButton->setChecked(checked);
-                    _channelWidgets[i]->ui.soloButton->blockSignals(true);
-                    _channelWidgets[i]->ui.soloButton->setChecked(false);
-                    _channelWidgets[i]->ui.soloButton->blockSignals(false);
-                }
-            });
-    }
 
     this->adjustSize();
 
@@ -136,6 +81,79 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect_module_signals();
     _module.start();
+}
+
+void MainWindow::create_channels(int number_of_channels)
+{
+    if (_channelWidgets.empty()) {
+        _ui.channelsLayout->removeWidget(_ui.noChannelsLabel);
+        _ui.noChannelsLabel->hide();
+    } else {
+        for (auto const& widget : _channelWidgets) {
+            _ui.channelsLayout->removeWidget(widget.get());
+        }
+        _channelWidgets.clear();
+    }
+
+    if (number_of_channels == 0) {
+        _ui.channelsLayout->addWidget(_ui.noChannelsLabel, 0, 0);
+        _ui.noChannelsLabel->show();
+    }
+
+    for (int i = 0; i < number_of_channels; ++i) {
+        auto widget = std::make_unique<ChannelWidget>();
+        widget->ui.title->setText(QString::asprintf("Ch %d", i));
+        widget->ui.soundMeterBar->setOrientation(Qt::Orientation::Vertical);
+        widget->ui.soundMeterBar->setLowpassDecay(0.5);
+        widget->setFixedWidth(75);
+        _ui.channelsLayout->addWidget(widget.get(), i / 8, i % 8);
+
+        QObject::connect(
+            widget->ui.volumeBar, &QSlider::valueChanged, this, [this, ch = i](int value) {
+                QMetaObject::invokeMethod(
+                    &_module, &UpseModule::set_channel_vol, ch, value / 100.f);
+            });
+
+        QObject::connect(
+            widget->ui.muteButton, &QPushButton::toggled, this, [this, ch = i](bool checked) {
+                QMetaObject::invokeMethod(&_module, &UpseModule::mute_channel, ch, checked);
+                _channelWidgets[ch]->ui.volumeBar->setDisabled(checked);
+                _channelWidgets[ch]->ui.title->setDisabled(checked);
+                _channelWidgets[ch]->ui.soundMeterBar->setDisabled(checked);
+                if (checked) {
+                    _channelWidgets[ch]->ui.soloButton->blockSignals(true);
+                    _channelWidgets[ch]->ui.soloButton->setChecked(false);
+                    _channelWidgets[ch]->ui.soloButton->blockSignals(false);
+                } else {
+                    for (auto const& [i, widget] : std::ranges::enumerate_view{_channelWidgets}) {
+                        if (i == ch) {
+                            continue;
+                        }
+                        widget->ui.soloButton->blockSignals(true);
+                        widget->ui.soloButton->setChecked(false);
+                        widget->ui.soloButton->blockSignals(false);
+                    }
+                }
+            });
+
+        QObject::connect(
+            widget->ui.soloButton, &QPushButton::toggled, this, [this, ch = i](bool checked) {
+                for (auto const& [i, widget] : std::ranges::enumerate_view{_channelWidgets}) {
+                    if (i == ch) {
+                        if (checked) {
+                            widget->ui.muteButton->setChecked(false);
+                        }
+                        continue;
+                    }
+                    widget->ui.muteButton->setChecked(checked);
+                    widget->ui.soloButton->blockSignals(true);
+                    widget->ui.soloButton->setChecked(false);
+                    widget->ui.soloButton->blockSignals(false);
+                }
+            });
+
+        _channelWidgets.emplace_back(std::move(widget));
+    }
 }
 
 void MainWindow::connect_module_signals()
@@ -210,23 +228,27 @@ void MainWindow::connect_module_signals()
     QObject::connect(
         &_module, &UpseModule::sound_level_changed, _ui.soundMeterBar, &SoundMeterBar::set_level);
 
-    QObject::connect(
-        &_module, &UpseModule::channel_sound_level_changed, [this](int channel, float l, float r) {
-            if (channel >= NUM_CHANNELS) {
-                return;
-            }
-            QMetaObject::invokeMethod(
-                _channelWidgets[channel]->ui.soundMeterBar, &SoundMeterBar::set_level, l, r);
-        });
+    QObject::connect(&_module,
+                     &UpseModule::channel_sound_level_changed,
+                     [this](size_t channel, float l, float r) {
+                         if (channel >= _channelWidgets.size()) {
+                             return;
+                         }
+                         QMetaObject::invokeMethod(_channelWidgets[channel]->ui.soundMeterBar,
+                                                   &SoundMeterBar::set_level,
+                                                   l,
+                                                   r);
+                     });
 
-    QObject::connect(
-        &_module, &UpseModule::channel_fired, [this](int channel) {
-            if (channel >= NUM_CHANNELS) {
-                return;
-            }
-            QMetaObject::invokeMethod(
-                _channelWidgets[channel]->ui.soundMeterBar, &SoundMeterBar::channel_fired);
-        });
+    QObject::connect(&_module, &UpseModule::channel_fired, [this](size_t channel) {
+        if (channel >= _channelWidgets.size()) {
+            return;
+        }
+        QMetaObject::invokeMethod(_channelWidgets[channel]->ui.soundMeterBar,
+                                  &SoundMeterBar::channel_fired);
+    });
+
+    QObject::connect(&_module, &UpseModule::supported_channels, this, &MainWindow::create_channels);
 }
 
 void MainWindow::load_file(QString const& file_name)

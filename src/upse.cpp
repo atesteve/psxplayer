@@ -152,21 +152,7 @@ void UpseModule::run()
         }
 
         if (_state == State::Playing) {
-            for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
-                if (channel.fired) {
-                    channel.fired = false;
-                    if (_channel_map.empty()) {
-                        emit channel_fired(ch);
-                    } else {
-                        auto const it = std::ranges::find_if(_channel_map, [&](auto const& entry) {
-                            return entry.second.second == ch;
-                        });
-                        if (it != _channel_map.cend()) {
-                            emit channel_fired(it->second.first);
-                        }
-                    }
-                }
-            }
+            handle_channel_fire();
         }
 
         // QEventLoop::AllEvents returns immediately if there are no events to dispatch.
@@ -175,6 +161,27 @@ void UpseModule::run()
         eventDispatcher()->processEvents((_state == State::Seeking || _state == State::Playing)
                                              ? QEventLoop::AllEvents
                                              : QEventLoop::WaitForMoreEvents);
+    }
+}
+
+void UpseModule::handle_channel_fire()
+{
+    for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
+        if (!channel.fired) {
+            continue;
+        }
+
+        channel.fired = false;
+
+        if (_channel_map.empty()) {
+            emit channel_fired(ch);
+        } else {
+            auto const it = std::ranges::find_if(
+                _channel_map, [&](auto const& entry) { return entry.second.second == ch; });
+            if (it != _channel_map.cend()) {
+                emit channel_fired(it->second.first);
+            }
+        }
     }
 }
 
@@ -225,6 +232,7 @@ void UpseModule::load_file(QString const& file_name)
 
     if (!_mod) {
         set_state(State::Unloaded);
+        emit supported_channels(0);
         return;
     }
 
@@ -233,6 +241,7 @@ void UpseModule::load_file(QString const& file_name)
     take_snapshot();
 
     _paused = false;
+    emit supported_channels(32);
     set_state(State::Playing);
     emit total_time_changed(milliseconds{_mod->metadata->length});
     emit seek_changed(0ms);

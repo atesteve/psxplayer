@@ -43,6 +43,7 @@ signals:
     void sound_level_changed(float l, float r);
     void channel_sound_level_changed(int ch, float l, float r);
     void channel_fired(int ch);
+    void supported_channels(int n_channels);
 
 public slots:
     void seek(int pos);
@@ -67,6 +68,7 @@ private:
     void update_mapped_channels();
     void take_snapshot();
     void set_state(State new_state);
+    void handle_channel_fire();
 
     static void jal_hook(void* self, upse_module_instance_t* ins);
     void jal_hook(upse_module_instance_t* ins);

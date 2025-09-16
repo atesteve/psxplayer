@@ -16,6 +16,9 @@ public:
     MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
+public slots:
+    void create_channels(int number_of_channels);
+
 private slots:
     void total_time_changed(std::chrono::milliseconds ms);
     void seek_changed(std::chrono::milliseconds ms);
@@ -33,5 +36,5 @@ private:
     UpseModule _module;
     QTimer _cursorTimer;
     bool _movingSlider{};
-    std::vector<ChannelWidget*> _channelWidgets;
+    std::vector<std::unique_ptr<ChannelWidget>> _channelWidgets;
 };
