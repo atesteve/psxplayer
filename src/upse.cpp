@@ -65,17 +65,37 @@ void UpseModule::jal_hook(void* self, upse_module_instance_t* ins)
 
 void UpseModule::jal_hook(upse_module_instance_t* ins)
 {
-    if (_channel_map.empty() && ins->cpustate.pc == 0x800585e0) {
-        // a0 constains the interesting pointer.
-        auto const base_ptr = ins->cpustate.GPR.n.a0;
-        // First channel at offset 0x118
-        auto const channel_base_ptr = base_ptr + 0x118;
+    if (!_channel_map.empty()) {
+        return;
+    }
 
-        // Each channel every 0x134 bytes.
-        for (int i = 0; i < 32; ++i) {
-            auto const channel_ptr = channel_base_ptr + i * 0x134;
-            _channel_map[channel_ptr] = {i, read_psx_mem(ins, channel_ptr)};
+    auto const [base_ptr_offset, channel_ptr_pitch] = [&] -> std::pair<size_t, size_t> {
+        switch (ins->cpustate.pc) {
+        case 0x80015fe0: // FF8
+            return {0xf4, 0x110};
+        case 0x800585e0: // FF9
+            return {0x118, 0x134};
+        case 0x8004d084: // Chrono Cross
+            return {0x108, 0x124};
+        default:
+            return {};
         }
+    }();
+
+    // Not an interesting function address.
+    if (base_ptr_offset == 0) {
+        return;
+    }
+
+    // a0 constains the interesting pointer.
+    auto const base_ptr = ins->cpustate.GPR.n.a0;
+    // First channel at offset `base_ptr_offset`
+    auto const channel_base_ptr = base_ptr + base_ptr_offset;
+
+    // Each channel every `channel_ptr_pitch` bytes.
+    for (int i = 0; i < 32; ++i) {
+        auto const channel_ptr = channel_base_ptr + i * channel_ptr_pitch;
+        _channel_map[channel_ptr] = {i, read_psx_mem(ins, channel_ptr)};
     }
 }
 
@@ -241,8 +261,12 @@ void UpseModule::load_file(QString const& file_name)
     std::string_view game_name{_mod->metadata->game};
     if (game_name == "Final Fantasy 9") {
         emit supported_channels(32);
+    } else if (game_name == "Final Fantasy 8") {
+        emit supported_channels(32);
     } else if (game_name == "Final Fantasy 7") {
         emit supported_channels(16);
+    } else if (game_name == "Chrono Cross") {
+        emit supported_channels(32);
     } else {
         emit supported_channels(24);
     }
