@@ -57,6 +57,16 @@ malloc_ptr(T*) -> malloc_ptr<T>;
 
 using FILE_ptr = std::unique_ptr<FILE, decltype([](auto* ptr) { fclose(ptr); })>;
 
+using psf2_vfs = std::unordered_map<std::string, std::vector<uint8_t>>;
+
+struct PSF2 {
+    uint32_t load_irx(upse_module_instance_t* ins, std::string_view name);
+    void iop_call(upse_module_instance_t* ins);
+
+    uint32_t base_addr{0x80023f00}; // Magic number from HE.
+    psf2_vfs vfs;
+};
+
 std::vector<uint8_t> read_file(FILE* f)
 {
     std::vector<uint8_t> ret;
@@ -72,9 +82,13 @@ std::vector<uint8_t> read_file(FILE* f)
     return ret;
 }
 
-using psf2_vfs = std::unordered_map<std::string, std::vector<uint8_t>>;
+void free_psf2(upse_module_instance_t* ins)
+{
+    auto* ptr = (PSF2*)ins->opaque;
+    delete ptr;
+}
 
-void finish_module_initialization(upse_xsf_t* xsf, auto const& mod, psf2_vfs fs)
+void finish_module_initialization(upse_xsf_t* xsf, auto const& mod, PSF2* psf2)
 {
     // fill out our metadata struct.
     auto* psfi = (upse_psf_t*)calloc(1, sizeof(upse_psf_t));
@@ -93,14 +107,16 @@ void finish_module_initialization(upse_xsf_t* xsf, auto const& mod, psf2_vfs fs)
     psfi->length = psfi->stop + psfi->fade;
     psfi->rate = 44100;
 
+    mod->instance.opaque = psf2;
+
     mod->metadata = psfi;
-    mod->opaque = new psf2_vfs{std::move(fs)};
     mod->evloop_run = upse_r3000_cpu_execute;
     mod->evloop_stop = upse_ps1_spu_stop;
     mod->evloop_render = upse_r3000_cpu_execute_render;
     mod->evloop_setcb = upse_ps1_spu_set_audio_callback;
     mod->evloop_seek = upse_ps1_spu_seek;
     mod->evloop_tell_seek = upse_ps1_spu_tell_seek;
+    mod->evloop_free_opaque = free_psf2;
 }
 
 template<std::integral Int>
@@ -191,7 +207,7 @@ void load_vfs_directory(psf2_vfs& fs,
 
         if (data_offset == 0 && uncompressed_size == 0 && block_size == 0) {
             // Empty file.
-            fs.try_emplace(path + name, std::vector<uint8_t>{});
+            fs.try_emplace(path + name);
             continue;
         }
 
@@ -285,11 +301,11 @@ struct Elf32_Rel {
     Elf32_Word r_info;
 };
 
-void handle_rela(upse_module_instance_t* ins,
-                 std::vector<uint8_t> const& irx,
-                 uint32_t base_addr,
-                 uint32_t section_offset,
-                 uint32_t section_size)
+void handle_rel(upse_module_instance_t* ins,
+                std::vector<uint8_t> const& irx,
+                uint32_t base_addr,
+                uint32_t section_offset,
+                uint32_t section_size)
 {
     std::optional<uint32_t> rel_target_hi{};
     std::optional<uint32_t> rel_target_lo{};
@@ -345,13 +361,22 @@ void handle_rela(upse_module_instance_t* ins,
     }
 }
 
-uint32_t load_irx(upse_module_instance_t* ins, std::vector<uint8_t> const& irx, uint32_t base_addr)
+uint32_t PSF2::load_irx(upse_module_instance_t* ins, std::string_view name)
 {
+    auto const it = vfs.find(std::string{name});
+    if (it == vfs.cend()) {
+        return 0xffffffff;
+    }
+
+    auto const& irx = it->second;
+
     // Check magic value.
     if (load_string(irx, 4) != "\177ELF"sv) {
         // Not an ELF
         return 0xffffffff;
     }
+
+    uint32_t max_addr = 0;
 
     auto const* const header = stdx::start_lifetime_as<Elf32_Ehdr>(irx.data());
     auto const sections_offset = from_le(header->e_shoff);
@@ -373,6 +398,7 @@ uint32_t load_irx(upse_module_instance_t* ins, std::vector<uint8_t> const& irx, 
 
         case 1: // SHT_PROGBITS
             upse_ps1_memory_load(ins, base_addr + addr, size, irx.data() + offset);
+            max_addr = std::max(max_addr, base_addr + addr + size);
             break;
 
         case 2: // SHT_SYMTAB
@@ -381,10 +407,11 @@ uint32_t load_irx(upse_module_instance_t* ins, std::vector<uint8_t> const& irx, 
 
         case 8: // SHT_NOBITS
             upse_ps1_memory_clear(ins, base_addr + addr, size);
+            max_addr = std::max(max_addr, base_addr + addr + size);
             break;
 
         case 9: // SHT_REL
-            handle_rela(ins, irx, base_addr, offset, size);
+            handle_rel(ins, irx, base_addr, offset, size);
             break;
 
         case 0x70000080: // Sony .iopmod section.
@@ -395,7 +422,10 @@ uint32_t load_irx(upse_module_instance_t* ins, std::vector<uint8_t> const& irx, 
         }
     }
 
-    return base_addr + from_le(header->e_entry);
+    auto const entry_point = base_addr + from_le(header->e_entry);
+    base_addr = ((max_addr + 3) / 4) * 4; // Round up to multiple of 4.
+
+    return entry_point;
 }
 
 } // namespace
@@ -415,15 +445,13 @@ upse_module_t*
     psf2_vfs fs{};
     auto xsf = load_psf2_file(f, path.parent_path(), fs);
 
+    auto psf2 = std::make_unique<PSF2>();
+    psf2->vfs = std::move(fs);
+
     // Load psf2.irx
-    auto const it = fs.find("/psf2.irx");
-    if (it == fs.cend()) {
-        return nullptr;
-    }
+    auto const entry_point = psf2->load_irx(ins, "/psf2.irx");
 
-    auto const entry_point = load_irx(ins, it->second, 0x80023f00);
-
-    finish_module_initialization(xsf.release(), mod, std::move(fs));
+    finish_module_initialization(xsf.release(), mod, psf2.release());
     ins->cpustate.pc = entry_point;
     ins->cpustate.GPR.n.sp = 0x801ffff0;
 

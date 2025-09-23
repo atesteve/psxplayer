@@ -119,6 +119,10 @@ upse_module_close(upse_module_t *mod)
     if (!mod)
         return;
 
+    if (mod->evloop_free_opaque) {
+        mod->evloop_free_opaque(&mod->instance);
+    }
+
     upse_free_psf_metadata(mod->metadata); /* XXX */
     free(mod);
 }

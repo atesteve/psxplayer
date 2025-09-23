@@ -402,8 +402,9 @@ upse_load_psf2_(void *fp, const char *path, const upse_iofuncs_t *iofuncs, emula
     psfi->length = psfi->stop + psfi->fade;
     psfi->rate = 44100;
 
+    ins->opaque = fs;
+
     ret->metadata = psfi;
-    ret->opaque = fs;
     ret->evloop_run = upse_r3000_cpu_execute;
     ret->evloop_stop = upse_ps1_spu_stop;
     ret->evloop_render = upse_r3000_cpu_execute_render;

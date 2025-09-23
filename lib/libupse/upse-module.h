@@ -84,6 +84,7 @@ typedef struct upse_module_instance {
     emulation_control_t *control;
 
     size_t bump_ptr;
+    void* opaque;
     char storage[565160];
 } upse_module_instance_t;
 
@@ -94,11 +95,11 @@ typedef int (*upse_eventloop_render_func_t)(upse_module_instance_t *ins, s16 **s
 typedef void (*upse_eventloop_setcb_func_t)(upse_module_instance_t *ins, upse_audio_callback_func_t func, const void *user_data);
 typedef int (*upse_eventloop_seek_func_t)(upse_module_instance_t *ins, u32 t);
 typedef u32 (*upse_eventloop_teel_seek_func_t)(upse_module_instance_t *ins);
+typedef void (*upse_eventloop_free_opaque)(upse_module_instance_t *ins);
 
 typedef struct upse_psf upse_psf_t;
 
 typedef struct upse_module {
-    void *opaque;
     upse_psf_t *metadata; /* XXX */
     upse_eventloop_func_t evloop_run;
     upse_eventloop_func_t evloop_stop;
@@ -106,6 +107,7 @@ typedef struct upse_module {
     upse_eventloop_setcb_func_t evloop_setcb;
     upse_eventloop_seek_func_t evloop_seek;
     upse_eventloop_teel_seek_func_t evloop_tell_seek;
+    upse_eventloop_free_opaque evloop_free_opaque;
     upse_module_instance_t instance;
 } upse_module_t;
 
