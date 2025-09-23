@@ -127,7 +127,7 @@ _upse_load_psf(upse_module_instance_t *ins, void *fp, const char *path, int leve
     in = upse_get_buffer(fp, funcs, &inlen);
     xsf = upse_xsf_decode(in, inlen, &out, &outlen);
 
-    memcpy(&tmpHead, out, min(outlen, sizeof(upse_exe_header_t)));
+    memcpy(&tmpHead, out, MIN(outlen, sizeof(upse_exe_header_t)));
 	if (outlen < sizeof(upse_exe_header_t)) memset(((u8*)&tmpHead)+outlen, 0, sizeof(upse_exe_header_t)-outlen);
 	if (outlen < 0x800) t_size = 0; else t_size = outlen - 0x800;
 

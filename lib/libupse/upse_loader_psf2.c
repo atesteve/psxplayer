@@ -305,7 +305,7 @@ upse_parse_psf2_elf(upse_module_instance_t *ins, u8 *start, u32 len)
 }
 
 upse_module_t *
-upse_load_psf2(void *fp, const char *path, const upse_iofuncs_t *iofuncs, emulation_control_t *control)
+upse_load_psf2_(void *fp, const char *path, const upse_iofuncs_t *iofuncs, emulation_control_t *control)
 {
     upse_psf_t *psfi;
     upse_xsf_t *xsf;

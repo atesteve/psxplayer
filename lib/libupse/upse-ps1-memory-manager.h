@@ -23,6 +23,10 @@
 #include "upse-types.h"
 #include "upse-module.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef WORDS_BIGENDIAN
 static inline u16 BFLIP16(u16 x)
 {
@@ -80,7 +84,11 @@ void upse_ps1_memory_write_8(upse_module_instance_t *ins, u32 mem, u8 value);
 void upse_ps1_memory_write_16(upse_module_instance_t *ins, u32 mem, u16 value);
 void upse_ps1_memory_write_32(upse_module_instance_t *ins, u32 mem, u32 value);
 
-void upse_ps1_memory_load(upse_module_instance_t *ins, u32 address, s32 length, unsigned char *data);
+void upse_ps1_memory_load(upse_module_instance_t *ins, u32 address, s32 length, const unsigned char *data);
 void upse_ps1_memory_clear(upse_module_instance_t *ins, u32 address, s32 length);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __PSXMEMORY_H__ */

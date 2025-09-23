@@ -22,7 +22,7 @@
 
 #include "upse-internal.h"
 
-void upse_ps1_memory_load(upse_module_instance_t *ins, u32 address, s32 length, unsigned char *data)
+void upse_ps1_memory_load(upse_module_instance_t *ins, u32 address, s32 length, const unsigned char *data)
 {
     /* track lowest and highest address size for debugging functions. */
     if (!ins->lowest_addr || address < ins->lowest_addr)

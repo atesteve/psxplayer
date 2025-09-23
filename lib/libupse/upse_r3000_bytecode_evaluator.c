@@ -31,10 +31,14 @@ extern void upse_ps2_iop_call(u32 callnum);
 //        printf("%08x ", ins->cpustate.pc);
 
 #define execI(ins) { \
+        if(PSXM(ins, (ins)->cpustate.pc)) { \
 	ins->cpustate.code = BFLIP32(PSXMu32(ins, ins->cpustate.pc)); \
 	if (0) { _DEBUG("current PC: %x Cycle: %x Code: %d", ins->cpustate.pc, ins->cpustate.cycle, ins->cpustate.code >> 26); } \
 	ins->cpustate.pc+= 4; ins->cpustate.cycle++; \
 	psxBSC[ins->cpustate.code >> 26](ins); \
+        } else { \
+           ins->cpustate.pc = 0; /* Ugly hack, just keep the emulator from looping forever */ \
+        } \
 }
 
 // Subsets

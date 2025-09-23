@@ -4,6 +4,10 @@
 
 #include "upse-spu-internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 upse_spu_state_t *upse_ps1_spu_open(upse_module_instance_t *ins, emulation_control_t *control);
 void upse_ps1_spu_setlength(upse_spu_state_t *spu, s32 stop, s32 fade);
 void upse_ps1_spu_close(upse_spu_state_t *spu);
@@ -19,5 +23,9 @@ int upse_ps1_spu_finalize_count(upse_spu_state_t *spu, s16 **s);
 void upse_ps1_spu_set_audio_callback(upse_module_instance_t *ins, upse_audio_callback_func_t func, const void *user_data);
 int upse_ps1_spu_seek(upse_module_instance_t *ins, u32 t);
 u32 upse_ps1_spu_tell_seek(upse_module_instance_t *ins);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

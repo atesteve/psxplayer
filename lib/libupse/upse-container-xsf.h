@@ -61,7 +61,7 @@
 typedef struct {
 	char lib[256];
 	char libaux[8][256];
-	
+
 	char inf_title[256];
 	char inf_copy[256];
 	char inf_artist[256];
@@ -71,15 +71,15 @@ typedef struct {
 	char inf_fade[256];
 	char inf_refresh[256];
         char inf_volume[256];
-	
+
 	char tag_name[MAX_UNKNOWN_TAGS][256];
 	char tag_data[MAX_UNKNOWN_TAGS][256];
 
-	u32 *res_section;
+	u8 *res_section;
 	u32 res_size;
 } upse_xsf_t;
 
-upse_xsf_t *upse_xsf_decode(u8 *input, u32 input_len, u8 **output, u64 *size);
+upse_xsf_t *upse_xsf_decode(const u8 *input, u32 input_len, u8 **output, u64 *size);
 long upse_time_to_ms(const char *str);
 
 #endif

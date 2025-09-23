@@ -22,6 +22,10 @@
 #include "upse-eventloop.h"
 #include "Neill/emucontrol.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef union
 {
     struct
@@ -121,5 +125,9 @@ upse_snapshot_t *upse_module_take_snapshot(upse_module_t *mod, upse_snapshot_t *
 void upse_module_restore_snapshot(upse_module_t *mod, upse_snapshot_t *snapshot);
 void upse_module_destroy_snapshot(upse_snapshot_t *snapshot);
 void upse_module_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

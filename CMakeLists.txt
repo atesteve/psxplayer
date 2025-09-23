@@ -34,6 +34,7 @@ qt6_add_executable(${TARGET}
   src/kcollapsiblegroupbox.h
   src/sound-meter-bar.cpp
   src/sound-meter-bar.h
+  src/upse_loader_psf2.cpp
 )
 qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
 
@@ -66,5 +67,5 @@ find_package(ZLIB REQUIRED)
 target_link_libraries(${TARGET_LIBUPSE} PUBLIC ZLIB::ZLIB)
 
 set_target_properties(${TARGET} PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD 26
 )

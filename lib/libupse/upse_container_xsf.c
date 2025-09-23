@@ -103,11 +103,12 @@
 #define DECOMP_MAX_SIZE		((32 * 1024 * 1024) + 12)
 
 upse_xsf_t *
-upse_xsf_decode(u8 *input, u32 input_len, u8 **output, u64 *size)
+upse_xsf_decode(const u8 *input, u32 input_len, u8 **output, u64 *size)
 {
 	u32 *buf;
 	u32 res_area, comp_crc,  actual_crc;
-	u8 *decomp_dat, *tag_dec;
+	u8 *decomp_dat;
+        const u8 *tag_dec;
 	uLongf decomp_length, comp_length;
 	upse_xsf_t *c = NULL;
 
@@ -170,7 +171,7 @@ upse_xsf_decode(u8 *input, u32 input_len, u8 **output, u64 *size)
 	strcpy(c->inf_fade, "n/a");
 
 	// set reserved section pointer
-	c->res_section = &buf[4];
+	c->res_section = (u8*) &buf[4];
 	c->res_size = res_area;
 
 	// Return it
