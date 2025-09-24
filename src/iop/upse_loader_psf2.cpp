@@ -15,7 +15,6 @@
 #include <concepts>
 #include <filesystem>
 #include <type_traits>
-#include <functional>
 
 using namespace std::literals;
 
@@ -89,36 +88,6 @@ void finish_module_initialization(upse_xsf_t* xsf, auto const& mod, PSF2* psf2)
     mod->evloop_seek = upse_ps1_spu_seek;
     mod->evloop_tell_seek = upse_ps1_spu_tell_seek;
     mod->evloop_free_opaque = free_psf2;
-}
-
-template<std::integral Int>
-Int load(uint8_t const* buf)
-{
-    Int ret{};
-
-    ret = (static_cast<Int>(buf[0]) & 0xff);
-    if constexpr (sizeof(Int) > 1) {
-        ret |= (static_cast<Int>(buf[1]) & 0xff) << 8;
-    }
-    if constexpr (sizeof(Int) > 2) {
-        ret |= (static_cast<Int>(buf[2]) & 0xff) << 16;
-        ret |= (static_cast<Int>(buf[3]) & 0xff) << 24;
-    }
-
-    return from_le(ret);
-}
-
-std::string_view load_string(auto const& buf, size_t max_size)
-{
-    std::string_view str{(char*)&buf[0], max_size};
-    return str.substr(0, str.find_first_of('\0'));
-}
-
-template<size_t N>
-std::string_view load_string(char const (&buf)[N])
-{
-    std::string_view str{buf, N};
-    return str.substr(0, str.find_first_of('\0'));
 }
 
 std::vector<uint8_t> load_vfs_file(std::basic_string_view<uint8_t> buffer,
@@ -448,25 +417,6 @@ void PSF2::scan_imported_functions(upse_module_instance_t* ins,
             i += 2;
         }
     }
-}
-
-void PSF2::iop_call(upse_module_instance_t* ins)
-{
-    auto const it = imported_functions.find(ins->cpustate.pc - 8);
-    if (it == imported_functions.cend()) {
-        fmt::println("Warning: can't find IOP call at {:#08x}", ins->cpustate.pc - 8);
-        return;
-    }
-
-    auto const& fn = it->second;
-    if (!fn.handler) {
-        fmt::println("Warning: unimplemented function: {}, {}", fn.name, fn.index);
-        // Return -1
-        ins->cpustate.GPR.n.v0 = to_le(-1);
-        return;
-    }
-
-    std::invoke(*fn.handler, this, ins);
 }
 
 upse_module_t*

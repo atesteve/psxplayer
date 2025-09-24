@@ -16,7 +16,7 @@ struct PSF2 {
     using psf2_vfs = std::unordered_map<std::string, std::vector<uint8_t>>;
     using imported_functions_t = std::unordered_map<uint32_t, LibFunction>;
 
-    using iop_handler = void (PSF2::*)(upse_module_instance_t* ins);
+    using iop_handler = uint32_t (PSF2::*)(upse_module_instance_t* ins);
     using iop_table_key = std::pair<std::string_view, int>;
 
     static std::unordered_map<iop_table_key, iop_handler> builtin_iop_fns;
@@ -27,11 +27,23 @@ struct PSF2 {
                                  uint32_t end_addr);
 
     void iop_call(upse_module_instance_t* ins);
-    void iop_printf(upse_module_instance_t* ins);
+    uint32_t iop_printf(upse_module_instance_t* ins);
+    uint32_t iop_open(upse_module_instance_t* ins);
+    uint32_t iop_close(upse_module_instance_t* ins);
+    uint32_t iop_read(upse_module_instance_t* ins);
+    uint32_t iop_lseek(upse_module_instance_t* ins);
+
+    struct Vfd {
+        int p;
+        const uint8_t* base;
+        int size;
+    };
 
     uint32_t base_addr{0x80023f00}; // Magic number from HE.
     psf2_vfs vfs;
     imported_functions_t imported_functions;
+    std::unordered_map<int, Vfd> vfd_store;
+    int next_vfd{3};
 };
 
 template<>

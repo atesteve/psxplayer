@@ -35,9 +35,11 @@ qt6_add_executable(${TARGET}
   src/kcollapsiblegroupbox.h
   src/sound-meter-bar.cpp
   src/sound-meter-bar.h
+  src/iop/iop.cpp
+  src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
   src/iop/iop-stdio.cpp
-  src/iop/iop-stdio.h
+  src/iop/iop-ioman.cpp
 )
 qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
 

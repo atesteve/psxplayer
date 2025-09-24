@@ -71,7 +71,7 @@ void print(const char* data, int n, void*)
 
 } // namespace
 
-void PSF2::iop_printf(upse_module_instance_t* ins)
+uint32_t PSF2::iop_printf(upse_module_instance_t* ins)
 {
     // $a0 contains a pointer to the format string.
     uint32_t ptr = from_le(ins->cpustate.GPR.n.a0);
@@ -82,8 +82,5 @@ void PSF2::iop_printf(upse_module_instance_t* ins)
         .param = 1, // Initialize to 1, second parameter. The first parameter is the format string.
     };
 
-    auto const result = vxprintf(print, nullptr, fmt_str, va);
-
-    // Return in $v0.
-    ins->cpustate.GPR.n.v0 = to_le(result);
+    return vxprintf(print, nullptr, fmt_str, va);
 }
