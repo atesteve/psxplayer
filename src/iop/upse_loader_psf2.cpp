@@ -1,5 +1,5 @@
+#include "iop.h"
 #include "util.h"
-#include "iop-stdio.h"
 
 #include "libupse/upse.h"
 #include "libupse/upse-r3000-abstract.h"
@@ -12,14 +12,10 @@
 #include <cstdlib>
 #include <memory>
 #include <string_view>
-#include <vector>
 #include <concepts>
-#include <unordered_map>
-#include <string>
 #include <filesystem>
 #include <type_traits>
-#include <cstring>
-#include <optional>
+#include <functional>
 
 using namespace std::literals;
 
@@ -43,27 +39,6 @@ malloc_ptr(T*) -> malloc_ptr<T>;
 
 using FILE_ptr = std::unique_ptr<FILE, decltype([](auto* ptr) { fclose(ptr); })>;
 
-struct LibFunction {
-    std::string name;
-    uint32_t version;
-    int index;
-};
-
-struct PSF2 {
-    using psf2_vfs = std::unordered_map<std::string, std::vector<uint8_t>>;
-    using imported_functions_t = std::unordered_map<uint32_t, LibFunction>;
-
-    uint32_t load_irx(upse_module_instance_t* ins, std::string_view name);
-    void scan_imported_functions(upse_module_instance_t* ins,
-                                 uint32_t start_addr,
-                                 uint32_t end_addr);
-    void iop_call(upse_module_instance_t* ins);
-
-    uint32_t base_addr{0x80023f00}; // Magic number from HE.
-    psf2_vfs vfs;
-    imported_functions_t imported_functions;
-};
-
 std::vector<uint8_t> read_file(FILE* f)
 {
     std::vector<uint8_t> ret;
@@ -81,7 +56,7 @@ std::vector<uint8_t> read_file(FILE* f)
 
 void free_psf2(upse_module_instance_t* ins)
 {
-    auto* ptr = (PSF2*)ins->opaque;
+    auto* ptr = static_cast<PSF2*>(ins->opaque);
     delete ptr;
 }
 
@@ -349,6 +324,8 @@ void handle_rel(upse_module_instance_t* ins,
     }
 }
 
+} // namespace
+
 uint32_t PSF2::load_irx(upse_module_instance_t* ins, std::string_view name)
 {
     auto const it = vfs.find(std::string{name});
@@ -458,7 +435,15 @@ void PSF2::scan_imported_functions(upse_module_instance_t* ins,
             int const code = addi & 0xff;
             fmt::println("Found: {:#08x}: {} {:x} {}", addr, name, version, addi & 0xff);
 
-            imported_functions.try_emplace(addr, LibFunction{std::string{name}, version, code});
+            auto const it = builtin_iop_fns.find({name, code});
+
+            imported_functions.try_emplace(addr,
+                                           LibFunction{std::string{name},
+                                                       version,
+                                                       code,
+                                                       it != builtin_iop_fns.cend()
+                                                           ? std::optional{it->second}
+                                                           : std::nullopt});
 
             i += 2;
         }
@@ -474,12 +459,15 @@ void PSF2::iop_call(upse_module_instance_t* ins)
     }
 
     auto const& fn = it->second;
-    if (fn.name == "stdio"sv && fn.index == 4) { // printf
-        iop_printf(ins);
+    if (!fn.handler) {
+        fmt::println("Warning: unimplemented function: {}, {}", fn.name, fn.index);
+        // Return -1
+        ins->cpustate.GPR.n.v0 = to_le(-1);
+        return;
     }
-}
 
-} // namespace
+    std::invoke(*fn.handler, this, ins);
+}
 
 upse_module_t*
     upse_load_psf2(FILE* f, const char* c_path, const upse_iofuncs_t*, emulation_control_t* control)
@@ -503,15 +491,16 @@ upse_module_t*
     auto const entry_point = psf2->load_irx(ins, "/psf2.irx");
 
     finish_module_initialization(xsf.release(), mod, psf2.release());
-    ins->cpustate.pc = entry_point;
+    ins->cpustate.pc = to_le(entry_point);
     ins->cpustate.GPR.n.sp = to_le(0x801ffff0);
     ins->cpustate.GPR.n.ra = to_le(0x80000000);
 
     PSXMu32(ins, 0x80000000) = to_le(0x1000ffff); // b 0
     PSXMu32(ins, 0x80000004) = 0;                 // nop
     PSXMu32(ins, 0x80000008) = to_le(0x80000010);
-    PSXMu32(ins, 0x8000000c) = to_le(0x80000010);
-    std::ranges::copy("vfs:/", (char*)PSXM(ins, 0x80000010));
+    PSXMu32(ins, 0x8000000c) = to_le(0x80000019);
+    std::ranges::copy("psf2.irx", (char*)PSXM(ins, 0x80000010)); // argv[0]
+    std::ranges::copy("vfs:/", (char*)PSXM(ins, 0x80000019));    // argv[1]
 
     ins->cpustate.GPR.n.a0 = to_le(2);          // argc
     ins->cpustate.GPR.n.a1 = to_le(0x80000008); // argv
@@ -521,6 +510,6 @@ upse_module_t*
 
 void upse_ps2_iop_call(upse_module_instance_t* ins)
 {
-    auto* const ptr = reinterpret_cast<PSF2*>(ins->opaque);
+    auto* const ptr = static_cast<PSF2*>(ins->opaque);
     ptr->iop_call(ins);
 }

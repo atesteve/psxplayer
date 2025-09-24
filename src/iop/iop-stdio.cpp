@@ -1,4 +1,4 @@
-#include "iop-stdio.h"
+#include "iop.h"
 #include "util.h"
 
 #include "xprintf/xprintf.h"
@@ -71,7 +71,7 @@ void print(const char* data, int n, void*)
 
 } // namespace
 
-void iop_printf(upse_module_instance_t* ins)
+void PSF2::iop_printf(upse_module_instance_t* ins)
 {
     // $a0 contains a pointer to the format string.
     uint32_t ptr = from_le(ins->cpustate.GPR.n.a0);
