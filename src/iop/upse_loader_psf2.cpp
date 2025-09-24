@@ -359,7 +359,8 @@ uint32_t PSF2::load_irx(upse_module_instance_t* ins, std::string_view name)
     scan_imported_functions(ins, base_addr, max_addr);
 
     auto const entry_point = base_addr + from_le(header->e_entry);
-    base_addr = ((max_addr + 3) / 4) * 4; // Round up to multiple of 4.
+    base_addr = max_addr;
+    round_base_addr();
 
     return entry_point;
 }

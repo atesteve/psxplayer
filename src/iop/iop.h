@@ -32,6 +32,13 @@ struct PSF2 {
     uint32_t iop_close(upse_module_instance_t* ins);
     uint32_t iop_read(upse_module_instance_t* ins);
     uint32_t iop_lseek(upse_module_instance_t* ins);
+    uint32_t iop_AllocSysMemory(upse_module_instance_t* ins);
+    uint32_t iop_FreeSysMemory(upse_module_instance_t* ins);
+
+    void round_base_addr()
+    {
+        base_addr = ((base_addr + 3) / 4) * 4; // Round up to multiple of 4.
+    }
 
     struct Vfd {
         int p;
@@ -47,8 +54,7 @@ struct PSF2 {
 };
 
 template<>
-struct std::hash<PSF2::iop_table_key>
-{
+struct std::hash<PSF2::iop_table_key> {
     std::size_t operator()(const PSF2::iop_table_key& s) const noexcept
     {
         std::size_t h1 = std::hash<std::string_view>{}(s.first);

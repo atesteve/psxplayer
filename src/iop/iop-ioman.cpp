@@ -58,7 +58,32 @@ uint32_t PSF2::iop_close(upse_module_instance_t* ins)
     return 0;
 }
 
-uint32_t PSF2::iop_read(upse_module_instance_t* ins) { return -1; }
+uint32_t PSF2::iop_read(upse_module_instance_t* ins)
+{
+    int const vfd = from_le(ins->cpustate.GPR.n.a0);
+    auto* const buf = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a1));
+    uint32_t const count = from_le(ins->cpustate.GPR.n.a2);
+
+    auto const it = vfd_store.find(vfd);
+    if (it == vfd_store.cend()) {
+        // Not valid vfd
+        return -1;
+    }
+    auto& vfd_d = it->second;
+
+    if (!buf) {
+        return -1;
+    }
+
+    auto const start_p = vfd_d.p;
+    auto const end_p = std::min<int>(vfd_d.p + count, vfd_d.size);
+    auto const ret = end_p - start_p;
+    vfd_d.p = end_p;
+
+    std::copy(vfd_d.base + start_p, vfd_d.base + end_p, buf);
+
+    return ret;
+}
 
 uint32_t PSF2::iop_lseek(upse_module_instance_t* ins)
 {
@@ -71,25 +96,26 @@ uint32_t PSF2::iop_lseek(upse_module_instance_t* ins)
         // Not valid vfd
         return -1;
     }
+    auto& vfd_d = it->second;
 
     auto const new_offset = [&] {
         switch (whence) {
         case SEEK_SET:
             return offset;
         case SEEK_CUR:
-            return it->second.p + offset;
+            return vfd_d.p + offset;
         case SEEK_END:
-            return it->second.size + offset;
+            return vfd_d.size + offset;
         default:
             return -1;
         };
     }();
 
-    if (new_offset < 0 || new_offset > it->second.size) {
+    if (new_offset < 0 || new_offset > vfd_d.size) {
         // Invalid offset
         return -1;
     }
 
-    it->second.p = new_offset;
+    vfd_d.p = new_offset;
     return new_offset;
 }

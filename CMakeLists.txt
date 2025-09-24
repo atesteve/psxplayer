@@ -40,6 +40,7 @@ qt6_add_executable(${TARGET}
   src/iop/upse_loader_psf2.cpp
   src/iop/iop-stdio.cpp
   src/iop/iop-ioman.cpp
+  src/iop/iop-sysmem.cpp
 )
 qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
 

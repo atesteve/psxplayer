@@ -12,6 +12,9 @@ std::unordered_map<PSF2::iop_table_key, PSF2::iop_handler> PSF2::builtin_iop_fns
     {{"ioman", 5}, &PSF2::iop_close},
     {{"ioman", 6}, &PSF2::iop_read},
     {{"ioman", 8}, &PSF2::iop_lseek},
+
+    {{"sysmem", 4}, &PSF2::iop_AllocSysMemory},
+    {{"sysmem", 5}, &PSF2::iop_FreeSysMemory},
 };
 
 void PSF2::iop_call(upse_module_instance_t* ins)
