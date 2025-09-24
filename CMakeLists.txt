@@ -41,6 +41,7 @@ qt6_add_executable(${TARGET}
   src/iop/iop-stdio.cpp
   src/iop/iop-ioman.cpp
   src/iop/iop-sysmem.cpp
+  src/iop/iop-modload.cpp
 )
 qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
 

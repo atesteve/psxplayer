@@ -34,6 +34,8 @@ struct PSF2 {
     uint32_t iop_lseek(upse_module_instance_t* ins);
     uint32_t iop_AllocSysMemory(upse_module_instance_t* ins);
     uint32_t iop_FreeSysMemory(upse_module_instance_t* ins);
+    uint32_t iop_LoadStartModule(upse_module_instance_t* ins);
+    uint32_t iop_LoadStartModuleReturn(upse_module_instance_t* ins);
 
     void round_base_addr()
     {
@@ -51,6 +53,14 @@ struct PSF2 {
     imported_functions_t imported_functions;
     std::unordered_map<int, Vfd> vfd_store;
     int next_vfd{3};
+
+    struct {
+        uint32_t ra;
+        uint32_t a0;
+        uint32_t a1;
+        uint32_t a2;
+        uint32_t a3;
+    } loadStartModule_saved_state;
 };
 
 template<>

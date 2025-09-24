@@ -59,7 +59,10 @@ void free_psf2(upse_module_instance_t* ins)
     delete ptr;
 }
 
-void finish_module_initialization(upse_xsf_t* xsf, auto const& mod, PSF2* psf2)
+void finish_module_initialization(upse_xsf_t* xsf,
+                                  auto const& mod,
+                                  PSF2* psf2,
+                                  uint32_t entry_point)
 {
     // fill out our metadata struct.
     auto* psfi = (upse_psf_t*)calloc(1, sizeof(upse_psf_t));
@@ -88,6 +91,32 @@ void finish_module_initialization(upse_xsf_t* xsf, auto const& mod, PSF2* psf2)
     mod->evloop_seek = upse_ps1_spu_seek;
     mod->evloop_tell_seek = upse_ps1_spu_tell_seek;
     mod->evloop_free_opaque = free_psf2;
+
+    auto* const ins = &mod->instance;
+
+    // Setup PC, SP and return address.
+    ins->cpustate.pc = to_le(entry_point);
+    ins->cpustate.GPR.n.sp = to_le(0x801ffff0);
+    ins->cpustate.GPR.n.ra = to_le(0x80000000);
+
+    // Setup a spin loop at 0x80000000
+    PSXMu32(ins, 0x80000000) = to_le(0x1000ffff); // b 0
+    PSXMu32(ins, 0x80000004) = 0;                 // nop
+
+    // Setup a call to a special iop function for module calls.
+    PSXMu32(ins, 0x80000008) = to_le(0x03e00008); // jr $ra
+    PSXMu32(ins, 0x8000000c) = to_le(0x2400ffff); // li $zero, -1
+
+    psf2->imported_functions.try_emplace(
+        0x80000008, LibFunction{"internal", 0x100, -1, &PSF2::iop_LoadStartModuleReturn});
+
+    PSXMu32(ins, 0x80000010) = to_le(0x80000010);
+    PSXMu32(ins, 0x80000014) = to_le(0x80000019);
+    std::ranges::copy("psf2.irx", (char*)PSXM(ins, 0x80000018)); // argv[0]
+    std::ranges::copy("vfs:/", (char*)PSXM(ins, 0x80000021));    // argv[1]
+
+    ins->cpustate.GPR.n.a0 = to_le(2);          // argc
+    ins->cpustate.GPR.n.a1 = to_le(0x80000008); // argv
 }
 
 std::vector<uint8_t> load_vfs_file(std::basic_string_view<uint8_t> buffer,
@@ -243,7 +272,7 @@ void handle_rel(upse_module_instance_t* ins,
     std::optional<uint32_t> rel_target_hi{};
     std::optional<uint32_t> rel_target_lo{};
 
-    for (auto i = 0u; i < section_size * sizeof(Elf32_Rel); i += sizeof(Elf32_Rel)) {
+    for (auto i = 0u; i < section_size; i += sizeof(Elf32_Rel)) {
         auto const* const rel = stdx::start_lifetime_as<Elf32_Rel>(irx.data() + section_offset + i);
         auto const offset = from_le(rel->r_offset);
         auto const info = from_le(rel->r_info);
@@ -441,20 +470,7 @@ upse_module_t*
     // Load psf2.irx
     auto const entry_point = psf2->load_irx(ins, "/psf2.irx");
 
-    finish_module_initialization(xsf.release(), mod, psf2.release());
-    ins->cpustate.pc = to_le(entry_point);
-    ins->cpustate.GPR.n.sp = to_le(0x801ffff0);
-    ins->cpustate.GPR.n.ra = to_le(0x80000000);
-
-    PSXMu32(ins, 0x80000000) = to_le(0x1000ffff); // b 0
-    PSXMu32(ins, 0x80000004) = 0;                 // nop
-    PSXMu32(ins, 0x80000008) = to_le(0x80000010);
-    PSXMu32(ins, 0x8000000c) = to_le(0x80000019);
-    std::ranges::copy("psf2.irx", (char*)PSXM(ins, 0x80000010)); // argv[0]
-    std::ranges::copy("vfs:/", (char*)PSXM(ins, 0x80000019));    // argv[1]
-
-    ins->cpustate.GPR.n.a0 = to_le(2);          // argc
-    ins->cpustate.GPR.n.a1 = to_le(0x80000008); // argv
+    finish_module_initialization(xsf.release(), mod, psf2.release(), entry_point);
 
     return mod.release();
 }
