@@ -504,7 +504,17 @@ upse_module_t*
 
     finish_module_initialization(xsf.release(), mod, psf2.release());
     ins->cpustate.pc = entry_point;
-    ins->cpustate.GPR.n.sp = 0x801ffff0;
+    ins->cpustate.GPR.n.sp = to_le(0x801ffff0);
+    ins->cpustate.GPR.n.ra = to_le(0x80000000);
+
+    PSXMu32(ins, 0x80000000) = to_le(0x1000ffff); // b 0
+    PSXMu32(ins, 0x80000004) = 0;                 // nop
+    PSXMu32(ins, 0x80000008) = to_le(0x80000010);
+    PSXMu32(ins, 0x8000000c) = to_le(0x80000010);
+    std::ranges::copy("vfs:/", (char*)PSXM(ins, 0x80000010));
+
+    ins->cpustate.GPR.n.a0 = to_le(2);          // argc
+    ins->cpustate.GPR.n.a1 = to_le(0x80000008); // argv
 
     return mod.release();
 }
