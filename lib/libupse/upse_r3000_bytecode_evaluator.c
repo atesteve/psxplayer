@@ -21,7 +21,7 @@
 
 #include "upse-internal.h"
 
-extern void upse_ps2_iop_call(u32 callnum);
+extern void upse_ps2_iop_call(upse_module_instance_t *ins);
 
 // These macros are used to assemble the repassembler functions
 
@@ -458,8 +458,10 @@ static void psxADDI(upse_module_instance_t *ins)
 }				// Rt = Rs + Im         (Exception on Integer Overflow)
 static void psxADDIU(upse_module_instance_t *ins)
 {
-    if (!_Rt_)
+    if (!_Rt_) {
+        upse_ps2_iop_call(ins);
 	return;
+    }
 
     _rRt_ = _u32(_rRs_) + _Imm_;
 }				// Rt = Rs + Im

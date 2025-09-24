@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 set(TARGET "psxplayer")
 set(TARGET_LIBUPSE "libupse")
+set(TARGET_XPRINTF "xprintf")
 project(${TARGET} VERSION 0.0.1 LANGUAGES C CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -34,7 +35,9 @@ qt6_add_executable(${TARGET}
   src/kcollapsiblegroupbox.h
   src/sound-meter-bar.cpp
   src/sound-meter-bar.h
-  src/upse_loader_psf2.cpp
+  src/iop/upse_loader_psf2.cpp
+  src/iop/iop-stdio.cpp
+  src/iop/iop-stdio.h
 )
 qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
 
@@ -43,6 +46,11 @@ target_compile_options(${TARGET} PRIVATE -Wall -Wextra -pedantic)
 # Scan files from libupse
 file(GLOB_RECURSE SOURCES_LIBUPSE "lib/libupse" "*.c")
 add_library(${TARGET_LIBUPSE} STATIC ${SOURCES_LIBUPSE})
+
+add_library(${TARGET_XPRINTF} STATIC
+  lib/xprintf/xprintf.cpp
+  lib/xprintf/xprintf.h
+)
 
 # Definitions for libupse
 target_compile_definitions(${TARGET_LIBUPSE} PRIVATE EMU_COMPILE EMU_LITTLE_ENDIAN)
@@ -53,6 +61,7 @@ endif()
 target_include_directories(${TARGET} PRIVATE lib)
 target_include_directories(${TARGET} PRIVATE src)
 target_link_libraries(${TARGET} PRIVATE ${TARGET_LIBUPSE})
+target_link_libraries(${TARGET} PRIVATE ${TARGET_XPRINTF})
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})

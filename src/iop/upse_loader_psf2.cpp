@@ -1,7 +1,11 @@
+#include "util.h"
+#include "iop-stdio.h"
+
 #include "libupse/upse.h"
 #include "libupse/upse-r3000-abstract.h"
 #include "libupse/upse-ps1-spu-base.h"
 
+#include <fmt/format.h>
 #include <zlib.h>
 
 #include <cstdio>
@@ -9,7 +13,6 @@
 #include <memory>
 #include <string_view>
 #include <vector>
-#include <bit>
 #include <concepts>
 #include <unordered_map>
 #include <string>
@@ -18,25 +21,6 @@
 #include <cstring>
 #include <optional>
 
-namespace stdx {
-
-// https://stackoverflow.com/questions/76445860/implementation-of-stdstart-lifetime-as
-template<class T>
-    requires(std::is_trivially_copyable_v<T>)
-T* start_lifetime_as(void* p) noexcept
-{
-    return std::launder(static_cast<T*>(std::memmove(p, p, sizeof(T))));
-}
-
-template<class T>
-    requires(std::is_trivially_copyable_v<T>)
-T const* start_lifetime_as(const void* p) noexcept
-{
-    return std::launder(static_cast<T const*>(std::memmove(const_cast<void*>(p), p, sizeof(T))));
-}
-
-} // namespace stdx
-
 using namespace std::literals;
 
 extern "C" {
@@ -44,6 +28,8 @@ upse_module_t* upse_load_psf2(FILE* f,
                               const char* path,
                               const upse_iofuncs_t* funcs,
                               emulation_control_t* control);
+
+void upse_ps2_iop_call(upse_module_instance_t* ins);
 }
 
 namespace {
@@ -57,14 +43,25 @@ malloc_ptr(T*) -> malloc_ptr<T>;
 
 using FILE_ptr = std::unique_ptr<FILE, decltype([](auto* ptr) { fclose(ptr); })>;
 
-using psf2_vfs = std::unordered_map<std::string, std::vector<uint8_t>>;
+struct LibFunction {
+    std::string name;
+    uint32_t version;
+    int index;
+};
 
 struct PSF2 {
+    using psf2_vfs = std::unordered_map<std::string, std::vector<uint8_t>>;
+    using imported_functions_t = std::unordered_map<uint32_t, LibFunction>;
+
     uint32_t load_irx(upse_module_instance_t* ins, std::string_view name);
+    void scan_imported_functions(upse_module_instance_t* ins,
+                                 uint32_t start_addr,
+                                 uint32_t end_addr);
     void iop_call(upse_module_instance_t* ins);
 
     uint32_t base_addr{0x80023f00}; // Magic number from HE.
     psf2_vfs vfs;
+    imported_functions_t imported_functions;
 };
 
 std::vector<uint8_t> read_file(FILE* f)
@@ -117,16 +114,6 @@ void finish_module_initialization(upse_xsf_t* xsf, auto const& mod, PSF2* psf2)
     mod->evloop_seek = upse_ps1_spu_seek;
     mod->evloop_tell_seek = upse_ps1_spu_tell_seek;
     mod->evloop_free_opaque = free_psf2;
-}
-
-template<std::integral Int>
-Int from_le(Int i)
-{
-    if constexpr (std::endian::native == std::endian::big) {
-        return std::byteswap(i);
-    } else {
-        return i;
-    }
 }
 
 template<std::integral Int>
@@ -188,7 +175,7 @@ std::vector<uint8_t> load_vfs_file(std::basic_string_view<uint8_t> buffer,
     return ret;
 }
 
-void load_vfs_directory(psf2_vfs& fs,
+void load_vfs_directory(PSF2::psf2_vfs& fs,
                         std::string path,
                         std::basic_string_view<uint8_t> buffer,
                         size_t offset = 0)
@@ -223,8 +210,10 @@ void load_vfs_directory(psf2_vfs& fs,
     }
 }
 
-malloc_ptr<upse_xsf_t>
-    load_psf2_file(FILE* f, std::filesystem::path const& path, psf2_vfs& fs, int rec_level = 0)
+malloc_ptr<upse_xsf_t> load_psf2_file(FILE* f,
+                                      std::filesystem::path const& path,
+                                      PSF2::psf2_vfs& fs,
+                                      int rec_level = 0)
 {
     static constexpr int MAX_REC_LEVEL = 9;
 
@@ -333,7 +322,6 @@ void handle_rel(upse_module_instance_t* ins,
             break;
 
         case 5: // Two-step 32-bit immediate, hi bits.
-            [[fallthrough]];
         case 6: // Two-step 32-bit immediate, lo bits.
             if (type == 5) {
                 rel_target_hi = target;
@@ -410,7 +398,7 @@ uint32_t PSF2::load_irx(upse_module_instance_t* ins, std::string_view name)
             max_addr = std::max(max_addr, base_addr + addr + size);
             break;
 
-        case 9: // SHT_REL
+        case 9: // SHT_REL - SHiT getting REaL
             handle_rel(ins, irx, base_addr, offset, size);
             break;
 
@@ -422,10 +410,73 @@ uint32_t PSF2::load_irx(upse_module_instance_t* ins, std::string_view name)
         }
     }
 
+    scan_imported_functions(ins, base_addr, max_addr);
+
     auto const entry_point = base_addr + from_le(header->e_entry);
     base_addr = ((max_addr + 3) / 4) * 4; // Round up to multiple of 4.
 
     return entry_point;
+}
+
+void PSF2::scan_imported_functions(upse_module_instance_t* ins,
+                                   uint32_t start_addr,
+                                   uint32_t end_addr)
+{
+    static constexpr auto EXPORT_FN_MAGIC = 0x41e00000;
+
+    auto const ram_base = start_addr & 0x1fffff;
+    auto const* const ram = reinterpret_cast<uint32_t*>(ins->psxM);
+
+    for (auto i = ram_base / sizeof(uint32_t);
+         i < (ram_base + (end_addr - start_addr)) / sizeof(uint32_t);
+         ++i) {
+        if (from_le(ram[i]) != EXPORT_FN_MAGIC) {
+            continue;
+        }
+
+        if (auto const zero = from_le(ram[i + 1]); zero != 0) {
+            continue;
+        }
+
+        auto const version = from_le(ram[i + 2]);
+        auto const name = load_string(&ram[i + 3], 8);
+
+        i += 5;
+
+        while (true) {
+            auto const jr = from_le(ram[i]);
+            auto const addi = from_le(ram[i + 1]);
+
+            if (jr != 0x03e00008) { // jr $ra
+                break;
+            }
+            if ((addi & 0xffff0000) != 0x24000000) { // addi $zero $zero #imm
+                break;
+            }
+
+            uint32_t const addr = i * sizeof(uint32_t) + 0x80000000;
+            int const code = addi & 0xff;
+            fmt::println("Found: {:#08x}: {} {:x} {}", addr, name, version, addi & 0xff);
+
+            imported_functions.try_emplace(addr, LibFunction{std::string{name}, version, code});
+
+            i += 2;
+        }
+    }
+}
+
+void PSF2::iop_call(upse_module_instance_t* ins)
+{
+    auto const it = imported_functions.find(ins->cpustate.pc - 8);
+    if (it == imported_functions.cend()) {
+        fmt::println("Warning: can't find IOP call at {:#08x}", ins->cpustate.pc - 8);
+        return;
+    }
+
+    auto const& fn = it->second;
+    if (fn.name == "stdio"sv && fn.index == 4) { // printf
+        iop_printf(ins);
+    }
 }
 
 } // namespace
@@ -442,7 +493,7 @@ upse_module_t*
     upse_ps1_init(ins);
     upse_ps1_reset(ins, UPSE_PSX_REV_PS2_IOP, control);
 
-    psf2_vfs fs{};
+    PSF2::psf2_vfs fs{};
     auto xsf = load_psf2_file(f, path.parent_path(), fs);
 
     auto psf2 = std::make_unique<PSF2>();
@@ -456,4 +507,10 @@ upse_module_t*
     ins->cpustate.GPR.n.sp = 0x801ffff0;
 
     return mod.release();
+}
+
+void upse_ps2_iop_call(upse_module_instance_t* ins)
+{
+    auto* const ptr = reinterpret_cast<PSF2*>(ins->opaque);
+    ptr->iop_call(ins);
 }
