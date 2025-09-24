@@ -22,6 +22,9 @@ std::unordered_map<iop_table_key, PSF2::iop_handler> PSF2::builtin_iop_fns = {
     {{"intrman", 18}, &PSF2::iop_CpuResumeIntr},
 
     {{"loadcore", 6}, &PSF2::iop_RegisterLibraryEntries},
+
+    {{"sysclib", 14}, &PSF2::iop_memset},
+    {{"sysclib", 36}, &PSF2::iop_strtol},
 };
 
 void PSF2::iop_call(upse_module_instance_t* ins)
@@ -40,6 +43,7 @@ void PSF2::iop_call(upse_module_instance_t* ins)
         return;
     }
 
+    fmt::println("---- Calling {} {}", fn.name, fn.index);
     auto const result = std::invoke(*fn.handler, this, ins);
 
     // Return value in v0

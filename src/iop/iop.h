@@ -50,6 +50,8 @@ struct PSF2 {
     uint32_t iop_CpuSuspendIntr(upse_module_instance_t* ins);
     uint32_t iop_CpuResumeIntr(upse_module_instance_t* ins);
     uint32_t iop_RegisterLibraryEntries(upse_module_instance_t* ins);
+    uint32_t iop_memset(upse_module_instance_t* ins);
+    uint32_t iop_strtol(upse_module_instance_t* ins);
 
     void round_base_addr()
     {
@@ -75,6 +77,7 @@ struct PSF2 {
         uint32_t a1;
         uint32_t a2;
         uint32_t a3;
+        uint32_t sp;
     } loadStartModule_saved_state;
 };
 
