@@ -10,14 +10,25 @@
 #include <string_view>
 #include <optional>
 
-struct LibFunction;
+struct LibCallPoint;
+
+using iop_table_key = std::pair<std::string_view, int>;
+
+template<>
+struct std::hash<iop_table_key> {
+    std::size_t operator()(const iop_table_key& s) const noexcept
+    {
+        std::size_t h1 = std::hash<std::string_view>{}(s.first);
+        std::size_t h2 = std::hash<int>{}(s.second);
+        return h1 ^ (h2 << 1); // or use boost::hash_combine
+    }
+};
 
 struct PSF2 {
     using psf2_vfs = std::unordered_map<std::string, std::vector<uint8_t>>;
-    using imported_functions_t = std::unordered_map<uint32_t, LibFunction>;
+    using imported_functions_t = std::unordered_map<uint32_t, LibCallPoint>;
 
     using iop_handler = uint32_t (PSF2::*)(upse_module_instance_t* ins);
-    using iop_table_key = std::pair<std::string_view, int>;
 
     static std::unordered_map<iop_table_key, iop_handler> builtin_iop_fns;
 
@@ -36,6 +47,9 @@ struct PSF2 {
     uint32_t iop_FreeSysMemory(upse_module_instance_t* ins);
     uint32_t iop_LoadStartModule(upse_module_instance_t* ins);
     uint32_t iop_LoadStartModuleReturn(upse_module_instance_t* ins);
+    uint32_t iop_CpuSuspendIntr(upse_module_instance_t* ins);
+    uint32_t iop_CpuResumeIntr(upse_module_instance_t* ins);
+    uint32_t iop_RegisterLibraryEntries(upse_module_instance_t* ins);
 
     void round_base_addr()
     {
@@ -51,6 +65,7 @@ struct PSF2 {
     uint32_t base_addr{0x80023f00}; // Magic number from HE.
     psf2_vfs vfs;
     imported_functions_t imported_functions;
+    std::unordered_map<iop_table_key, uint32_t> exported_iop_fns;
     std::unordered_map<int, Vfd> vfd_store;
     int next_vfd{3};
 
@@ -63,17 +78,7 @@ struct PSF2 {
     } loadStartModule_saved_state;
 };
 
-template<>
-struct std::hash<PSF2::iop_table_key> {
-    std::size_t operator()(const PSF2::iop_table_key& s) const noexcept
-    {
-        std::size_t h1 = std::hash<std::string_view>{}(s.first);
-        std::size_t h2 = std::hash<int>{}(s.second);
-        return h1 ^ (h2 << 1); // or use boost::hash_combine
-    }
-};
-
-struct LibFunction {
+struct LibCallPoint {
     std::string name;
     uint32_t version;
     int index;

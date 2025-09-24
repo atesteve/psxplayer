@@ -5,7 +5,7 @@
 
 #include <functional>
 
-std::unordered_map<PSF2::iop_table_key, PSF2::iop_handler> PSF2::builtin_iop_fns = {
+std::unordered_map<iop_table_key, PSF2::iop_handler> PSF2::builtin_iop_fns = {
     {{"stdio", 4}, &PSF2::iop_printf},
 
     {{"ioman", 4}, &PSF2::iop_open},
@@ -17,6 +17,11 @@ std::unordered_map<PSF2::iop_table_key, PSF2::iop_handler> PSF2::builtin_iop_fns
     {{"sysmem", 5}, &PSF2::iop_FreeSysMemory},
 
     {{"modload", 7}, &PSF2::iop_LoadStartModule},
+
+    {{"intrman", 17}, &PSF2::iop_CpuSuspendIntr},
+    {{"intrman", 18}, &PSF2::iop_CpuResumeIntr},
+
+    {{"loadcore", 6}, &PSF2::iop_RegisterLibraryEntries},
 };
 
 void PSF2::iop_call(upse_module_instance_t* ins)

@@ -108,7 +108,7 @@ void finish_module_initialization(upse_xsf_t* xsf,
     PSXMu32(ins, 0x8000000c) = to_le(0x2400ffff); // li $zero, -1
 
     psf2->imported_functions.try_emplace(
-        0x80000008, LibFunction{"internal", 0x100, -1, &PSF2::iop_LoadStartModuleReturn});
+        0x80000008, LibCallPoint{"internal", 0x100, -1, &PSF2::iop_LoadStartModuleReturn});
 
     PSXMu32(ins, 0x80000010) = to_le(0x80000010);
     PSXMu32(ins, 0x80000014) = to_le(0x80000019);
@@ -437,7 +437,7 @@ void PSF2::scan_imported_functions(upse_module_instance_t* ins,
             auto const it = builtin_iop_fns.find({name, code});
 
             imported_functions.try_emplace(addr,
-                                           LibFunction{std::string{name},
+                                           LibCallPoint{std::string{name},
                                                        version,
                                                        code,
                                                        it != builtin_iop_fns.cend()
