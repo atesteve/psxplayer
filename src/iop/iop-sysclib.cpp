@@ -18,11 +18,27 @@ uint32_t PSF2::iop_memset(upse_module_instance_t* ins)
     return from_le(ins->cpustate.GPR.n.a0);
 }
 
+uint32_t PSF2::iop_strlen(upse_module_instance_t* ins)
+{
+    auto* const ptr = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
+    return strlen(ptr);
+}
+
+uint32_t PSF2::iop_strncpy(upse_module_instance_t* ins)
+{
+    auto const dst_arg = from_le(ins->cpustate.GPR.n.a0);
+    auto* const dst = (char*)PSXM(ins, dst_arg);
+    auto* const src = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a1));
+    uint32_t const dsize = from_le(ins->cpustate.GPR.n.a2);
+    strncpy(dst, src, dsize);
+    return dst_arg;
+}
+
 uint32_t PSF2::iop_strtol(upse_module_instance_t* ins)
 {
-    uint32_t const nptr = from_le(ins->cpustate.GPR.n.a0);
+    auto* const nptr = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
     uint32_t const endptr = from_le(ins->cpustate.GPR.n.a1);
     int const base = from_le(ins->cpustate.GPR.n.a2);
 
-    return 0;
+    return strtol(nptr, 0, base);
 }

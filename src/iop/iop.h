@@ -39,18 +39,28 @@ struct PSF2 {
 
     void iop_call(upse_module_instance_t* ins);
     uint32_t iop_printf(upse_module_instance_t* ins);
+
     uint32_t iop_open(upse_module_instance_t* ins);
     uint32_t iop_close(upse_module_instance_t* ins);
     uint32_t iop_read(upse_module_instance_t* ins);
     uint32_t iop_lseek(upse_module_instance_t* ins);
+    uint32_t iop_AddDrv(upse_module_instance_t* ins);
+    uint32_t iop_DelDrv(upse_module_instance_t* ins);
+
     uint32_t iop_AllocSysMemory(upse_module_instance_t* ins);
     uint32_t iop_FreeSysMemory(upse_module_instance_t* ins);
+
     uint32_t iop_LoadStartModule(upse_module_instance_t* ins);
     uint32_t iop_LoadStartModuleReturn(upse_module_instance_t* ins);
+
     uint32_t iop_CpuSuspendIntr(upse_module_instance_t* ins);
     uint32_t iop_CpuResumeIntr(upse_module_instance_t* ins);
+
     uint32_t iop_RegisterLibraryEntries(upse_module_instance_t* ins);
+
     uint32_t iop_memset(upse_module_instance_t* ins);
+    uint32_t iop_strlen(upse_module_instance_t* ins);
+    uint32_t iop_strncpy(upse_module_instance_t* ins);
     uint32_t iop_strtol(upse_module_instance_t* ins);
 
     void round_base_addr()

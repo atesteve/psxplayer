@@ -53,7 +53,7 @@ uint32_t PSF2::iop_LoadStartModule(upse_module_instance_t* ins)
 
     PSXMu32(ins, sp + 8) = to_le(name_arg);
     for (auto const [i, arg] : std::ranges::enumerate_view{arg_list}) {
-        PSXMu32(ins, sp + 8 + i * sizeof(uint32_t)) = to_le(arg);
+        PSXMu32(ins, sp + 12 + i * sizeof(uint32_t)) = to_le(arg);
     }
 
     ins->cpustate.GPR.n.sp = to_le(sp);
@@ -73,7 +73,7 @@ uint32_t PSF2::iop_LoadStartModuleReturn(upse_module_instance_t* ins)
     ins->cpustate.GPR.n.a1 = loadStartModule_saved_state.a1;
     ins->cpustate.GPR.n.a2 = loadStartModule_saved_state.a1;
     ins->cpustate.GPR.n.a3 = loadStartModule_saved_state.a3;
-    ins->cpustate.GPR.n.sp = loadStartModule_saved_state.a3;
+    ins->cpustate.GPR.n.sp = loadStartModule_saved_state.sp;
 
     // Set return value.
     uint32_t const result = from_le(ins->cpustate.GPR.n.a3);

@@ -119,3 +119,46 @@ uint32_t PSF2::iop_lseek(upse_module_instance_t* ins)
     vfd_d.p = new_offset;
     return new_offset;
 }
+
+struct iop_device_ops_t {
+	uint32_t init;
+	uint32_t deinit;
+	uint32_t format;
+	uint32_t open;
+	uint32_t close;
+	uint32_t read;
+	uint32_t write;
+	uint32_t lseek;
+	uint32_t ioctl;
+	uint32_t remove;
+	uint32_t mkdir;
+	uint32_t rmdir;
+	uint32_t dopen;
+	uint32_t dclose;
+	uint32_t dread;
+	uint32_t getstat;
+	uint32_t chstat;
+};
+
+struct iop_device_t {
+	uint32_t name;
+	uint32_t type;
+	uint32_t version;
+	uint32_t desc;
+	uint32_t ops;
+};
+
+uint32_t PSF2::iop_AddDrv(upse_module_instance_t* ins)
+{
+    auto* const table = (iop_device_t*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
+    auto* const name = (char*)PSXM(ins, from_le(table->name));
+    auto* const desc = (char*)PSXM(ins, from_le(table->desc));
+    auto* const ops = (iop_device_ops_t*)PSXM(ins, from_le(table->ops));
+    return 0;
+}
+
+uint32_t PSF2::iop_DelDrv(upse_module_instance_t* ins)
+{
+    auto* const name = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
+    return 0;
+}
