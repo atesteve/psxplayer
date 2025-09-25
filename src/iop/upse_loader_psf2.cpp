@@ -432,7 +432,7 @@ void PSF2::scan_imported_functions(upse_module_instance_t* ins,
 
             uint32_t const addr = i * sizeof(uint32_t) + 0x80000000;
             int const code = addi & 0xff;
-            fmt::println("Found: {:#08x}: {} {:x} {}", addr, name, version, addi & 0xff);
+            // fmt::println("Found: {:#08x}: {} {:x} {}", addr, name, version, addi & 0xff);
 
             auto const it = builtin_iop_fns.find({name, code});
 

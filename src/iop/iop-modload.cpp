@@ -7,7 +7,7 @@
 
 using namespace std::literals;
 
-uint32_t PSF2::iop_LoadStartModule(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_LoadStartModule(upse_module_instance_t* ins)
 {
     auto const name_arg = from_le(ins->cpustate.GPR.n.a0);
     auto* const c_name = (char const*)PSXM(ins, name_arg);
@@ -65,7 +65,7 @@ uint32_t PSF2::iop_LoadStartModule(upse_module_instance_t* ins)
     return 0;
 }
 
-uint32_t PSF2::iop_LoadStartModuleReturn(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_LoadStartModuleReturn(upse_module_instance_t* ins)
 {
     // Restore state
     ins->cpustate.GPR.n.ra = loadStartModule_saved_state.ra;

@@ -20,12 +20,15 @@ std::unordered_map<iop_table_key, PSF2::iop_builtin_handler> PSF2::builtin_iop_f
 
     {{"modload", 7}, &PSF2::iop_LoadStartModule},
 
+    {{"intrman", 5}, &PSF2::iop_ReleaseIntrHandler},
+    {{"intrman", 7}, &PSF2::iop_DisableIntr},
     {{"intrman", 17}, &PSF2::iop_CpuSuspendIntr},
     {{"intrman", 18}, &PSF2::iop_CpuResumeIntr},
 
     {{"loadcore", 6}, &PSF2::iop_RegisterLibraryEntries},
 
     {{"sysclib", 14}, &PSF2::iop_memset},
+    {{"sysclib", 17}, &PSF2::iop_bzero},
     {{"sysclib", 23}, &PSF2::iop_strcpy},
     {{"sysclib", 27}, &PSF2::iop_strlen},
     {{"sysclib", 30}, &PSF2::iop_strncpy},
@@ -36,7 +39,7 @@ void PSF2::iop_call(upse_module_instance_t* ins)
 {
     auto const it = imported_functions.find(ins->cpustate.pc - 8);
     if (it == imported_functions.cend()) {
-        fmt::println("Warning: can't find IOP call at {:#010x}", ins->cpustate.pc - 8);
+        // fmt::println("Warning: can't find IOP call at {:#010x}", ins->cpustate.pc - 8);
         return;
     }
 
@@ -51,17 +54,19 @@ void PSF2::iop_call(upse_module_instance_t* ins)
                        } else {
                            auto const address = it->second;
                            fn.handler = address;
-                           fmt::println("---- Calling native {} {}", fn.name, fn.index);
+                           //    fmt::println("---- Calling native {} {}", fn.name, fn.index);
                            ins->cpustate.branchPC = to_le(address);
                        }
                    },
                    [&](iop_builtin_handler handler) {
-                       fmt::println("---- Calling builtin {} {}", fn.name, fn.index);
+                       //    fmt::println("---- Calling builtin {} {}", fn.name, fn.index);
                        auto const result = std::invoke(handler, this, ins);
-                       ins->cpustate.GPR.n.v0 = to_le(result);
+                       if (result) {
+                           ins->cpustate.GPR.n.v0 = to_le(*result);
+                       }
                    },
                    [&](uint32_t address) {
-                       fmt::println("---- Calling native {} {}", fn.name, fn.index);
+                       //    fmt::println("---- Calling native {} {}", fn.name, fn.index);
                        ins->cpustate.branchPC = to_le(address);
                    },
                },

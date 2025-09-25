@@ -9,6 +9,7 @@
 #include <utility>
 #include <string_view>
 #include <variant>
+#include <optional>
 
 struct LibCallPoint;
 
@@ -28,7 +29,7 @@ struct PSF2 {
     using psf2_vfs = std::unordered_map<std::string, std::vector<uint8_t>>;
     using imported_functions_t = std::unordered_map<uint32_t, LibCallPoint>;
 
-    using iop_builtin_handler = uint32_t (PSF2::*)(upse_module_instance_t* ins);
+    using iop_builtin_handler = std::optional<uint32_t> (PSF2::*)(upse_module_instance_t* ins);
 
     static std::unordered_map<iop_table_key, iop_builtin_handler> builtin_iop_fns;
 
@@ -38,31 +39,34 @@ struct PSF2 {
                                  uint32_t end_addr);
 
     void iop_call(upse_module_instance_t* ins);
-    uint32_t iop_printf(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_printf(upse_module_instance_t* ins);
 
-    uint32_t iop_open(upse_module_instance_t* ins);
-    uint32_t iop_close(upse_module_instance_t* ins);
-    uint32_t iop_read(upse_module_instance_t* ins);
-    uint32_t iop_lseek(upse_module_instance_t* ins);
-    uint32_t iop_AddDrv(upse_module_instance_t* ins);
-    uint32_t iop_DelDrv(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_open(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_close(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_read(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_lseek(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_AddDrv(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_DelDrv(upse_module_instance_t* ins);
 
-    uint32_t iop_AllocSysMemory(upse_module_instance_t* ins);
-    uint32_t iop_FreeSysMemory(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_AllocSysMemory(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_FreeSysMemory(upse_module_instance_t* ins);
 
-    uint32_t iop_LoadStartModule(upse_module_instance_t* ins);
-    uint32_t iop_LoadStartModuleReturn(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_LoadStartModule(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_LoadStartModuleReturn(upse_module_instance_t* ins);
 
-    uint32_t iop_CpuSuspendIntr(upse_module_instance_t* ins);
-    uint32_t iop_CpuResumeIntr(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_ReleaseIntrHandler(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_DisableIntr(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_CpuSuspendIntr(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_CpuResumeIntr(upse_module_instance_t* ins);
 
-    uint32_t iop_RegisterLibraryEntries(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_RegisterLibraryEntries(upse_module_instance_t* ins);
 
-    uint32_t iop_memset(upse_module_instance_t* ins);
-    uint32_t iop_strcpy(upse_module_instance_t* ins);
-    uint32_t iop_strlen(upse_module_instance_t* ins);
-    uint32_t iop_strncpy(upse_module_instance_t* ins);
-    uint32_t iop_strtol(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_memset(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_bzero(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_strcpy(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_strlen(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_strncpy(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_strtol(upse_module_instance_t* ins);
 
     void round_base_addr()
     {

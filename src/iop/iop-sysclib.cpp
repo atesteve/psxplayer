@@ -7,7 +7,7 @@
 
 using namespace std::literals;
 
-uint32_t PSF2::iop_memset(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_memset(upse_module_instance_t* ins)
 {
     auto* const ptr = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
     int const c = from_le(ins->cpustate.GPR.n.a1);
@@ -18,7 +18,17 @@ uint32_t PSF2::iop_memset(upse_module_instance_t* ins)
     return from_le(ins->cpustate.GPR.n.a0);
 }
 
-uint32_t PSF2::iop_strcpy(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_bzero(upse_module_instance_t* ins)
+{
+    auto* const ptr = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
+    uint32_t const n = from_le(ins->cpustate.GPR.n.a1);
+
+    bzero(ptr, n);
+
+    return std::nullopt;
+}
+
+std::optional<uint32_t> PSF2::iop_strcpy(upse_module_instance_t* ins)
 {
     auto const dst_u32 = from_le(ins->cpustate.GPR.n.a0);
     auto* const dst = (char*)PSXM(ins, dst_u32);
@@ -27,13 +37,13 @@ uint32_t PSF2::iop_strcpy(upse_module_instance_t* ins)
     return dst_u32;
 }
 
-uint32_t PSF2::iop_strlen(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_strlen(upse_module_instance_t* ins)
 {
     auto* const ptr = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
     return strlen(ptr);
 }
 
-uint32_t PSF2::iop_strncpy(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_strncpy(upse_module_instance_t* ins)
 {
     auto const dst_u32 = from_le(ins->cpustate.GPR.n.a0);
     auto* const dst = (char*)PSXM(ins, dst_u32);
@@ -43,7 +53,7 @@ uint32_t PSF2::iop_strncpy(upse_module_instance_t* ins)
     return dst_u32;
 }
 
-uint32_t PSF2::iop_strtol(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_strtol(upse_module_instance_t* ins)
 {
     auto const nptr_u32 = from_le(ins->cpustate.GPR.n.a0);
     auto* const nptr = (char*)PSXM(ins, nptr_u32);

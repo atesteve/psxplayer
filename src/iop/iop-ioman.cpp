@@ -3,8 +3,6 @@
 
 #include "libupse/upse-ps1-memory-manager.h"
 
-#include <string>
-
 using namespace std::literals;
 
 #define O_RDONLY 0x0001
@@ -15,7 +13,7 @@ using namespace std::literals;
 #define SEEK_CUR 1
 #define SEEK_END 2
 
-uint32_t PSF2::iop_open(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_open(upse_module_instance_t* ins)
 {
     auto* const c_file_name = (char const*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
     auto const flags = from_le(ins->cpustate.GPR.n.a1);
@@ -45,7 +43,7 @@ uint32_t PSF2::iop_open(upse_module_instance_t* ins)
     return vfd;
 }
 
-uint32_t PSF2::iop_close(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_close(upse_module_instance_t* ins)
 {
     int const vfd = from_le(ins->cpustate.GPR.n.a0);
 
@@ -58,7 +56,7 @@ uint32_t PSF2::iop_close(upse_module_instance_t* ins)
     return 0;
 }
 
-uint32_t PSF2::iop_read(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_read(upse_module_instance_t* ins)
 {
     int const vfd = from_le(ins->cpustate.GPR.n.a0);
     auto* const buf = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a1));
@@ -85,7 +83,7 @@ uint32_t PSF2::iop_read(upse_module_instance_t* ins)
     return ret;
 }
 
-uint32_t PSF2::iop_lseek(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_lseek(upse_module_instance_t* ins)
 {
     int const vfd = from_le(ins->cpustate.GPR.n.a0);
     int const offset = from_le(ins->cpustate.GPR.n.a1);
@@ -148,7 +146,7 @@ struct iop_device_t {
 	uint32_t ops;
 };
 
-uint32_t PSF2::iop_AddDrv(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_AddDrv(upse_module_instance_t* ins)
 {
     auto* const table = (iop_device_t*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
     auto* const name = (char*)PSXM(ins, from_le(table->name));
@@ -157,7 +155,7 @@ uint32_t PSF2::iop_AddDrv(upse_module_instance_t* ins)
     return 0;
 }
 
-uint32_t PSF2::iop_DelDrv(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_DelDrv(upse_module_instance_t* ins)
 {
     auto* const name = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
     return 0;

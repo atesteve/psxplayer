@@ -14,7 +14,7 @@ struct irx_export_table {
     uint32_t fptrs;
 };
 
-uint32_t PSF2::iop_RegisterLibraryEntries(upse_module_instance_t* ins)
+std::optional<uint32_t> PSF2::iop_RegisterLibraryEntries(upse_module_instance_t* ins)
 {
     static constexpr uint32_t IRX_EXPORT_MAGIC = 0x41c00000;
 
@@ -36,7 +36,7 @@ uint32_t PSF2::iop_RegisterLibraryEntries(upse_module_instance_t* ins)
             n++;
         }
 
-        fmt::println("Imported {} {:x}: {} functions", name, version, n);
+        //fmt::println("Imported {} {:x}: {} functions", name, version, n);
 
         if (table->next) {
             table = (irx_export_table const*)PSXM(ins, from_le(table->next));
