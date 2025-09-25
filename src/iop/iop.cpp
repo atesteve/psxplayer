@@ -26,6 +26,7 @@ std::unordered_map<iop_table_key, PSF2::iop_handler> PSF2::builtin_iop_fns = {
     {{"loadcore", 6}, &PSF2::iop_RegisterLibraryEntries},
 
     {{"sysclib", 14}, &PSF2::iop_memset},
+    {{"sysclib", 23}, &PSF2::iop_strcpy},
     {{"sysclib", 27}, &PSF2::iop_strlen},
     {{"sysclib", 30}, &PSF2::iop_strncpy},
     {{"sysclib", 36}, &PSF2::iop_strtol},

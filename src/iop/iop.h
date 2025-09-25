@@ -59,6 +59,7 @@ struct PSF2 {
     uint32_t iop_RegisterLibraryEntries(upse_module_instance_t* ins);
 
     uint32_t iop_memset(upse_module_instance_t* ins);
+    uint32_t iop_strcpy(upse_module_instance_t* ins);
     uint32_t iop_strlen(upse_module_instance_t* ins);
     uint32_t iop_strncpy(upse_module_instance_t* ins);
     uint32_t iop_strtol(upse_module_instance_t* ins);
