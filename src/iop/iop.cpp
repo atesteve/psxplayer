@@ -5,7 +5,7 @@
 
 #include <functional>
 
-std::unordered_map<iop_table_key, PSF2::iop_handler> PSF2::builtin_iop_fns = {
+std::unordered_map<iop_table_key, PSF2::iop_builtin_handler> PSF2::builtin_iop_fns = {
     {{"stdio", 4}, &PSF2::iop_printf},
 
     {{"ioman", 4}, &PSF2::iop_open},
@@ -40,17 +40,30 @@ void PSF2::iop_call(upse_module_instance_t* ins)
         return;
     }
 
-    auto const& fn = it->second;
-    if (!fn.handler) {
-        fmt::println("Warning: unimplemented function: {}, {}", fn.name, fn.index);
-        // Return -1
-        ins->cpustate.GPR.n.v0 = to_le(-1);
-        return;
-    }
-
-    fmt::println("---- Calling {} {}", fn.name, fn.index);
-    auto const result = std::invoke(*fn.handler, this, ins);
-
-    // Return value in v0
-    ins->cpustate.GPR.n.v0 = to_le(result);
+    auto& fn = it->second;
+    std::visit(visitor{
+                   [&](std::nullptr_t) {
+                       auto const it = exported_iop_fns.find({fn.name, fn.index});
+                       if (it == exported_iop_fns.cend()) {
+                           fmt::println(
+                               "Warning: unimplemented function: {}, {}", fn.name, fn.index);
+                           ins->cpustate.GPR.n.v0 = to_le(-1);
+                       } else {
+                           auto const address = it->second;
+                           fn.handler = address;
+                           fmt::println("---- Calling native {} {}", fn.name, fn.index);
+                           ins->cpustate.branchPC = to_le(address);
+                       }
+                   },
+                   [&](iop_builtin_handler handler) {
+                       fmt::println("---- Calling builtin {} {}", fn.name, fn.index);
+                       auto const result = std::invoke(handler, this, ins);
+                       ins->cpustate.GPR.n.v0 = to_le(result);
+                   },
+                   [&](uint32_t address) {
+                       fmt::println("---- Calling native {} {}", fn.name, fn.index);
+                       ins->cpustate.branchPC = to_le(address);
+                   },
+               },
+               fn.handler);
 }

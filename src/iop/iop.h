@@ -8,7 +8,7 @@
 #include <vector>
 #include <utility>
 #include <string_view>
-#include <optional>
+#include <variant>
 
 struct LibCallPoint;
 
@@ -28,9 +28,9 @@ struct PSF2 {
     using psf2_vfs = std::unordered_map<std::string, std::vector<uint8_t>>;
     using imported_functions_t = std::unordered_map<uint32_t, LibCallPoint>;
 
-    using iop_handler = uint32_t (PSF2::*)(upse_module_instance_t* ins);
+    using iop_builtin_handler = uint32_t (PSF2::*)(upse_module_instance_t* ins);
 
-    static std::unordered_map<iop_table_key, iop_handler> builtin_iop_fns;
+    static std::unordered_map<iop_table_key, iop_builtin_handler> builtin_iop_fns;
 
     uint32_t load_irx(upse_module_instance_t* ins, std::string_view name);
     void scan_imported_functions(upse_module_instance_t* ins,
@@ -96,5 +96,5 @@ struct LibCallPoint {
     std::string name;
     uint32_t version;
     int index;
-    std::optional<PSF2::iop_handler> handler;
+    std::variant<std::nullptr_t, PSF2::iop_builtin_handler, uint32_t> handler{};
 };

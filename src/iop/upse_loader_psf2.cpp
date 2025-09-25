@@ -436,13 +436,11 @@ void PSF2::scan_imported_functions(upse_module_instance_t* ins,
 
             auto const it = builtin_iop_fns.find({name, code});
 
-            imported_functions.try_emplace(addr,
-                                           LibCallPoint{std::string{name},
-                                                       version,
-                                                       code,
-                                                       it != builtin_iop_fns.cend()
-                                                           ? std::optional{it->second}
-                                                           : std::nullopt});
+            LibCallPoint cp{std::string{name}, version, code};
+            if (it != builtin_iop_fns.cend()) {
+                cp.handler = it->second;
+            }
+            imported_functions.try_emplace(addr, std::move(cp));
 
             i += 2;
         }

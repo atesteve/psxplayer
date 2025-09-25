@@ -24,6 +24,11 @@ T const* start_lifetime_as(const void* p) noexcept
 
 } // namespace stdx
 
+template<typename... Callable>
+struct visitor : Callable... {
+    using Callable::operator()...;
+};
+
 template<std::integral Int>
 Int from_le(Int i)
 {
