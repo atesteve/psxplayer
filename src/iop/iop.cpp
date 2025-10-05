@@ -1,14 +1,18 @@
 #include "iop.h"
 #include "util.h"
 
+#include "libupse/upse-ps1-memory-manager.h"
+
 #include <fmt/format.h>
 
 #include <functional>
+#include <utility>
+#include <type_traits>
 
 std::unordered_map<iop_table_key, PSF2::iop_builtin_handler> PSF2::builtin_iop_fns = {
     {{"stdio", 4}, &PSF2::iop_printf},
 
-    {{"ioman", 4}, &PSF2::iop_open},
+    {{"ioman", 4}, &PSF2::iop_builtin<&PSF2::iop_open, int(const char* name, int mode)>},
     {{"ioman", 5}, &PSF2::iop_close},
     {{"ioman", 6}, &PSF2::iop_read},
     {{"ioman", 8}, &PSF2::iop_lseek},
@@ -20,7 +24,9 @@ std::unordered_map<iop_table_key, PSF2::iop_builtin_handler> PSF2::builtin_iop_f
 
     {{"modload", 7}, &PSF2::iop_LoadStartModule},
 
+    {{"intrman", 4}, &PSF2::iop_RegisterIntrHandler},
     {{"intrman", 5}, &PSF2::iop_ReleaseIntrHandler},
+    {{"intrman", 6}, &PSF2::iop_EnableIntr},
     {{"intrman", 7}, &PSF2::iop_DisableIntr},
     {{"intrman", 17}, &PSF2::iop_CpuSuspendIntr},
     {{"intrman", 18}, &PSF2::iop_CpuResumeIntr},
@@ -28,7 +34,7 @@ std::unordered_map<iop_table_key, PSF2::iop_builtin_handler> PSF2::builtin_iop_f
     {{"loadcore", 6}, &PSF2::iop_RegisterLibraryEntries},
 
     {{"sysclib", 14}, &PSF2::iop_memset},
-    {{"sysclib", 17}, &PSF2::iop_bzero},
+    {{"sysclib", 17}, &PSF2::iop_builtin<&PSF2::iop_bzero, void(void* ptr, size_t n)>},
     {{"sysclib", 23}, &PSF2::iop_strcpy},
     {{"sysclib", 27}, &PSF2::iop_strlen},
     {{"sysclib", 30}, &PSF2::iop_strncpy},
@@ -71,4 +77,65 @@ void PSF2::iop_call(upse_module_instance_t* ins)
                    },
                },
                fn.handler);
+}
+
+template<auto F, typename Signature>
+struct iop_builtin_impl;
+
+template<auto F, typename Result, typename... Args>
+struct iop_builtin_impl<F, Result(Args...)> {
+
+    static uint32_t get_raw_arg(upse_module_instance_t* ins, size_t index)
+    {
+        if (index <= 3) { // Registers $a0 - $a3
+            return ins->cpustate.GPR.r[index + 4];
+        }
+        // Parameters from the stack.
+        auto const sp = from_le(ins->cpustate.GPR.n.sp);
+        auto* sp_ptr = (uint32_t*)PSXM(ins, sp);
+        if (sp_ptr) {
+            return *(sp_ptr + index);
+        }
+        // TODO: warning message?
+        return 0;
+    };
+
+    template<typename Arg, size_t Index>
+    static auto argument(upse_module_instance_t* ins)
+    {
+        uint32_t const raw_arg = get_raw_arg(ins, Index);
+
+        if constexpr (std::is_pointer_v<Arg>)
+        {
+            auto const ptr = (Arg)PSXM(ins, raw_arg);
+            return PSF2::PointerArg{ptr, raw_arg};
+        }
+        else
+        {
+            return raw_arg;
+        }
+    }
+
+    template<typename I, I... Ints>
+    static std::optional<uint32_t>
+        run(PSF2& psf2, upse_module_instance_t* ins, std::index_sequence<Ints...>)
+    {
+        if constexpr (std::is_void_v<Result>) {
+            (psf2.*F)(argument<Args, Ints>(ins)...);
+            return std::nullopt;
+        } else {
+            return (psf2.*F)(argument<Args, Ints>(ins)...);
+        }
+    }
+
+    static std::optional<uint32_t> run(PSF2& psf2, upse_module_instance_t* ins)
+    {
+        return run(psf2, ins, std::make_index_sequence<sizeof...(Args)>{});
+    }
+};
+
+template<auto F, typename Signature>
+std::optional<uint32_t> PSF2::iop_builtin(upse_module_instance_t* ins)
+{
+    return iop_builtin_impl<F, Signature>::run(*this, ins);
 }

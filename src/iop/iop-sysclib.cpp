@@ -18,14 +18,9 @@ std::optional<uint32_t> PSF2::iop_memset(upse_module_instance_t* ins)
     return from_le(ins->cpustate.GPR.n.a0);
 }
 
-std::optional<uint32_t> PSF2::iop_bzero(upse_module_instance_t* ins)
+void PSF2::iop_bzero(PointerArg<void*> ptr, uint32_t n)
 {
-    auto* const ptr = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
-    uint32_t const n = from_le(ins->cpustate.GPR.n.a1);
-
-    bzero(ptr, n);
-
-    return std::nullopt;
+    bzero(ptr.ptr, n);
 }
 
 std::optional<uint32_t> PSF2::iop_strcpy(upse_module_instance_t* ins)

@@ -39,9 +39,19 @@ struct PSF2 {
                                  uint32_t end_addr);
 
     void iop_call(upse_module_instance_t* ins);
+
+    template<typename T>
+    struct PointerArg {
+        T ptr;
+        uint32_t raw_ptr;
+    };
+
+    template<auto F, typename Signature>
+    std::optional<uint32_t> iop_builtin(upse_module_instance_t* ins);
+
     std::optional<uint32_t> iop_printf(upse_module_instance_t* ins);
 
-    std::optional<uint32_t> iop_open(upse_module_instance_t* ins);
+    int32_t iop_open(PointerArg<char const*> name, int32_t mode);
     std::optional<uint32_t> iop_close(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_read(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_lseek(upse_module_instance_t* ins);
@@ -54,7 +64,9 @@ struct PSF2 {
     std::optional<uint32_t> iop_LoadStartModule(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_LoadStartModuleReturn(upse_module_instance_t* ins);
 
+    std::optional<uint32_t> iop_RegisterIntrHandler(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_ReleaseIntrHandler(upse_module_instance_t* ins);
+    std::optional<uint32_t> iop_EnableIntr(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_DisableIntr(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_CpuSuspendIntr(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_CpuResumeIntr(upse_module_instance_t* ins);
@@ -62,7 +74,7 @@ struct PSF2 {
     std::optional<uint32_t> iop_RegisterLibraryEntries(upse_module_instance_t* ins);
 
     std::optional<uint32_t> iop_memset(upse_module_instance_t* ins);
-    std::optional<uint32_t> iop_bzero(upse_module_instance_t* ins);
+    void iop_bzero(PointerArg<void*> ptr, uint32_t n);
     std::optional<uint32_t> iop_strcpy(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_strlen(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_strncpy(upse_module_instance_t* ins);

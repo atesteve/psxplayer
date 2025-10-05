@@ -13,21 +13,18 @@ using namespace std::literals;
 #define SEEK_CUR 1
 #define SEEK_END 2
 
-std::optional<uint32_t> PSF2::iop_open(upse_module_instance_t* ins)
+int32_t PSF2::iop_open(PointerArg<char const*> name, int32_t mode)
 {
-    auto* const c_file_name = (char const*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
-    auto const flags = from_le(ins->cpustate.GPR.n.a1);
-
-    if (flags != O_RDONLY) {
+    if (mode != O_RDONLY) {
         // Implement just read only for the moment.
         return -1;
     }
 
-    if (!c_file_name) {
+    if (!name.ptr) {
         return -1;
     }
 
-    auto const file_name = load_string(c_file_name, 256);
+    auto const file_name = load_string(name.ptr, 256);
     auto const it = vfs.find("/"s + file_name);
 
     if (it == vfs.cend()) {
