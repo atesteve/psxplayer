@@ -7,15 +7,10 @@
 
 using namespace std::literals;
 
-std::optional<uint32_t> PSF2::iop_memset(upse_module_instance_t* ins)
+uint32_t PSF2::iop_memset(PointerArg<void*> ptr, int c, uint32_t n)
 {
-    auto* const ptr = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
-    int const c = from_le(ins->cpustate.GPR.n.a1);
-    uint32_t const n = from_le(ins->cpustate.GPR.n.a2);
-
-    memset(ptr, c, n);
-
-    return from_le(ins->cpustate.GPR.n.a0);
+    memset(ptr.ptr, c, n);
+    return ptr.raw_ptr;
 }
 
 void PSF2::iop_bzero(PointerArg<void*> ptr, uint32_t n)
@@ -23,47 +18,37 @@ void PSF2::iop_bzero(PointerArg<void*> ptr, uint32_t n)
     bzero(ptr.ptr, n);
 }
 
-std::optional<uint32_t> PSF2::iop_strcpy(upse_module_instance_t* ins)
+uint32_t PSF2::iop_strcpy(PointerArg<char*> dst, PointerArg<char const*> src)
 {
-    auto const dst_u32 = from_le(ins->cpustate.GPR.n.a0);
-    auto* const dst = (char*)PSXM(ins, dst_u32);
-    auto* const src = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a1));
-    strcpy(dst, src);
-    return dst_u32;
+    strcpy(dst.ptr, src.ptr);
+    return dst.raw_ptr;
 }
 
-std::optional<uint32_t> PSF2::iop_strlen(upse_module_instance_t* ins)
+uint32_t PSF2::iop_strlen(PointerArg<char const*> str)
 {
-    auto* const ptr = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
-    return strlen(ptr);
+    return strlen(str.ptr);
 }
 
-std::optional<uint32_t> PSF2::iop_strncpy(upse_module_instance_t* ins)
+uint32_t PSF2::iop_strncpy(PointerArg<char*> dst, PointerArg<char const*> src, uint32_t size)
 {
-    auto const dst_u32 = from_le(ins->cpustate.GPR.n.a0);
-    auto* const dst = (char*)PSXM(ins, dst_u32);
-    auto* const src = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a1));
-    uint32_t const dsize = from_le(ins->cpustate.GPR.n.a2);
-    strncpy(dst, src, dsize);
-    return dst_u32;
+    strncpy(dst.ptr, src.ptr, size);
+    return dst.raw_ptr;
 }
 
-std::optional<uint32_t> PSF2::iop_strtol(upse_module_instance_t* ins)
+int32_t PSF2::iop_strtol(upse_module_instance_t* ins,
+                         PointerArg<char const*> nptr,
+                         PointerArg<char**> endptr,
+                         int base)
 {
-    auto const nptr_u32 = from_le(ins->cpustate.GPR.n.a0);
-    auto* const nptr = (char*)PSXM(ins, nptr_u32);
-    uint32_t const endptr = from_le(ins->cpustate.GPR.n.a1);
-    int const base = from_le(ins->cpustate.GPR.n.a2);
-
     char* ptr{};
-    auto result = strtol(nptr, &ptr, base);
+    auto result = strtol(nptr.ptr, &ptr, base);
 
-    if (endptr) {
+    if (endptr.raw_ptr) {
         if (!ptr) {
-            PSXMu32(ins, endptr) = 0;
+            PSXMu32(ins, endptr.raw_ptr) = 0;
         } else {
-            auto const diff = ptr - nptr;
-            PSXMu32(ins, endptr) = from_le(nptr_u32 + diff);
+            auto const diff = ptr - nptr.ptr;
+            PSXMu32(ins, endptr.raw_ptr) = from_le(nptr.raw_ptr + diff);
         }
     }
 

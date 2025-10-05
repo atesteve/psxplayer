@@ -51,17 +51,21 @@ struct PSF2 {
 
     std::optional<uint32_t> iop_printf(upse_module_instance_t* ins);
 
-    int32_t iop_open(PointerArg<char const*> name, int32_t mode);
-    std::optional<uint32_t> iop_close(upse_module_instance_t* ins);
-    std::optional<uint32_t> iop_read(upse_module_instance_t* ins);
-    std::optional<uint32_t> iop_lseek(upse_module_instance_t* ins);
+    int iop_open(PointerArg<char const*> name, int flags);
+    int iop_close(int fd);
+    int iop_read(int fd, PointerArg<void*> ptr, uint32_t count);
+    int iop_lseek(int fd, int offset, int whence);
     std::optional<uint32_t> iop_AddDrv(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_DelDrv(upse_module_instance_t* ins);
 
-    std::optional<uint32_t> iop_AllocSysMemory(upse_module_instance_t* ins);
-    std::optional<uint32_t> iop_FreeSysMemory(upse_module_instance_t* ins);
+    uint32_t iop_AllocSysMemory(int mode, int size, PointerArg<void*> ptr);
+    int iop_FreeSysMemory(PointerArg<void*> ptr);
 
-    std::optional<uint32_t> iop_LoadStartModule(upse_module_instance_t* ins);
+    int iop_LoadStartModule(upse_module_instance_t* ins,
+                            PointerArg<char const*> name,
+                            int arglen,
+                            PointerArg<char const*> args,
+                            PointerArg<int*> result);
     std::optional<uint32_t> iop_LoadStartModuleReturn(upse_module_instance_t* ins);
 
     std::optional<uint32_t> iop_RegisterIntrHandler(upse_module_instance_t* ins);
@@ -73,12 +77,15 @@ struct PSF2 {
 
     std::optional<uint32_t> iop_RegisterLibraryEntries(upse_module_instance_t* ins);
 
-    std::optional<uint32_t> iop_memset(upse_module_instance_t* ins);
+    uint32_t iop_memset(PointerArg<void*> ptr, int c, uint32_t n);
     void iop_bzero(PointerArg<void*> ptr, uint32_t n);
-    std::optional<uint32_t> iop_strcpy(upse_module_instance_t* ins);
-    std::optional<uint32_t> iop_strlen(upse_module_instance_t* ins);
-    std::optional<uint32_t> iop_strncpy(upse_module_instance_t* ins);
-    std::optional<uint32_t> iop_strtol(upse_module_instance_t* ins);
+    uint32_t iop_strcpy(PointerArg<char*> dst, PointerArg<char const*> src);
+    uint32_t iop_strlen(PointerArg<char const*> str);
+    uint32_t iop_strncpy(PointerArg<char*> dst, PointerArg<char const*> src, uint32_t size);
+    int32_t iop_strtol(upse_module_instance_t* ins,
+                       PointerArg<char const*> nptr,
+                       PointerArg<char**> endptr,
+                       int base);
 
     void round_base_addr()
     {

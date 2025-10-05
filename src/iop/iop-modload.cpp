@@ -7,18 +7,20 @@
 
 using namespace std::literals;
 
-std::optional<uint32_t> PSF2::iop_LoadStartModule(upse_module_instance_t* ins)
+int PSF2::iop_LoadStartModule(upse_module_instance_t* ins,
+                          PointerArg<char const*> c_name,
+                          int arglen,
+                          PointerArg<char const*> args,
+                          PointerArg<int*> result)
 {
-    auto const name_arg = from_le(ins->cpustate.GPR.n.a0);
-    auto* const c_name = (char const*)PSXM(ins, name_arg);
-    int const arglen = from_le(ins->cpustate.GPR.n.a1);
-    uint32_t const args = from_le(ins->cpustate.GPR.n.a2);
+    // Can't set result now, it will be set in the return callback.
+    std::ignore = result;
 
-    if (!c_name) {
+    if (!c_name.ptr) {
         return -1;
     }
 
-    auto const name = "/"s + load_string(c_name, 256);
+    auto const name = "/"s + load_string(c_name.ptr, 256);
     auto const entry_point = load_irx(ins, name);
 
     // Save state.
@@ -39,11 +41,11 @@ std::optional<uint32_t> PSF2::iop_LoadStartModule(upse_module_instance_t* ins)
 
     std::vector<uint32_t> arg_list{};
 
-    uint32_t new_arg = args;
+    uint32_t new_arg = args.raw_ptr;
     for (int i = 0; i < arglen; ++i) {
-        if (PSXMu8(ins, from_le(args + i)) == 0) {
+        if (PSXMu8(ins, args.raw_ptr + i) == 0) {
             arg_list.push_back(new_arg);
-            new_arg = args + i + 1;
+            new_arg = args.raw_ptr + i + 1;
         }
     }
 
@@ -51,7 +53,7 @@ std::optional<uint32_t> PSF2::iop_LoadStartModule(upse_module_instance_t* ins)
     auto sp = from_le(ins->cpustate.GPR.n.sp);
     sp -= (arg_list.size() + 3) * sizeof(uint32_t);
 
-    PSXMu32(ins, sp + 8) = to_le(name_arg);
+    PSXMu32(ins, sp + 8) = c_name.raw_ptr;
     for (auto const [i, arg] : std::ranges::enumerate_view{arg_list}) {
         PSXMu32(ins, sp + 12 + i * sizeof(uint32_t)) = to_le(arg);
     }

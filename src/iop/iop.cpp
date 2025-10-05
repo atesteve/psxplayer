@@ -13,16 +13,17 @@ std::unordered_map<iop_table_key, PSF2::iop_builtin_handler> PSF2::builtin_iop_f
     {{"stdio", 4}, &PSF2::iop_printf},
 
     {{"ioman", 4}, &PSF2::iop_builtin<&PSF2::iop_open, int(const char* name, int mode)>},
-    {{"ioman", 5}, &PSF2::iop_close},
-    {{"ioman", 6}, &PSF2::iop_read},
-    {{"ioman", 8}, &PSF2::iop_lseek},
+    {{"ioman", 5}, &PSF2::iop_builtin<&PSF2::iop_close, int(int fd)>},
+    {{"ioman", 6}, &PSF2::iop_builtin<&PSF2::iop_read, int(int fd, void* ptr, size_t size)>},
+    {{"ioman", 8}, &PSF2::iop_builtin<&PSF2::iop_lseek, int(int fd, int pos, int mode)>},
     {{"ioman", 20}, &PSF2::iop_AddDrv},
     {{"ioman", 21}, &PSF2::iop_DelDrv},
 
-    {{"sysmem", 4}, &PSF2::iop_AllocSysMemory},
-    {{"sysmem", 5}, &PSF2::iop_FreeSysMemory},
+    {{"sysmem", 4}, &PSF2::iop_builtin<&PSF2::iop_AllocSysMemory, void*(int, int, void*)>},
+    {{"sysmem", 5}, &PSF2::iop_builtin<&PSF2::iop_FreeSysMemory, int(void* ptr)>},
 
-    {{"modload", 7}, &PSF2::iop_LoadStartModule},
+    {{"modload", 7},
+     &PSF2::iop_builtin<&PSF2::iop_LoadStartModule, int(char const*, int, char const*, int*)>},
 
     {{"intrman", 4}, &PSF2::iop_RegisterIntrHandler},
     {{"intrman", 5}, &PSF2::iop_ReleaseIntrHandler},
@@ -33,12 +34,14 @@ std::unordered_map<iop_table_key, PSF2::iop_builtin_handler> PSF2::builtin_iop_f
 
     {{"loadcore", 6}, &PSF2::iop_RegisterLibraryEntries},
 
-    {{"sysclib", 14}, &PSF2::iop_memset},
+    {{"sysclib", 14}, &PSF2::iop_builtin<&PSF2::iop_memset, void*(void* ptr, int c, size_t n)>},
     {{"sysclib", 17}, &PSF2::iop_builtin<&PSF2::iop_bzero, void(void* ptr, size_t n)>},
-    {{"sysclib", 23}, &PSF2::iop_strcpy},
-    {{"sysclib", 27}, &PSF2::iop_strlen},
-    {{"sysclib", 30}, &PSF2::iop_strncpy},
-    {{"sysclib", 36}, &PSF2::iop_strtol},
+    {{"sysclib", 23}, &PSF2::iop_builtin<&PSF2::iop_strcpy, char*(char* dst, char const* src)>},
+    {{"sysclib", 27}, &PSF2::iop_builtin<&PSF2::iop_strlen, size_t(char const* str)>},
+    {{"sysclib", 30},
+     &PSF2::iop_builtin<&PSF2::iop_strncpy, char*(char* dst, char const* src, size_t size)>},
+    {{"sysclib", 36},
+     &PSF2::iop_builtin<&PSF2::iop_strtol, long(char const* nptr, char** endptr, int base)>},
 };
 
 void PSF2::iop_call(upse_module_instance_t* ins)
@@ -105,13 +108,10 @@ struct iop_builtin_impl<F, Result(Args...)> {
     {
         uint32_t const raw_arg = get_raw_arg(ins, Index);
 
-        if constexpr (std::is_pointer_v<Arg>)
-        {
+        if constexpr (std::is_pointer_v<Arg>) {
             auto const ptr = (Arg)PSXM(ins, raw_arg);
             return PSF2::PointerArg{ptr, raw_arg};
-        }
-        else
-        {
+        } else {
             return raw_arg;
         }
     }
@@ -124,7 +124,12 @@ struct iop_builtin_impl<F, Result(Args...)> {
             (psf2.*F)(argument<Args, Ints>(ins)...);
             return std::nullopt;
         } else {
-            return (psf2.*F)(argument<Args, Ints>(ins)...);
+            if constexpr (requires() { (psf2.*F)(argument<Args, Ints>(ins)...); }) {
+                return (psf2.*F)(argument<Args, Ints>(ins)...);
+            } else {
+                // Some implementations require a pointer to the emulator instance.
+                return (psf2.*F)(ins, argument<Args, Ints>(ins)...);
+            }
         }
     }
 

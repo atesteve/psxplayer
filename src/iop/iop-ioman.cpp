@@ -13,9 +13,9 @@ using namespace std::literals;
 #define SEEK_CUR 1
 #define SEEK_END 2
 
-int32_t PSF2::iop_open(PointerArg<char const*> name, int32_t mode)
+int PSF2::iop_open(PointerArg<char const*> name, int flags)
 {
-    if (mode != O_RDONLY) {
+    if (flags != O_RDONLY) {
         // Implement just read only for the moment.
         return -1;
     }
@@ -40,11 +40,9 @@ int32_t PSF2::iop_open(PointerArg<char const*> name, int32_t mode)
     return vfd;
 }
 
-std::optional<uint32_t> PSF2::iop_close(upse_module_instance_t* ins)
+int PSF2::iop_close(int fd)
 {
-    int const vfd = from_le(ins->cpustate.GPR.n.a0);
-
-    auto const it = vfd_store.find(vfd);
+    auto const it = vfd_store.find(fd);
     if (it == vfd_store.cend()) {
         // Not valid vfd
         return -1;
@@ -53,20 +51,16 @@ std::optional<uint32_t> PSF2::iop_close(upse_module_instance_t* ins)
     return 0;
 }
 
-std::optional<uint32_t> PSF2::iop_read(upse_module_instance_t* ins)
+int PSF2::iop_read(int fd, PointerArg<void*> ptr, uint32_t count)
 {
-    int const vfd = from_le(ins->cpustate.GPR.n.a0);
-    auto* const buf = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a1));
-    uint32_t const count = from_le(ins->cpustate.GPR.n.a2);
-
-    auto const it = vfd_store.find(vfd);
+    auto const it = vfd_store.find(fd);
     if (it == vfd_store.cend()) {
         // Not valid vfd
         return -1;
     }
     auto& vfd_d = it->second;
 
-    if (!buf) {
+    if (!ptr.ptr) {
         return -1;
     }
 
@@ -75,18 +69,14 @@ std::optional<uint32_t> PSF2::iop_read(upse_module_instance_t* ins)
     auto const ret = end_p - start_p;
     vfd_d.p = end_p;
 
-    std::copy(vfd_d.base + start_p, vfd_d.base + end_p, buf);
+    std::copy(vfd_d.base + start_p, vfd_d.base + end_p, (char*)ptr.ptr);
 
     return ret;
 }
 
-std::optional<uint32_t> PSF2::iop_lseek(upse_module_instance_t* ins)
+int PSF2::iop_lseek(int fd, int offset, int whence)
 {
-    int const vfd = from_le(ins->cpustate.GPR.n.a0);
-    int const offset = from_le(ins->cpustate.GPR.n.a1);
-    int const whence = from_le(ins->cpustate.GPR.n.a2);
-
-    auto const it = vfd_store.find(vfd);
+    auto const it = vfd_store.find(fd);
     if (it == vfd_store.cend()) {
         // Not valid vfd
         return -1;
@@ -116,31 +106,31 @@ std::optional<uint32_t> PSF2::iop_lseek(upse_module_instance_t* ins)
 }
 
 struct iop_device_ops_t {
-	uint32_t init;
-	uint32_t deinit;
-	uint32_t format;
-	uint32_t open;
-	uint32_t close;
-	uint32_t read;
-	uint32_t write;
-	uint32_t lseek;
-	uint32_t ioctl;
-	uint32_t remove;
-	uint32_t mkdir;
-	uint32_t rmdir;
-	uint32_t dopen;
-	uint32_t dclose;
-	uint32_t dread;
-	uint32_t getstat;
-	uint32_t chstat;
+    uint32_t init;
+    uint32_t deinit;
+    uint32_t format;
+    uint32_t open;
+    uint32_t close;
+    uint32_t read;
+    uint32_t write;
+    uint32_t lseek;
+    uint32_t ioctl;
+    uint32_t remove;
+    uint32_t mkdir;
+    uint32_t rmdir;
+    uint32_t dopen;
+    uint32_t dclose;
+    uint32_t dread;
+    uint32_t getstat;
+    uint32_t chstat;
 };
 
 struct iop_device_t {
-	uint32_t name;
-	uint32_t type;
-	uint32_t version;
-	uint32_t desc;
-	uint32_t ops;
+    uint32_t name;
+    uint32_t type;
+    uint32_t version;
+    uint32_t desc;
+    uint32_t ops;
 };
 
 std::optional<uint32_t> PSF2::iop_AddDrv(upse_module_instance_t* ins)

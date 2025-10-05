@@ -3,12 +3,8 @@
 
 #include <utility>
 
-std::optional<uint32_t> PSF2::iop_AllocSysMemory(upse_module_instance_t* ins)
+uint32_t PSF2::iop_AllocSysMemory(int mode, int size, PointerArg<void*> ptr)
 {
-    int const mode = from_le(ins->cpustate.GPR.n.a0);
-    int const size = from_le(ins->cpustate.GPR.n.a1);
-    uint32_t const ptr = from_le(ins->cpustate.GPR.n.a2);
-
     // Ignore mode and ptr
     std::ignore = mode;
     std::ignore = ptr;
@@ -21,9 +17,9 @@ std::optional<uint32_t> PSF2::iop_AllocSysMemory(upse_module_instance_t* ins)
     return ret;
 }
 
-std::optional<uint32_t> PSF2::iop_FreeSysMemory(upse_module_instance_t* ins)
+int PSF2::iop_FreeSysMemory(PointerArg<void*> ptr)
 {
-    std::ignore = ins;
+    std::ignore = ptr;
     // Do nothing.
     return 0;
 }
