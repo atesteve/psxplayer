@@ -32,7 +32,8 @@ std::unordered_map<iop_table_key, PSF2::iop_builtin_handler> PSF2::builtin_iop_f
     {{"intrman", 17}, &PSF2::iop_CpuSuspendIntr},
     {{"intrman", 18}, &PSF2::iop_CpuResumeIntr},
 
-    {{"loadcore", 6}, &PSF2::iop_RegisterLibraryEntries},
+    {{"loadcore", 6},
+     &PSF2::iop_builtin<&PSF2::iop_RegisterLibraryEntries, int(irx_export_table const*)>},
 
     {{"sysclib", 14}, &PSF2::iop_builtin<&PSF2::iop_memset, void*(void* ptr, int c, size_t n)>},
     {{"sysclib", 17}, &PSF2::iop_builtin<&PSF2::iop_bzero, void(void* ptr, size_t n)>},

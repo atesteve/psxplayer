@@ -13,6 +13,8 @@
 
 struct LibCallPoint;
 
+struct irx_export_table;
+
 using iop_table_key = std::pair<std::string_view, int>;
 
 template<>
@@ -75,7 +77,8 @@ struct PSF2 {
     std::optional<uint32_t> iop_CpuSuspendIntr(upse_module_instance_t* ins);
     std::optional<uint32_t> iop_CpuResumeIntr(upse_module_instance_t* ins);
 
-    std::optional<uint32_t> iop_RegisterLibraryEntries(upse_module_instance_t* ins);
+    int iop_RegisterLibraryEntries(upse_module_instance_t* ins,
+                                   PointerArg<irx_export_table const*> exports);
 
     uint32_t iop_memset(PointerArg<void*> ptr, int c, uint32_t n);
     void iop_bzero(PointerArg<void*> ptr, uint32_t n);
