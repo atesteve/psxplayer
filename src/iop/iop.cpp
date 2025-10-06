@@ -101,16 +101,16 @@ struct iop_builtin_impl<F, Result (PSF2::*)(Args...)> {
     };
 
     template<typename Arg, size_t Index>
-    static auto argument(upse_module_instance_t* ins, bool sub_one)
+    static auto get_argument(upse_module_instance_t* ins)
     {
         if constexpr (std::is_same_v<Arg, upse_module_instance_t*>) {
             return ins;
         } else if constexpr (requires() { std::declval<Arg>().ptr; }) {
-            uint32_t const raw_arg = get_raw_arg(ins, Index - sub_one);
+            uint32_t const raw_arg = get_raw_arg(ins, Index);
             auto const ptr = (decltype(Arg::ptr))PSXM(ins, raw_arg);
             return PSF2::PointerArg{ptr, raw_arg};
         } else {
-            return get_raw_arg(ins, Index - sub_one);
+            return get_raw_arg(ins, Index);
         }
     }
 
@@ -122,10 +122,10 @@ struct iop_builtin_impl<F, Result (PSF2::*)(Args...)> {
         constexpr bool sub_one = std::is_same_v<FirstArg, upse_module_instance_t*>;
 
         if constexpr (std::is_void_v<Result>) {
-            (psf2.*F)(argument<Args, Ints>(ins, sub_one)...);
+            (psf2.*F)(get_argument<Args, Ints - sub_one>(ins)...);
             return std::nullopt;
         } else {
-            return (psf2.*F)(argument<Args, Ints>(ins, sub_one)...);
+            return (psf2.*F)(get_argument<Args, Ints - sub_one>(ins)...);
         }
     }
 
