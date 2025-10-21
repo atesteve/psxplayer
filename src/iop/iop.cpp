@@ -79,11 +79,11 @@ void PSF2::iop_call(upse_module_instance_t* ins)
                fn.handler);
 }
 
-template<auto F, typename Signature>
+template<auto Fn, typename Signature>
 struct iop_builtin_impl;
 
-template<auto F, typename Result, typename... Args>
-struct iop_builtin_impl<F, Result (PSF2::*)(Args...)> {
+template<auto Fn, typename Result, typename... Args>
+struct iop_builtin_impl<Fn, Result (PSF2::*)(Args...)> {
 
     static uint32_t get_raw_arg(upse_module_instance_t* ins, size_t index)
     {
@@ -122,10 +122,10 @@ struct iop_builtin_impl<F, Result (PSF2::*)(Args...)> {
         constexpr bool sub_one = std::is_same_v<FirstArg, upse_module_instance_t*>;
 
         if constexpr (std::is_void_v<Result>) {
-            (psf2.*F)(get_argument<Args, Ints - sub_one>(ins)...);
+            (psf2.*Fn)(get_argument<Args, Ints - sub_one>(ins)...);
             return std::nullopt;
         } else {
-            return (psf2.*F)(get_argument<Args, Ints - sub_one>(ins)...);
+            return (psf2.*Fn)(get_argument<Args, Ints - sub_one>(ins)...);
         }
     }
 
@@ -135,8 +135,8 @@ struct iop_builtin_impl<F, Result (PSF2::*)(Args...)> {
     }
 };
 
-template<auto F>
+template<auto Fn>
 std::optional<uint32_t> PSF2::iop_builtin(upse_module_instance_t* ins)
 {
-    return iop_builtin_impl<F, decltype(F)>::run(*this, ins);
+    return iop_builtin_impl<Fn, decltype(Fn)>::run(*this, ins);
 }

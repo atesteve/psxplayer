@@ -48,7 +48,7 @@ struct PSF2 {
         uint32_t raw_ptr;
     };
 
-    template<auto F>
+    template<auto Fn>
     std::optional<uint32_t> iop_builtin(upse_module_instance_t* ins);
 
     std::optional<uint32_t> iop_printf(upse_module_instance_t* ins);
