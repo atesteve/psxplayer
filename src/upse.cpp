@@ -1,5 +1,7 @@
 #include "upse.h"
+#include "adpcm.h"
 
+#include "libupse/upse-spu-internal.h"
 #include <fmt/format.h>
 
 #include <QAbstractEventDispatcher>
@@ -158,7 +160,11 @@ void UpseModule::run()
 
         if (n > 0 && buf) {
             if (_state != State::Seeking) {
-                _audio->write({buf, n * 2});
+                if (_sample.empty()) {
+                    _audio->write({buf, n * 2});
+                } else {
+                    _audio->write(_sample);
+                }
             }
             if (_state == State::Seeking) {
                 _control.input.speed_multiplier = _speed;
@@ -188,6 +194,31 @@ void UpseModule::handle_channel_fire()
         }
 
         channel.fired = false;
+
+        if (channel.sample_addr) {
+            auto const* spu_state = reinterpret_cast<upse_spu_state_t const*>(_mod->instance.spu);
+            auto const offset_to_ram = *reinterpret_cast<uint32_t const*>(
+                (char const*)spu_state->pCore + sizeof(uint32_t));
+            auto const* ram = reinterpret_cast<uint8_t const*>(spu_state->pCore) + offset_to_ram;
+
+            auto const [sample, start] =
+                decode_adpcm_sample({ram, 0x80000}, channel.sample_addr, channel.loop_addr);
+
+            static volatile bool do_it = false;
+            if (do_it) {
+                std::vector<int16_t> sample_stereo;
+                sample_stereo.resize((sample.size() - start) * 2);
+                for (auto const& [i, s] :
+                     std::ranges::enumerate_view{std::span{sample}.subspan(start)}) {
+                    sample_stereo[i * 2] = s;
+                    sample_stereo[i * 2 + 1] = s;
+                }
+                _sample = std::move(sample_stereo);
+                do_it = false;
+            }
+
+            channel.sample_addr = 0;
+        }
 
         if (_channel_map.empty()) {
             emit channel_fired(ch);

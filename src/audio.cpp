@@ -7,7 +7,10 @@
 namespace {
 constexpr auto BUF_SAMPLE_SIZE = 1024u;
 
-constexpr size_t advance(size_t p, size_t n = 1) { return (p + n) % (BUF_SAMPLE_SIZE * 2); }
+constexpr size_t advance(size_t p, size_t n = 1)
+{
+    return (p + n) % (BUF_SAMPLE_SIZE * 2);
+}
 
 } // namespace
 
@@ -28,7 +31,7 @@ void Audio::write_impl(T&& samples)
     size_t current_read_p = _read_p;
     size_t write_p = _write_p;
 
-    size_t sample1, sample2;
+    int16_t sample1, sample2;
     int nsamples = 0;
 
     for (auto const sample : samples) {
@@ -46,7 +49,7 @@ void Audio::write_impl(T&& samples)
 
             std::unique_lock lock{_mutex};
             auto const status =
-                _cv.wait_for(lock, 100ms, [this, next_write_p = advance(write_p, 2)] {
+                _cv.wait_for(lock, 1000ms, [this, next_write_p = advance(write_p, 2)] {
                     return _read_p != next_write_p;
                 });
 
@@ -66,7 +69,10 @@ void Audio::write_impl(T&& samples)
     _write_p = write_p;
 }
 
-void Audio::write(std::span<int16_t> samples) { return write_impl(samples); }
+void Audio::write(std::span<int16_t> samples)
+{
+    return write_impl(samples);
+}
 
 void Audio::flush()
 {
@@ -86,7 +92,7 @@ qint64 Audio::readData(char* output, qint64 maxlen)
     qint64 written = 0;
     auto* const output_s16 = reinterpret_cast<int16_t*>(output);
 
-    for (auto i = 0u; i < maxlen / 2; ++i) {
+    for (auto i = 0u; i < maxlen / 4; ++i) {
         if (read_p == current_write_p) {
             current_write_p = _write_p;
         }

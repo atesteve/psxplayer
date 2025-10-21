@@ -1021,7 +1021,7 @@ static void EMU_CALL envelope_release(struct SPUCORE_ENVELOPE *env) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static void EMU_CALL sample_prime(struct SPUCORE_SAMPLE *sample) {
+static void EMU_CALL sample_prime(struct SPUCORE_SAMPLE *sample, out_channel_t *control) {
   sample->state = SAMPLE_STATE_ON;
   memset(sample->array, 0, sizeof(sample->array));
   sample->array_cleared = 1;
@@ -1030,6 +1030,9 @@ static void EMU_CALL sample_prime(struct SPUCORE_SAMPLE *sample) {
 
   sample->block_addr = sample->start_block_addr;
   //sample->loop_block_addr = sample->start_loop_block_addr;
+
+  control->sample_addr = sample->start_block_addr;
+  control->loop_addr = sample->loop_block_addr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1052,7 +1055,7 @@ static void EMU_CALL voice_on(struct SPUCORE_CHAN *c, out_channel_t *control) {
     }
   } else {
 //    EMUTRACE0("prime");
-    sample_prime(&(c->sample));
+    sample_prime(&(c->sample), control);
     envelope_prime(&(c->env), control);
   }
 //  EMUTRACE0("\n");
@@ -1256,7 +1259,7 @@ static int EMU_CALL render_channel_mono(
   ** Process the key-on if necessary
   */
   if(!defer_remaining) {
-    sample_prime(&(c->sample));
+    sample_prime(&(c->sample), &control->output.channel[ch]);
     envelope_prime(&(c->env), &control->output.channel[ch]);
   }
 

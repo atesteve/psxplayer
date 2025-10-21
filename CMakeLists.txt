@@ -35,6 +35,8 @@ qt6_add_executable(${TARGET}
   src/kcollapsiblegroupbox.h
   src/sound-meter-bar.cpp
   src/sound-meter-bar.h
+  src/adpcm.cpp
+  src/adpcm.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp

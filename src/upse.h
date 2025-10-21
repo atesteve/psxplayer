@@ -105,4 +105,5 @@ private:
                 .sw = sw_hook,
             },
     };
+    std::vector<int16_t> _sample;
 };

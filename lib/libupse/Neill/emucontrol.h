@@ -25,6 +25,8 @@ typedef struct out_channel {
     int16_t r[SAMPLE_WINDOW_SIZE];
     int p;
     bool fired;
+    uint32_t sample_addr;
+    uint32_t loop_addr;
 } out_channel_t;
 
 typedef enum mem_access_size {
