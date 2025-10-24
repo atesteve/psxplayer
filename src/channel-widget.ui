@@ -2,6 +2,14 @@
 <ui version="4.0">
  <class>ChannelWidget</class>
  <widget class="QWidget" name="ChannelWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>154</width>
+    <height>165</height>
+   </rect>
+  </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
@@ -32,6 +40,13 @@
       <widget class="SoundMeterBar" name="soundMeterBar" native="true"/>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="freqLabel">
+     <property name="text">
+      <string>Freq</string>
+     </property>
+    </widget>
    </item>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_2">

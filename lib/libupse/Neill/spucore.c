@@ -2219,7 +2219,10 @@ void EMU_CALL spucore_setreg_voice(void *state, uint32 voice, uint32 n, uint32 v
   /* TODO: the increase/decrease modes */
   case SPUREG_VOICE_VOLL : volume_setmode(SPUCORESTATE->chan[voice].vol+0, value); break;
   case SPUREG_VOICE_VOLR : volume_setmode(SPUCORESTATE->chan[voice].vol+1, value); break;
-  case SPUREG_VOICE_PITCH: SPUCORESTATE->chan[voice].voice_pitch = value; break;
+  case SPUREG_VOICE_PITCH:
+    SPUCORESTATE->chan[voice].voice_pitch = value;
+    SPUCORESTATE->control->output.channel[voice].pitch = value;
+    break;
   case SPUREG_VOICE_ADSR1: SPUCORESTATE->chan[voice].env.reg_ad = value; SPUCORESTATE->chan[voice].env.cachemax = envelope_do(&SPUCORESTATE->chan[voice].env, SPUCORESTATE->control); break;
   case SPUREG_VOICE_ADSR2: SPUCORESTATE->chan[voice].env.reg_sr = value; SPUCORESTATE->chan[voice].env.cachemax = envelope_do(&SPUCORESTATE->chan[voice].env, SPUCORESTATE->control); break;
 

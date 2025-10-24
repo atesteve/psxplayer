@@ -240,6 +240,17 @@ void MainWindow::connect_module_signals()
                                                    r);
                      });
 
+    QObject::connect(&_module,
+                     &UpseModule::channel_frequency_changed,
+                     [this](size_t channel, double freq) {
+                         if (channel >= _channelWidgets.size()) {
+                             return;
+                         }
+                         QMetaObject::invokeMethod(_channelWidgets[channel]->ui.freqLabel,
+                                                   &QLabel::setText,
+                                                   QString::asprintf("%f", freq));
+                     });
+
     QObject::connect(&_module, &UpseModule::channel_fired, [this](size_t channel) {
         if (channel >= _channelWidgets.size()) {
             return;

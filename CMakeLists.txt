@@ -47,6 +47,8 @@ qt6_add_executable(${TARGET}
   src/iop/iop-intrman.cpp
   src/iop/iop-loadcore.cpp
   src/iop/iop-sysclib.cpp
+  src/iop/iop-thevent.cpp
+  src/iop/iop-thsemap.cpp
 )
 qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
 
@@ -78,6 +80,9 @@ include(CPack)
 
 find_package(fmt REQUIRED)
 target_link_libraries(${TARGET} PUBLIC fmt::fmt)
+
+find_package(FFTW3 REQUIRED)
+target_link_libraries(${TARGET} PUBLIC fftw3)
 
 target_link_libraries(${TARGET} PRIVATE Qt6::Widgets Qt6::Multimedia)
 

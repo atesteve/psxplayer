@@ -27,6 +27,7 @@ typedef struct out_channel {
     bool fired;
     uint32_t sample_addr;
     uint32_t loop_addr;
+    uint32_t pitch;
 } out_channel_t;
 
 typedef enum mem_access_size {

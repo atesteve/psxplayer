@@ -160,11 +160,7 @@ void UpseModule::run()
 
         if (n > 0 && buf) {
             if (_state != State::Seeking) {
-                if (_sample.empty()) {
-                    _audio->write({buf, n * 2});
-                } else {
-                    _audio->write(_sample);
-                }
+                _audio->write({buf, n * 2});
             }
             if (_state == State::Seeking) {
                 _control.input.speed_multiplier = _speed;
@@ -175,6 +171,7 @@ void UpseModule::run()
 
         if (_state == State::Playing) {
             handle_channel_fire();
+            find_sample_frequency();
         }
 
         // QEventLoop::AllEvents returns immediately if there are no events to dispatch.
@@ -186,6 +183,51 @@ void UpseModule::run()
     }
 }
 
+void UpseModule::find_sample_frequency()
+{
+    auto const* spu_state = reinterpret_cast<upse_spu_state_t const*>(_mod->instance.spu);
+    auto const offset_to_ram =
+        *reinterpret_cast<uint32_t const*>((char const*)spu_state->pCore + sizeof(uint32_t));
+    auto const* ram = reinterpret_cast<uint8_t const*>(spu_state->pCore) + offset_to_ram;
+
+    for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
+        if (!channel.sample_addr) {
+            continue;
+        }
+
+        if (_sample_freq.contains(channel.sample_addr)) {
+            continue;
+        }
+
+        auto const [loop_addr, sample_end] =
+            get_sample_bounds({ram, 0x80000}, channel.sample_addr, channel.loop_addr);
+
+        if (sample_end == 0) {
+            //_sample_freq.emplace(channel.sample_addr, 0.0);
+            continue;
+        }
+
+        auto const sample_size = sample_end - channel.sample_addr;
+        std::vector<uint8_t> sample_mem;
+        sample_mem.resize(sample_size);
+        std::memcpy(sample_mem.data(), ram + channel.sample_addr, sample_size);
+
+        _sample_freq.emplace(channel.sample_addr,
+                             std::async(std::launch::async,
+                                        [sample_mem = std::move(sample_mem),
+                                         addr = channel.sample_addr,
+                                         loop_addr,
+                                         sample_end,
+                                         this] {
+                                            return find_sample_freq(sample_mem,
+                                                                    0,
+                                                                    loop_addr - addr,
+                                                                    sample_end - addr,
+                                                                    _sample_freq_mutex);
+                                        }));
+    }
+}
+
 void UpseModule::handle_channel_fire()
 {
     for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
@@ -194,31 +236,6 @@ void UpseModule::handle_channel_fire()
         }
 
         channel.fired = false;
-
-        if (channel.sample_addr) {
-            auto const* spu_state = reinterpret_cast<upse_spu_state_t const*>(_mod->instance.spu);
-            auto const offset_to_ram = *reinterpret_cast<uint32_t const*>(
-                (char const*)spu_state->pCore + sizeof(uint32_t));
-            auto const* ram = reinterpret_cast<uint8_t const*>(spu_state->pCore) + offset_to_ram;
-
-            auto const [sample, start] =
-                decode_adpcm_sample({ram, 0x80000}, channel.sample_addr, channel.loop_addr);
-
-            static volatile bool do_it = false;
-            if (do_it) {
-                std::vector<int16_t> sample_stereo;
-                sample_stereo.resize((sample.size() - start) * 2);
-                for (auto const& [i, s] :
-                     std::ranges::enumerate_view{std::span{sample}.subspan(start)}) {
-                    sample_stereo[i * 2] = s;
-                    sample_stereo[i * 2 + 1] = s;
-                }
-                _sample = std::move(sample_stereo);
-                do_it = false;
-            }
-
-            channel.sample_addr = 0;
-        }
 
         if (_channel_map.empty()) {
             emit channel_fired(ch);
@@ -276,6 +293,7 @@ void UpseModule::load_file(QString const& file_name)
     _snapshots.clear();
     _snapshots.shrink_to_fit();
     _channel_map.clear();
+    _sample_freq.clear();
 
     if (!_mod) {
         set_state(State::Unloaded);
@@ -443,26 +461,63 @@ void UpseModule::fast_timer_fired()
         emit sound_level_changed(0, 0);
     }
 
+    auto const emit_channel_signals = [&](int ch, out_channel_t const& channel) {
+        if (_state == State::Playing) {
+            emit channel_sound_level_changed(
+                ch, compute_rms(channel.l) / 32768, compute_rms(channel.r) / 32768);
+
+            auto const it = _sample_freq.find(channel.sample_addr);
+            if (it == _sample_freq.end()) {
+                return;
+            }
+            auto const sample_freq = it->second.get();
+            if (!sample_freq) {
+                emit channel_frequency_changed(ch, 0);
+                return;
+            }
+            if (std::isnan(*sample_freq) || *sample_freq == 0) {
+                _sample_freq.erase(it);
+                emit channel_frequency_changed(ch, 0);
+                return;
+            }
+            emit channel_frequency_changed(ch, (*sample_freq * channel.pitch) / 0x1000);
+        } else {
+            emit channel_sound_level_changed(ch, 0, 0);
+        }
+    };
+
     if (_channel_map.empty()) {
         for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
-            if (_state == State::Playing) {
-                emit channel_sound_level_changed(
-                    ch, compute_rms(channel.l) / 32768, compute_rms(channel.r) / 32768);
-            } else {
-                emit channel_sound_level_changed(ch, 0, 0);
-            }
+            emit_channel_signals(ch, channel);
         }
     } else {
         for (auto const& mapped_channel : _channel_map) {
             auto const [log_channel, hw_channel] = mapped_channel.second;
-            if (_state == State::Playing && hw_channel < 24) {
-                emit channel_sound_level_changed(
-                    log_channel,
-                    compute_rms(_control.output.channel[hw_channel].l) / 32768,
-                    compute_rms(_control.output.channel[hw_channel].r) / 32768);
-            } else {
-                emit channel_sound_level_changed(log_channel, 0, 0);
+            if (hw_channel >= 24) {
+                continue;
             }
+            emit_channel_signals(log_channel, _control.output.channel[hw_channel]);
         }
     }
+}
+
+UpseModule::Freq::Freq(double value)
+    : _value{value}
+{}
+
+UpseModule::Freq::Freq(std::future<double> future)
+    : _future(std::move(future))
+{}
+
+std::optional<double> UpseModule::Freq::get()
+{
+    if (_value) {
+        return _value;
+    }
+    auto const future_state = _future.wait_for(0s);
+    if (future_state != std::future_status::ready) {
+        return std::nullopt;
+    }
+    _value = _future.get();
+    return _value;
 }

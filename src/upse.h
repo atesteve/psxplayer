@@ -10,6 +10,8 @@
 #include <memory>
 #include <chrono>
 #include <vector>
+#include <future>
+#include <unordered_map>
 
 struct upse_module_deleter {
     static void operator()(upse_module_t* mod) noexcept { upse_module_close(mod); }
@@ -42,6 +44,7 @@ signals:
     void state_changed(State state);
     void sound_level_changed(float l, float r);
     void channel_sound_level_changed(int ch, float l, float r);
+    void channel_frequency_changed(int ch, double freq);
     void channel_fired(int ch);
     void supported_channels(int n_channels);
 
@@ -65,10 +68,21 @@ private:
         float vol{1};
     };
 
+    struct Freq {
+        Freq(double value);
+        Freq(std::future<double> future);
+
+        std::optional<double> get();
+
+        std::optional<double> _value;
+        std::future<double> _future;
+    };
+
     void update_mapped_channels();
     void take_snapshot();
     void set_state(State new_state);
     void handle_channel_fire();
+    void find_sample_frequency();
 
     static void jal_hook(void* self, upse_module_instance_t* ins);
     void jal_hook(upse_module_instance_t* ins);
@@ -105,5 +119,6 @@ private:
                 .sw = sw_hook,
             },
     };
-    std::vector<int16_t> _sample;
+    std::unordered_map<uint32_t, Freq> _sample_freq;
+    std::mutex _sample_freq_mutex;
 };
