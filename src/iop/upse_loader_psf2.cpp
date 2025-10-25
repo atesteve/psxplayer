@@ -28,9 +28,16 @@ void upse_ps2_iop_call(upse_module_instance_t* ins);
 }
 
 namespace {
+
+struct free_deleter {
+    static void operator()(void* p) {
+        free(p);
+    }
+};
+
 template<typename T>
-struct malloc_ptr : public std::unique_ptr<T> {
-    using std::unique_ptr<T>::unique_ptr;
+struct malloc_ptr : public std::unique_ptr<T, free_deleter> {
+    using std::unique_ptr<T, free_deleter>::unique_ptr;
 };
 
 template<typename T>
