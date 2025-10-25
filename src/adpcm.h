@@ -36,18 +36,24 @@ private:
 
 using Sample = FFTW3Holder<double>;
 
-std::pair<uint32_t, uint32_t>
-    get_sample_bounds(std::span<uint8_t const> ram, uint32_t addr, uint32_t loop_addr);
+struct SampleBounds {
+    uint32_t start_addr;
+    uint32_t loop_addr;
+    uint32_t end_addr;
+    uint32_t max_addr;
+};
+
+SampleBounds get_sample_bounds(std::span<uint8_t const> ram, uint32_t addr, uint32_t loop_addr);
 
 std::optional<Sample> decode_adpcm_sample(std::span<uint8_t const> ram,
                                           uint32_t addr,
-                                          uint32_t loop_addr_in,
-                                          uint32_t sample_end_addr,
+                                          uint32_t loop_addr,
+                                          std::optional<SampleBounds> bounds = std::nullopt,
                                           int repeats = 1,
                                           Sample* out = nullptr);
 
 double find_sample_freq(std::span<uint8_t const> ram,
                         uint32_t addr,
                         uint32_t loop_addr,
-                        uint32_t sample_end_addr,
+                        SampleBounds const& bounds,
                         std::mutex& mutex);

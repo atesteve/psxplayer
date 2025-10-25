@@ -199,30 +199,37 @@ void UpseModule::find_sample_frequency()
             continue;
         }
 
-        auto const [loop_addr, sample_end] =
-            get_sample_bounds({ram, 0x80000}, channel.sample_addr, channel.loop_addr);
+        auto bounds = get_sample_bounds({ram, 0x80000}, channel.sample_addr, channel.loop_addr);
 
-        if (sample_end == 0) {
-            //_sample_freq.emplace(channel.sample_addr, 0.0);
+        if (bounds.end_addr == 0) {
+            _sample_freq.emplace(channel.sample_addr, 0.0);
             continue;
         }
 
-        auto const sample_size = sample_end - channel.sample_addr;
+        auto const v = {bounds.start_addr, bounds.loop_addr, bounds.end_addr};
+        auto const min_addr = *std::ranges::min_element(v);
+
+        auto const sample_size = bounds.max_addr - min_addr;
         std::vector<uint8_t> sample_mem;
         sample_mem.resize(sample_size);
-        std::memcpy(sample_mem.data(), ram + channel.sample_addr, sample_size);
+        std::memcpy(sample_mem.data(), ram + min_addr, sample_size);
+
+        bounds.start_addr -= min_addr;
+        bounds.loop_addr -= min_addr;
+        bounds.end_addr -= min_addr;
+        bounds.max_addr -= min_addr;
 
         _sample_freq.emplace(channel.sample_addr,
                              std::async(std::launch::async,
                                         [sample_mem = std::move(sample_mem),
-                                         addr = channel.sample_addr,
-                                         loop_addr,
-                                         sample_end,
+                                         addr = channel.sample_addr - min_addr,
+                                         loop_addr = channel.loop_addr - min_addr,
+                                         bounds,
                                          this] {
                                             return find_sample_freq(sample_mem,
-                                                                    0,
-                                                                    loop_addr - addr,
-                                                                    sample_end - addr,
+                                                                    addr,
+                                                                    loop_addr,
+                                                                    bounds,
                                                                     _sample_freq_mutex);
                                         }));
     }
@@ -476,7 +483,6 @@ void UpseModule::fast_timer_fired()
                 return;
             }
             if (std::isnan(*sample_freq) || *sample_freq == 0) {
-                _sample_freq.erase(it);
                 emit channel_frequency_changed(ch, 0);
                 return;
             }

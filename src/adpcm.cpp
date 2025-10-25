@@ -93,17 +93,21 @@ std::pair<double, double> decode_adpcm_block(std::span<uint8_t const> ram,
     return {a, b};
 }
 
-std::pair<double, double>
-    prime_adpcm(std::span<uint8_t const> ram, uint32_t addr, uint32_t repeat_addr)
+std::pair<double, double> prime_adpcm(std::span<uint8_t const> ram,
+                                      uint32_t addr,
+                                      uint32_t loop_addr,
+                                      SampleBounds const& bounds)
 {
-    if (addr > ram.size() - 16 || repeat_addr >= ram.size() || repeat_addr <= addr) {
-        return {0, 0};
-    }
-
     std::pair<double, double> ret{0, 0};
 
-    for (; addr < repeat_addr; addr += sizeof(ADPCM_block)) {
+    while (addr != bounds.loop_addr && addr < ram.size()) {
         ret = decode_adpcm_block(ram, addr, ret, {});
+        auto const* block = stdx::start_lifetime_as<ADPCM_block const>(&ram[addr]);
+        if (block->loop_end && block->loop_repeat) {
+            addr = loop_addr;
+        } else {
+            addr += sizeof(ADPCM_block);
+        }
     }
 
     return ret;
@@ -196,53 +200,61 @@ FFTW3Holder<fftw_complex>::FFTW3Holder(size_t size)
     , _size{size}
 {}
 
-std::pair<uint32_t, uint32_t>
-    get_sample_bounds(std::span<uint8_t const> ram, uint32_t addr, uint32_t loop_addr)
+SampleBounds get_sample_bounds(std::span<uint8_t const> ram, uint32_t addr, uint32_t loop_addr)
 {
-    uint32_t const start = addr;
-    uint32_t flag_loop_addr = 0;
+    uint32_t const start_addr = addr;
+    uint32_t max_addr = addr;
+    bool jump_taken = false;
+
     while (addr <= ram.size() - 16) {
         auto const* block = stdx::start_lifetime_as<ADPCM_block const>(&ram[addr]);
 
         if (block->loop_start) {
-            flag_loop_addr = addr;
+            loop_addr = addr;
         }
 
         addr += sizeof(ADPCM_block);
+        max_addr = std::max(addr, max_addr);
 
-        if (block->loop_end) {
-            if (flag_loop_addr != 0) {
-                return {flag_loop_addr, addr};
+        if (block->loop_end && block->loop_repeat) {
+            if (jump_taken || (loop_addr >= start_addr && loop_addr < addr)) {
+                return {
+                    .start_addr = start_addr,
+                    .loop_addr = loop_addr,
+                    .end_addr = addr,
+                    .max_addr = max_addr,
+                };
             }
-            if (loop_addr >= start && loop_addr < addr) {
-                return {loop_addr, addr};
-            }
-            return {start, addr};
+            addr = loop_addr;
+            jump_taken = true;
+
+        } else if (block->loop_end) {
+            return {
+                .start_addr = start_addr,
+                .loop_addr = start_addr,
+                .end_addr = addr,
+                .max_addr = max_addr,
+            };
         }
     }
 
-    return {0, 0};
+    return {};
 }
 
 std::optional<Sample> decode_adpcm_sample(std::span<uint8_t const> ram,
                                           uint32_t addr,
-                                          uint32_t loop_addr_in,
-                                          uint32_t sample_end_addr,
+                                          uint32_t loop_addr,
+                                          std::optional<SampleBounds> bounds_in,
                                           int repeats,
                                           Sample* out_in)
 {
-    auto const [loop_addr, sample_end] = [&] {
-        if (sample_end_addr) {
-            return std::pair{loop_addr_in, sample_end_addr};
-        }
-        return get_sample_bounds(ram, addr, loop_addr_in);
-    }();
+    auto const& bounds = bounds_in ? *bounds_in : get_sample_bounds(ram, addr, loop_addr);
 
-    if (sample_end == 0) {
+    if (bounds.end_addr == 0) {
         return std::nullopt;
     }
 
-    auto const blocks = (sample_end - loop_addr) / sizeof(ADPCM_block);
+    auto const blocks = (bounds.end_addr - bounds.loop_addr) / sizeof(ADPCM_block);
 
     std::optional<Sample> local_sample;
     auto& out = [&] -> Sample& {
@@ -254,22 +266,15 @@ std::optional<Sample> decode_adpcm_sample(std::span<uint8_t const> ram,
         }
     }();
 
-    auto prev_samples = prime_adpcm(ram, addr, loop_addr);
+    auto prev_samples = prime_adpcm(ram, addr, loop_addr, bounds);
 
-    auto const decode_pass = [&] {
-        for (auto i = 0u; i < blocks * repeats; ++i) {
-            uint32_t p = loop_addr + (i % blocks) * sizeof(ADPCM_block);
-            uint32_t out_p = i * SAMPLES_PER_BLOCK;
+    for (auto i = 0u; i < blocks * repeats; ++i) {
+        uint32_t p = bounds.loop_addr + (i % blocks) * sizeof(ADPCM_block);
+        uint32_t out_p = i * SAMPLES_PER_BLOCK;
 
-            prev_samples = decode_adpcm_block(
-                ram, p, prev_samples, std::span{out}.subspan(out_p, SAMPLES_PER_BLOCK));
-        }
-    };
-
-    // Do two passes. Technically, the generated waveform is not the same after one loop, so
-    // hopefully by running two passes the resulting waveform loops better.
-    decode_pass();
-    decode_pass();
+        prev_samples = decode_adpcm_block(
+            ram, p, prev_samples, std::span{out}.subspan(out_p, SAMPLES_PER_BLOCK));
+    }
 
     if (out_in) {
         return std::nullopt;
@@ -281,10 +286,10 @@ std::optional<Sample> decode_adpcm_sample(std::span<uint8_t const> ram,
 double find_sample_freq(std::span<uint8_t const> ram,
                         uint32_t addr,
                         uint32_t loop_addr,
-                        uint32_t sample_end_addr,
+                        SampleBounds const& bounds,
                         std::mutex& mutex)
 {
-    auto const blocks = (sample_end_addr - loop_addr) / sizeof(ADPCM_block);
+    auto const blocks = (bounds.end_addr - bounds.loop_addr) / sizeof(ADPCM_block);
     int repeats = 1;
     if (blocks < 200) {
         repeats = 399 / blocks;
@@ -297,7 +302,7 @@ double find_sample_freq(std::span<uint8_t const> ram,
     fftw_plan_ptr plan{fftw_plan_dft_r2c_1d(sample.size(), sample.data(), fft.data(), 0)};
     lock.unlock();
 
-    decode_adpcm_sample(ram, addr, loop_addr, sample_end_addr, repeats, &sample);
+    decode_adpcm_sample(ram, addr, loop_addr, bounds, repeats, &sample);
 
     fftw_execute(plan.get());
 
