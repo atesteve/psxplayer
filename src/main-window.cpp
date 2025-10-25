@@ -240,16 +240,47 @@ void MainWindow::connect_module_signals()
                                                    r);
                      });
 
-    QObject::connect(&_module,
-                     &UpseModule::channel_frequency_changed,
-                     [this](size_t channel, double freq) {
-                         if (channel >= _channelWidgets.size()) {
-                             return;
-                         }
-                         QMetaObject::invokeMethod(_channelWidgets[channel]->ui.freqLabel,
-                                                   &QLabel::setText,
-                                                   QString::asprintf("%f", freq));
-                     });
+    QObject::connect(
+        &_module, &UpseModule::channel_frequency_changed, [this](size_t channel, double freq) {
+            if (channel >= _channelWidgets.size()) {
+                return;
+            }
+            // static constexpr char const* notes[] = {
+            //     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+            static constexpr char const* notes[] = {
+                "Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si"};
+
+            auto const cents = [&] -> int {
+                static constexpr auto C0 = 16.351597831;
+                auto const log2 = std::log2(freq / C0);
+                return std::round(log2 * 1200);
+            }();
+
+            auto octave = cents / 1200;
+            auto octave_cents = cents % 1200;
+            auto note = octave_cents / 100;
+            auto note_cents = octave_cents % 100;
+
+            if (note_cents >= 50) {
+                note_cents -= 100;
+                note += 1;
+                if (note == 12) {
+                    note = 0;
+                    octave += 1;
+                }
+            }
+
+            if (cents < 0) {
+                octave = 0;
+                note = 0;
+                note_cents = cents;
+            }
+
+            QMetaObject::invokeMethod(
+                _channelWidgets[channel]->ui.freqLabel,
+                &QLabel::setText,
+                QString::asprintf("%s%d %d", notes[note], octave, note_cents));
+        });
 
     QObject::connect(&_module, &UpseModule::channel_fired, [this](size_t channel) {
         if (channel >= _channelWidgets.size()) {
