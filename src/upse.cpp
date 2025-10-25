@@ -301,6 +301,7 @@ void UpseModule::load_file(QString const& file_name)
     _snapshots.shrink_to_fit();
     _channel_map.clear();
     _sample_freq.clear();
+    _control.output = {};
 
     if (!_mod) {
         set_state(State::Unloaded);
