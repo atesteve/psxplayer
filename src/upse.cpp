@@ -219,19 +219,17 @@ void UpseModule::find_sample_frequency()
         bounds.end_addr -= min_addr;
         bounds.max_addr -= min_addr;
 
-        _sample_freq.emplace(channel.sample_addr,
-                             std::async(std::launch::async,
-                                        [sample_mem = std::move(sample_mem),
-                                         addr = channel.sample_addr - min_addr,
-                                         loop_addr = channel.loop_addr - min_addr,
-                                         bounds,
-                                         this] {
-                                            return find_sample_freq(sample_mem,
-                                                                    addr,
-                                                                    loop_addr,
-                                                                    bounds,
-                                                                    _sample_freq_mutex);
-                                        }));
+        _sample_freq.emplace(
+            channel.sample_addr,
+            std::async(std::launch::async,
+                       [sample_mem = std::move(sample_mem),
+                        addr = channel.sample_addr - min_addr,
+                        loop_addr = channel.loop_addr - min_addr,
+                        bounds,
+                        this] {
+                           return find_sample_freq(
+                               sample_mem, addr, loop_addr, bounds, _sample_freq_mutex);
+                       }));
     }
 }
 
@@ -490,6 +488,7 @@ void UpseModule::fast_timer_fired()
             emit channel_frequency_changed(ch, (*sample_freq * channel.pitch) / 0x1000);
         } else {
             emit channel_sound_level_changed(ch, 0, 0);
+            emit channel_frequency_changed(ch, 0);
         }
     };
 
@@ -501,6 +500,8 @@ void UpseModule::fast_timer_fired()
         for (auto const& mapped_channel : _channel_map) {
             auto const [log_channel, hw_channel] = mapped_channel.second;
             if (hw_channel >= 24) {
+                emit channel_sound_level_changed(log_channel, 0, 0);
+                emit channel_frequency_changed(log_channel, 0);
                 continue;
             }
             emit_channel_signals(log_channel, _control.output.channel[hw_channel]);

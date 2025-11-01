@@ -2,6 +2,7 @@
 #include "iop/util.h"
 
 #include <fftw3.h>
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <ranges>
@@ -10,6 +11,10 @@
 #include <iterator>
 #include <complex>
 #include <mutex>
+#include <cstdlib>
+#include <thread>
+#include <vector>
+#include <numeric>
 
 namespace {
 
@@ -153,30 +158,108 @@ double abs(fftw_complex const& a)
     return std::sqrt(a[0] * a[0] + a[1] * a[1]);
 }
 
+[[maybe_unused]]
+void plot(FFTW3Holder<fftw_complex> const& fft,
+          double bucket_size,
+          std::vector<std::pair<double, double>> const& regions,
+          std::pair<double, double> freq,
+          std::string_view name)
+{
+    std::stringstream command;
+    command << "echo -en \"set title '" << name << "';"
+            << "set datafile separator ',';";
+
+    for (auto const& [i, region] : std::views::enumerate(regions)) {
+        command << "set object " << (i + 1) << " rect from first " << region.first
+                << ", 0 to first " << region.second
+                << ", 3000 behind fc rgb '#afffff' fillstyle solid 1.00 noborder;";
+        if (i > 5) {
+            break;
+        }
+    }
+
+    command << "plot '-' using 1:2 with lines, '' using 1:2;"
+               "pause mouse close;";
+    for (auto const& [i, c] : std::views::enumerate(fft)) {
+        command << "\\n" << (i * bucket_size) << "," << abs(c);
+    }
+    command << "\\ne";
+    command << "\\n" << freq.first << ',' << freq.second << "\\ne";
+    command << "\" | gnuplot -p";
+    // fmt::print("{}\n", command.str());
+    std::thread t{[command = command.str()] { std::system(command.c_str()); }};
+    t.detach();
+}
+
 double find_peak_freq(FFTW3Holder<fftw_complex> const& fft)
 {
     static constexpr double MAX_FREQ = 22050;
-    static constexpr double SEARCH_MIN_FREQ = 50;
-    static constexpr double SEARCH_MAX_FREQ = 1500;
 
     double const bucket_size = MAX_FREQ / (fft.size() - 1);
-    auto const start_index = [&] {
-        unsigned ret = SEARCH_MIN_FREQ / bucket_size;
-        return ret == 0 ? 1 : ret;
-    }();
-    auto const end_index = [&] {
-        unsigned ret = SEARCH_MAX_FREQ / bucket_size;
-        return ret <= start_index ? start_index + 1 : ret;
-    }();
 
-    auto const it = std::max_element(
-        fft.begin() + start_index,
-        fft.begin() + end_index,
-        [](fftw_complex const& a, fftw_complex const& b) { return abs(a) < abs(b); });
-    auto const index = std::distance(fft.begin(), it);
-    auto const d = quinn_second_estimator(*std::prev(it), *it, *std::next(it));
+    auto const max_element = [&](auto&& start, auto&& end) {
+        auto const max_index = std::max_element(
+            fft.begin() + start,
+            fft.begin() + end,
+            [](fftw_complex const& a, fftw_complex const& b) { return abs(a) < abs(b); });
+        return std::make_pair(size_t(std::distance(fft.begin(), max_index)), abs(*max_index));
+    };
 
-    auto const freq = (index + d) * bucket_size;
+    auto const max_value = max_element(0, fft.size()).second;
+
+    static constexpr auto C1 = 32.703195662;
+
+    double max_sum = 0;
+    std::pair<size_t, size_t> max_sum_region = {0, 0};
+
+    for (auto i = 0u; i < 168; ++i) {
+        auto const base_freq = C1 * std::pow(2, i / 24.0);
+        int const n_regions = int(22050 / base_freq) - 1;
+        int const half_width = std::max(1.0, (fft.size() * 0.1) / n_regions);
+
+        double sum = 0;
+        int n_samples = 0;
+        for (auto j = 0; j < n_regions; ++j) {
+            int const index = (base_freq * (j + 1)) / bucket_size;
+            int const start_index = std::max(0, index - half_width);
+            int const end_index = std::min<int>(fft.size(), index + half_width);
+
+            if (j == 0) {
+                auto const [index, value] = max_element(start_index, end_index);
+                if (value < max_value * 0.01) {
+                    n_samples = 1;
+                    break;
+                }
+            }
+
+            n_samples += end_index - start_index;
+            sum += std::transform_reduce(fft.begin() + start_index,
+                                         fft.begin() + end_index,
+                                         0.0,
+                                         std::plus<>{},
+                                         [](auto&& n) { return abs(n); });
+        }
+
+        sum /= n_samples;
+
+        if (sum > max_sum) {
+            max_sum = sum;
+            int const index = base_freq / bucket_size;
+            max_sum_region = {index - half_width, index + half_width};
+        }
+    }
+
+    auto const [index, value] = max_element(max_sum_region.first, max_sum_region.second);
+
+    if (index == 0 || index >= fft.size()) {
+        return 0;
+    }
+
+    auto const freq =
+        index * bucket_size + quinn_second_estimator(fft[index - 1], fft[index], fft[index + 1]);
+
+    // fmt::print("{}: {},{}\n", name, freq, abs(*max_region_index));
+    // plot(fft, bucket_size, {}, {freq, value}, name);
 
     return freq;
 }
@@ -299,7 +382,8 @@ double find_sample_freq(std::span<uint8_t const> ram,
     FFTW3Holder<fftw_complex> fft{(blocks * repeats * SAMPLES_PER_BLOCK) / 2 + 1};
 
     std::unique_lock lock{mutex};
-    fftw_plan_ptr plan{fftw_plan_dft_r2c_1d(sample.size(), sample.data(), fft.data(), 0)};
+    fftw_plan_ptr plan{
+        fftw_plan_dft_r2c_1d(sample.size(), sample.data(), fft.data(), FFTW_ESTIMATE)};
     lock.unlock();
 
     decode_adpcm_sample(ram, addr, loop_addr, bounds, repeats, &sample);

@@ -252,9 +252,18 @@ void MainWindow::connect_module_signals()
 
             auto const cents = [&] -> int {
                 static constexpr auto C0 = 16.351597831;
+                if (std::isnan(freq) || freq <= 0) {
+                    return -1;
+                }
                 auto const log2 = std::log2(freq / C0);
                 return std::round(log2 * 1200);
             }();
+
+            if (cents < 0) {
+                QMetaObject::invokeMethod(
+                    _channelWidgets[channel]->ui.freqLabel, &QLabel::setText, QString{"-"});
+                return;
+            }
 
             auto octave = cents / 1200;
             auto octave_cents = cents % 1200;
@@ -268,12 +277,6 @@ void MainWindow::connect_module_signals()
                     note = 0;
                     octave += 1;
                 }
-            }
-
-            if (cents < 0) {
-                octave = 0;
-                note = 0;
-                note_cents = cents;
             }
 
             QMetaObject::invokeMethod(
