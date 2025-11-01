@@ -6,6 +6,7 @@
 
 #include <QTimer>
 #include <QWindow>
+#include <QShortcut>
 
 #include <vector>
 
@@ -27,7 +28,7 @@ private:
     void load_file(QString const& file_name);
     void connect_module_signals();
 
-    void keyPressEvent(QKeyEvent* event) override;
+    // void keyPressEvent(QKeyEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void changeEvent(QEvent* event) override;
@@ -37,4 +38,5 @@ private:
     QTimer _cursorTimer;
     bool _movingSlider{};
     std::vector<std::unique_ptr<ChannelWidget>> _channelWidgets;
+    std::vector<std::unique_ptr<QShortcut>> _shortcuts;
 };

@@ -80,6 +80,16 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     connect_module_signals();
+
+    _shortcuts.emplace_back(std::make_unique<QShortcut>(
+        Qt::Key_Space, this, [this] { emit _ui.playButton->clicked(); }));
+    _shortcuts.emplace_back(std::make_unique<QShortcut>(Qt::Key_Left, this, [this] {
+        _ui.seekSlider->triggerAction(QSlider::SliderSingleStepSub);
+    }));
+    _shortcuts.emplace_back(std::make_unique<QShortcut>(Qt::Key_Right, this, [this] {
+        _ui.seekSlider->triggerAction(QSlider::SliderSingleStepAdd);
+    }));
+
     _module.start();
 }
 
@@ -262,6 +272,10 @@ void MainWindow::connect_module_signals()
             if (cents < 0) {
                 QMetaObject::invokeMethod(
                     _channelWidgets[channel]->ui.freqLabel, &QLabel::setText, QString{"-"});
+                QMetaObject::invokeMethod(
+                    _channelWidgets[channel]->ui.octaveLabel, &QLabel::setText, QString{""});
+                QMetaObject::invokeMethod(
+                    _channelWidgets[channel]->ui.centsLabel, &QLabel::setText, QString{"-"});
                 return;
             }
 
@@ -280,9 +294,13 @@ void MainWindow::connect_module_signals()
             }
 
             QMetaObject::invokeMethod(
-                _channelWidgets[channel]->ui.freqLabel,
-                &QLabel::setText,
-                QString::asprintf("%s%d %d", notes[note], octave, note_cents));
+                _channelWidgets[channel]->ui.freqLabel, &QLabel::setText, QString{notes[note]});
+            QMetaObject::invokeMethod(_channelWidgets[channel]->ui.octaveLabel,
+                                      &QLabel::setText,
+                                      QString::number(octave));
+            QMetaObject::invokeMethod(_channelWidgets[channel]->ui.centsLabel,
+                                      &QLabel::setText,
+                                      QString::asprintf("%+d", note_cents));
         });
 
     QObject::connect(&_module, &UpseModule::channel_fired, [this](size_t channel) {
@@ -348,21 +366,6 @@ void MainWindow::dropEvent(QDropEvent* event)
         return;
     }
     load_file(list[0].toLocalFile());
-}
-
-void MainWindow::keyPressEvent(QKeyEvent* event)
-{
-    auto const key = event->key();
-    if (key == Qt::Key_Space) {
-        event->setAccepted(true);
-        emit _ui.playButton->clicked();
-    } else if (key == Qt::Key_Left) {
-        event->setAccepted(true);
-        _ui.seekSlider->triggerAction(QSlider::SliderSingleStepSub);
-    } else if (key == Qt::Key_Right) {
-        event->setAccepted(true);
-        _ui.seekSlider->triggerAction(QSlider::SliderSingleStepAdd);
-    }
 }
 
 void MainWindow::changeEvent(QEvent* event)
