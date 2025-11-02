@@ -56,4 +56,5 @@ double find_sample_freq(std::span<uint8_t const> ram,
                         uint32_t addr,
                         uint32_t loop_addr,
                         SampleBounds const& bounds,
-                        std::mutex& mutex);
+                        std::mutex& mutex,
+                        std::string_view name);

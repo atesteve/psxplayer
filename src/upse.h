@@ -119,6 +119,13 @@ private:
                 .sw = sw_hook,
             },
     };
-    std::unordered_map<uint32_t, Freq> _sample_freq;
+
+    struct pair_hash {
+        static size_t operator()(std::pair<uint32_t,uint32_t> const& p) noexcept {
+            return std::hash<uint32_t>{}(p.first) ^ std::hash<uint32_t>{}(p.second);
+        }
+    };
+
+    std::unordered_map<std::pair<uint32_t,uint32_t>, Freq, pair_hash> _sample_freq;
     std::mutex _sample_freq_mutex;
 };

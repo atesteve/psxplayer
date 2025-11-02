@@ -191,7 +191,7 @@ void plot(FFTW3Holder<fftw_complex> const& fft,
     t.detach();
 }
 
-double find_peak_freq(FFTW3Holder<fftw_complex> const& fft)
+double find_peak_freq(FFTW3Holder<fftw_complex> const& fft, [[maybe_unused]] std::string_view name)
 {
     static constexpr double MAX_FREQ = 22050;
 
@@ -370,7 +370,8 @@ double find_sample_freq(std::span<uint8_t const> ram,
                         uint32_t addr,
                         uint32_t loop_addr,
                         SampleBounds const& bounds,
-                        std::mutex& mutex)
+                        std::mutex& mutex,
+                        std::string_view name)
 {
     auto const blocks = (bounds.end_addr - bounds.loop_addr) / sizeof(ADPCM_block);
     int repeats = 1;
@@ -390,5 +391,5 @@ double find_sample_freq(std::span<uint8_t const> ram,
 
     fftw_execute(plan.get());
 
-    return find_peak_freq(fft);
+    return find_peak_freq(fft, name);
 }

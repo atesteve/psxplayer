@@ -195,14 +195,16 @@ void UpseModule::find_sample_frequency()
             continue;
         }
 
-        if (_sample_freq.contains(channel.sample_addr)) {
+        auto const key_pair = std::pair{channel.sample_addr, channel.loop_addr};
+
+        if (_sample_freq.contains(key_pair)) {
             continue;
         }
 
         auto bounds = get_sample_bounds({ram, 0x80000}, channel.sample_addr, channel.loop_addr);
 
         if (bounds.end_addr == 0) {
-            _sample_freq.emplace(channel.sample_addr, 0.0);
+            _sample_freq.emplace(key_pair, 0.0);
             continue;
         }
 
@@ -220,16 +222,19 @@ void UpseModule::find_sample_frequency()
         bounds.max_addr -= min_addr;
 
         _sample_freq.emplace(
-            channel.sample_addr,
-            std::async(std::launch::async,
-                       [sample_mem = std::move(sample_mem),
-                        addr = channel.sample_addr - min_addr,
-                        loop_addr = channel.loop_addr - min_addr,
-                        bounds,
-                        this] {
-                           return find_sample_freq(
-                               sample_mem, addr, loop_addr, bounds, _sample_freq_mutex);
-                       }));
+            key_pair,
+            std::async(
+                std::launch::async,
+                [sample_mem = std::move(sample_mem),
+                 addr = channel.sample_addr - min_addr,
+                 loop_addr = channel.loop_addr - min_addr,
+                 bounds,
+                 name = fmt::format(
+                     "channel {} - {:#x}, {:#x}", ch, channel.sample_addr, channel.loop_addr),
+                 this] {
+                    return find_sample_freq(
+                        sample_mem, addr, loop_addr, bounds, _sample_freq_mutex, name);
+                }));
     }
 }
 
@@ -472,7 +477,7 @@ void UpseModule::fast_timer_fired()
             emit channel_sound_level_changed(
                 ch, compute_rms(channel.l) / 32768, compute_rms(channel.r) / 32768);
 
-            auto const it = _sample_freq.find(channel.sample_addr);
+            auto const it = _sample_freq.find({channel.sample_addr, channel.loop_addr});
             if (it == _sample_freq.end()) {
                 return;
             }
