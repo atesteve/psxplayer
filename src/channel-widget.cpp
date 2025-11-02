@@ -2,6 +2,11 @@
 
 #include <QStyle>
 
+// static constexpr char const* notes[] = {
+//     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+static constexpr char const* notes[] =
+    {"Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si"};
+
 ChannelWidget::ChannelWidget(QWidget* parent)
     : QWidget{parent}
 {
@@ -17,9 +22,13 @@ ChannelWidget::ChannelWidget(QWidget* parent)
     _ui.freqLabel->setFont(font);
     _ui.octaveLabel->setFont(font);
     _ui.centsLabel->setFont(font);
+    auto const text_color = _ui.centsLabel->style()->standardPalette().brightText().color();
+    _ui.centsLabel->setStyleSheet(QString::asprintf(
+        "color: rgba(%d,%d,%d,0.5)", text_color.red(), text_color.green(), text_color.blue()));
 
-    _ui.centsLabel->setFixedWidth(QFontMetrics(font).boundingRect("+00").width());
-    _ui.octaveLabel->setFixedWidth(QFontMetrics(font).boundingRect('0').width());
+    _ui.centsLabel->setFixedWidth(QFontMetrics(font).horizontalAdvance("+00"));
+    _ui.freqLabel->setFixedWidth(QFontMetrics(font).horizontalAdvance(*std::ranges::max_element(
+        notes, [](auto&& a, auto&& b) { return std::strlen(a) < std::strlen(b); })));
 
     _ui.soundMeterBar->setOrientation(Qt::Orientation::Vertical);
     _ui.soundMeterBar->setLowpassDecay(0.5);
@@ -69,11 +78,6 @@ void ChannelWidget::setSoundLevel(float l, float r)
 
 void ChannelWidget::setFrequency(double freq)
 {
-    // static constexpr char const* notes[] = {
-    //     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-    static constexpr char const* notes[] = {
-        "Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si"};
-
     auto const cents = [&] -> int {
         static constexpr auto C0 = 16.351597831;
         if (std::isnan(freq) || freq <= 0) {
@@ -84,11 +88,21 @@ void ChannelWidget::setFrequency(double freq)
     }();
 
     if (cents < 0) {
-        _ui.freqLabel->setText(QString{"-"});
-        _ui.octaveLabel->setText(QString{""});
-        _ui.centsLabel->setText(QString{""});
+        if (_timer.isActive()) {
+            return;
+        }
+        QObject::connect(&_timer, &QTimer::timeout, this, [this] {
+            _ui.freqLabel->setText(QString{"-"});
+            _ui.octaveLabel->setText(QString{""});
+            _ui.centsLabel->setText(QString{""});
+        });
+        _timer.setInterval(500);
+        _timer.setSingleShot(true);
+        _timer.start();
         return;
     }
+
+    _timer.stop();
 
     auto octave = cents / 1200;
     auto octave_cents = cents % 1200;

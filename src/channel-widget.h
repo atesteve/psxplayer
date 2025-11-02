@@ -3,6 +3,7 @@
 #include "ui_channel-widget.h"
 
 #include <QWidget>
+#include <QTimer>
 
 class ChannelWidget : public QWidget {
     Q_OBJECT
@@ -29,4 +30,5 @@ signals:
 
 private:
     Ui::ChannelWidget _ui;
+    QTimer _timer;
 };
