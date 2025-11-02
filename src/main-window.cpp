@@ -112,53 +112,48 @@ void MainWindow::create_channels(int number_of_channels)
 
     for (int i = 0; i < number_of_channels; ++i) {
         auto widget = std::make_unique<ChannelWidget>();
-        widget->ui.title->setText(QString::asprintf("Ch %d", i));
-        widget->ui.soundMeterBar->setOrientation(Qt::Orientation::Vertical);
-        widget->ui.soundMeterBar->setLowpassDecay(0.5);
+        widget->setTitle(QString::asprintf("Ch %d", i));
         widget->setFixedWidth(75);
         _ui.channelsLayout->addWidget(widget.get(), i / 8, i % 8);
 
         QObject::connect(
-            widget->ui.volumeBar, &QSlider::valueChanged, this, [this, ch = i](int value) {
-                QMetaObject::invokeMethod(
-                    &_module, &UpseModule::set_channel_vol, ch, value / 100.f);
+            widget.get(), &ChannelWidget::volumeChanged, this, [this, ch = i](float value) {
+                QMetaObject::invokeMethod(&_module, &UpseModule::set_channel_vol, ch, value);
             });
 
         QObject::connect(
-            widget->ui.muteButton, &QPushButton::toggled, this, [this, ch = i](bool checked) {
-                QMetaObject::invokeMethod(&_module, &UpseModule::mute_channel, ch, checked);
-                _channelWidgets[ch]->ui.volumeBar->setDisabled(checked);
-                _channelWidgets[ch]->ui.title->setDisabled(checked);
-                _channelWidgets[ch]->ui.soundMeterBar->setDisabled(checked);
-                if (checked) {
-                    _channelWidgets[ch]->ui.soloButton->blockSignals(true);
-                    _channelWidgets[ch]->ui.soloButton->setChecked(false);
-                    _channelWidgets[ch]->ui.soloButton->blockSignals(false);
+            widget.get(), &ChannelWidget::muteChanged, this, [this, ch = i](bool muted) {
+                QMetaObject::invokeMethod(&_module, &UpseModule::mute_channel, ch, muted);
+                _channelWidgets[ch]->setDisabled(muted);
+                if (muted) {
+                    _channelWidgets[ch]->blockSignals(true);
+                    _channelWidgets[ch]->setSolo(false);
+                    _channelWidgets[ch]->blockSignals(false);
                 } else {
                     for (auto const& [i, widget] : std::ranges::enumerate_view{_channelWidgets}) {
                         if (i == ch) {
                             continue;
                         }
-                        widget->ui.soloButton->blockSignals(true);
-                        widget->ui.soloButton->setChecked(false);
-                        widget->ui.soloButton->blockSignals(false);
+                        widget->blockSignals(true);
+                        widget->setSolo(false);
+                        widget->blockSignals(false);
                     }
                 }
             });
 
         QObject::connect(
-            widget->ui.soloButton, &QPushButton::toggled, this, [this, ch = i](bool checked) {
+            widget.get(), &ChannelWidget::soloChanged, this, [this, ch = i](bool checked) {
                 for (auto const& [i, widget] : std::ranges::enumerate_view{_channelWidgets}) {
                     if (i == ch) {
                         if (checked) {
-                            widget->ui.muteButton->setChecked(false);
+                            widget->setMute(false);
                         }
                         continue;
                     }
-                    widget->ui.muteButton->setChecked(checked);
-                    widget->ui.soloButton->blockSignals(true);
-                    widget->ui.soloButton->setChecked(false);
-                    widget->ui.soloButton->blockSignals(false);
+                    widget->setMute(checked);
+                    widget->blockSignals(true);
+                    widget->setSolo(false);
+                    widget->blockSignals(false);
                 }
             });
 
@@ -244,10 +239,8 @@ void MainWindow::connect_module_signals()
                          if (channel >= _channelWidgets.size()) {
                              return;
                          }
-                         QMetaObject::invokeMethod(_channelWidgets[channel]->ui.soundMeterBar,
-                                                   &SoundMeterBar::set_level,
-                                                   l,
-                                                   r);
+                         QMetaObject::invokeMethod(
+                             _channelWidgets[channel].get(), &ChannelWidget::setSoundLevel, l, r);
                      });
 
     QObject::connect(
@@ -255,60 +248,15 @@ void MainWindow::connect_module_signals()
             if (channel >= _channelWidgets.size()) {
                 return;
             }
-            // static constexpr char const* notes[] = {
-            //     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-            static constexpr char const* notes[] = {
-                "Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si"};
-
-            auto const cents = [&] -> int {
-                static constexpr auto C0 = 16.351597831;
-                if (std::isnan(freq) || freq <= 0) {
-                    return -1;
-                }
-                auto const log2 = std::log2(freq / C0);
-                return std::round(log2 * 1200);
-            }();
-
-            if (cents < 0) {
-                QMetaObject::invokeMethod(
-                    _channelWidgets[channel]->ui.freqLabel, &QLabel::setText, QString{"-"});
-                QMetaObject::invokeMethod(
-                    _channelWidgets[channel]->ui.octaveLabel, &QLabel::setText, QString{""});
-                QMetaObject::invokeMethod(
-                    _channelWidgets[channel]->ui.centsLabel, &QLabel::setText, QString{"-"});
-                return;
-            }
-
-            auto octave = cents / 1200;
-            auto octave_cents = cents % 1200;
-            auto note = octave_cents / 100;
-            auto note_cents = octave_cents % 100;
-
-            if (note_cents >= 50) {
-                note_cents -= 100;
-                note += 1;
-                if (note == 12) {
-                    note = 0;
-                    octave += 1;
-                }
-            }
-
             QMetaObject::invokeMethod(
-                _channelWidgets[channel]->ui.freqLabel, &QLabel::setText, QString{notes[note]});
-            QMetaObject::invokeMethod(_channelWidgets[channel]->ui.octaveLabel,
-                                      &QLabel::setText,
-                                      QString::number(octave));
-            QMetaObject::invokeMethod(_channelWidgets[channel]->ui.centsLabel,
-                                      &QLabel::setText,
-                                      QString::asprintf("%+d", note_cents));
+                _channelWidgets[channel].get(), &ChannelWidget::setFrequency, freq);
         });
 
     QObject::connect(&_module, &UpseModule::channel_fired, [this](size_t channel) {
         if (channel >= _channelWidgets.size()) {
             return;
         }
-        QMetaObject::invokeMethod(_channelWidgets[channel]->ui.soundMeterBar,
-                                  &SoundMeterBar::channel_fired);
+        QMetaObject::invokeMethod(_channelWidgets[channel].get(), &ChannelWidget::channelFired);
     });
 
     QObject::connect(&_module, &UpseModule::supported_channels, this, &MainWindow::create_channels);
