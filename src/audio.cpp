@@ -49,7 +49,7 @@ void Audio::write_impl(T&& samples)
 
             std::unique_lock lock{_mutex};
             auto const status =
-                _cv.wait_for(lock, 100ms, [this, next_write_p = advance(write_p, 2)] {
+                _cv.wait_for(lock, 250ms, [this, next_write_p = advance(write_p, 2)] {
                     return _read_p != next_write_p;
                 });
 
