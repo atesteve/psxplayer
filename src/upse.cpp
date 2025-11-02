@@ -264,7 +264,8 @@ void UpseModule::take_snapshot()
     auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
     auto& emplaced = _snapshots.emplace_back();
     emplaced.first = current_seek;
-    upse_module_take_snapshot(_mod.get(), &emplaced.second);
+    emplaced.second.second = _channel_map;
+    upse_module_take_snapshot(_mod.get(), &emplaced.second.first);
 }
 
 void UpseModule::seek(int pos)
@@ -285,7 +286,8 @@ void UpseModule::seek(int pos)
                                        [](auto const& element) { return element.first; });
     assert(it != _snapshots.begin());
     if (pos < current_seek || prev(it)->first.count() > current_seek) {
-        upse_module_restore_snapshot(_mod.get(), &prev(it)->second);
+        upse_module_restore_snapshot(_mod.get(), &prev(it)->second.first);
+        _channel_map = prev(it)->second.second;
 
         if (prev(it)->first.count() == pos) {
             return;

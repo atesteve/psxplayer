@@ -91,7 +91,7 @@ private:
                         mem_access_size_t size,
                         uint32_t addr,
                         uint32_t data);
-    void sw_hook(upse_module_instance_t *ins, mem_access_size_t size, uint32_t addr, uint32_t data);
+    void sw_hook(upse_module_instance_t* ins, mem_access_size_t size, uint32_t addr, uint32_t data);
 
     upse_module_ptr _mod;
     std::unique_ptr<Audio> _audio;
@@ -103,8 +103,12 @@ private:
     QTimer _slow_timer;
     QTimer _fast_timer;
     std::vector<ChannelState> _channel_state;
-    std::vector<std::pair<std::chrono::milliseconds, upse_snapshot_t>> _snapshots;
-    std::unordered_map<uint32_t, std::pair<int, int>> _channel_map;
+
+    using channel_map_t = std::unordered_map<uint32_t, std::pair<int, int>>;
+
+    channel_map_t _channel_map;
+    std::vector<std::pair<std::chrono::milliseconds, std::pair<upse_snapshot_t, channel_map_t>>>
+        _snapshots;
     emulation_control_t _control{
         .input =
             {
@@ -121,11 +125,12 @@ private:
     };
 
     struct pair_hash {
-        static size_t operator()(std::pair<uint32_t,uint32_t> const& p) noexcept {
+        static size_t operator()(std::pair<uint32_t, uint32_t> const& p) noexcept
+        {
             return std::hash<uint32_t>{}(p.first) ^ std::hash<uint32_t>{}(p.second);
         }
     };
 
-    std::unordered_map<std::pair<uint32_t,uint32_t>, Freq, pair_hash> _sample_freq;
+    std::unordered_map<std::pair<uint32_t, uint32_t>, Freq, pair_hash> _sample_freq;
     std::mutex _sample_freq_mutex;
 };
