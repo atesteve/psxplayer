@@ -25,20 +25,10 @@ upse_iofuncs_t stdio_funcs{
 
 constexpr auto SNAPSHOT_INTERVAL = 30s;
 
-uint32_t read_psx_mem(upse_module_instance_t* ins, uint32_t addr)
-{
-    char const* const ptr = ins->upse_ps1_memory_LUT[addr >> 16];
-    if (!ptr) {
-        return 0;
-    }
-    return *reinterpret_cast<uint32_t const*>(ptr + (addr & 0xffffu));
-}
-
 } // namespace
 
 UpseModule::UpseModule(QObject* parent)
     : QThread{parent}
-    , _channel_state{32}
 {
     this->moveToThread(this);
     _slow_timer.moveToThread(this);
@@ -67,37 +57,8 @@ void UpseModule::jal_hook(void* self, upse_module_instance_t* ins)
 
 void UpseModule::jal_hook(upse_module_instance_t* ins)
 {
-    if (!_channel_map.empty()) {
-        return;
-    }
-
-    auto const [base_ptr_offset, channel_ptr_pitch] = [&] -> std::pair<size_t, size_t> {
-        switch (ins->cpustate.pc) {
-        case 0x80015fe0: // FF8
-            return {0xf4, 0x110};
-        case 0x800585e0: // FF9
-            return {0x118, 0x134};
-        case 0x8004d084: // Chrono Cross
-            return {0x108, 0x124};
-        default:
-            return {};
-        }
-    }();
-
-    // Not an interesting function address.
-    if (base_ptr_offset == 0) {
-        return;
-    }
-
-    // a0 constains the interesting pointer.
-    auto const base_ptr = ins->cpustate.GPR.n.a0;
-    // First channel at offset `base_ptr_offset`
-    auto const channel_base_ptr = base_ptr + base_ptr_offset;
-
-    // Each channel every `channel_ptr_pitch` bytes.
-    for (int i = 0; i < 32; ++i) {
-        auto const channel_ptr = channel_base_ptr + i * channel_ptr_pitch;
-        _channel_map[channel_ptr] = {i, read_psx_mem(ins, channel_ptr)};
+    if (_channel_mapper->jal_hook(ins)) {
+        update_mapped_channels();
     }
 }
 
@@ -115,15 +76,9 @@ void UpseModule::sw_hook(upse_module_instance_t* ins,
                          uint32_t addr,
                          uint32_t data)
 {
-    (void)ins;
-    (void)size;
-
-    auto const it = _channel_map.find(addr);
-    if (it == _channel_map.cend()) {
-        return;
+    if (_channel_mapper->sw_hook(ins, size, addr, data)) {
+        update_mapped_channels();
     }
-    it->second.second = data;
-    update_mapped_channels();
 }
 
 void UpseModule::run()
@@ -246,16 +201,7 @@ void UpseModule::handle_channel_fire()
         }
 
         channel.fired = false;
-
-        if (_channel_map.empty()) {
-            emit channel_fired(ch);
-        } else {
-            auto const it = std::ranges::find_if(
-                _channel_map, [&](auto const& entry) { return entry.second.second == ch; });
-            if (it != _channel_map.cend()) {
-                emit channel_fired(it->second.first);
-            }
-        }
+        emit channel_fired(_channel_mapper->physical_to_logical(ch));
     }
 }
 
@@ -264,7 +210,7 @@ void UpseModule::take_snapshot()
     auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
     auto& emplaced = _snapshots.emplace_back();
     emplaced.first = current_seek;
-    emplaced.second.second = _channel_map;
+    emplaced.second.second = _channel_mapper->take_snapshot();
     upse_module_take_snapshot(_mod.get(), &emplaced.second.first);
 }
 
@@ -287,7 +233,7 @@ void UpseModule::seek(int pos)
     assert(it != _snapshots.begin());
     if (pos < current_seek || prev(it)->first.count() > current_seek) {
         upse_module_restore_snapshot(_mod.get(), &prev(it)->second.first);
-        _channel_map = prev(it)->second.second;
+        _channel_mapper->restore_snapshot(prev(it)->second.second);
 
         if (prev(it)->first.count() == pos) {
             return;
@@ -304,7 +250,9 @@ void UpseModule::load_file(QString const& file_name)
 
     _snapshots.clear();
     _snapshots.shrink_to_fit();
-    _channel_map.clear();
+    _channel_mapper = ChannelMapper::build(_mod->metadata->game);
+    _channel_state.clear();
+    _channel_state.resize(_channel_mapper->supported_channels());
     _sample_freq.clear();
     _control.output = {};
 
@@ -320,18 +268,7 @@ void UpseModule::load_file(QString const& file_name)
 
     _paused = false;
 
-    std::string_view game_name{_mod->metadata->game};
-    if (game_name == "Final Fantasy 9") {
-        emit supported_channels(32);
-    } else if (game_name == "Final Fantasy 8") {
-        emit supported_channels(32);
-    } else if (game_name == "Final Fantasy 7") {
-        emit supported_channels(16);
-    } else if (game_name == "Chrono Cross") {
-        emit supported_channels(32);
-    } else {
-        emit supported_channels(24);
-    }
+    emit supported_channels(_channel_mapper->supported_channels());
 
     set_state(State::Playing);
     emit total_time_changed(milliseconds{_mod->metadata->length});
@@ -387,36 +324,26 @@ void UpseModule::set_speed(float speed)
 
 void UpseModule::update_mapped_channels()
 {
-    for (auto const& mapped_channel : _channel_map) {
-        auto const [log_channel, hw_channel] = mapped_channel.second;
-        if (hw_channel >= 24) {
+    for (auto const& [log_channel, channel_state] : std::views::enumerate(_channel_state)) {
+        auto const hw_channel = _channel_mapper->logical_to_physical(log_channel);
+        if (hw_channel == -1) {
             continue;
         }
-        _control.input.channel[hw_channel].mute = _channel_state[log_channel].muted;
-        _control.input.channel[hw_channel].vol_multiplier = _channel_state[log_channel].vol;
+        _control.input.channel[hw_channel].mute = channel_state.muted;
+        _control.input.channel[hw_channel].vol_multiplier = channel_state.vol;
     }
 }
 
 void UpseModule::mute_channel(int ch, bool muted)
 {
     _channel_state[ch].muted = muted;
-
-    if (_channel_map.empty()) {
-        _control.input.channel[ch].mute = muted;
-    } else {
-        update_mapped_channels();
-    }
+    update_mapped_channels();
 }
 
 void UpseModule::set_channel_vol(int ch, float vol)
 {
     _channel_state[ch].vol = vol;
-
-    if (_channel_map.empty()) {
-        _control.input.channel[ch].vol_multiplier = vol;
-    } else {
-        update_mapped_channels();
-    }
+    update_mapped_channels();
 }
 
 void UpseModule::shutdown()
@@ -474,44 +401,37 @@ void UpseModule::fast_timer_fired()
         emit sound_level_changed(0, 0);
     }
 
-    auto const emit_channel_signals = [&](int ch, out_channel_t const& channel) {
+    for (auto ch = 0u; ch < _channel_state.size(); ch++) {
+        auto const hw_channel = _channel_mapper->logical_to_physical(ch);
+        if (hw_channel == -1) {
+            emit channel_sound_level_changed(ch, 0, 0);
+            emit channel_frequency_changed(ch, 0);
+            continue;
+        }
+
+        auto const& channel_info = _control.output.channel[hw_channel];
+
         if (_state == State::Playing) {
             emit channel_sound_level_changed(
-                ch, compute_rms(channel.l) / 32768, compute_rms(channel.r) / 32768);
+                ch, compute_rms(channel_info.l) / 32768, compute_rms(channel_info.r) / 32768);
 
-            auto const it = _sample_freq.find({channel.sample_addr, channel.loop_addr});
+            auto const it = _sample_freq.find({channel_info.sample_addr, channel_info.loop_addr});
             if (it == _sample_freq.end()) {
-                return;
+                continue;
             }
             auto const sample_freq = it->second.get();
             if (!sample_freq) {
                 emit channel_frequency_changed(ch, 0);
-                return;
+                continue;
             }
             if (std::isnan(*sample_freq) || *sample_freq == 0) {
                 emit channel_frequency_changed(ch, 0);
-                return;
+                continue;
             }
-            emit channel_frequency_changed(ch, (*sample_freq * channel.pitch) / 0x1000);
+            emit channel_frequency_changed(ch, (*sample_freq * channel_info.pitch) / 0x1000);
         } else {
             emit channel_sound_level_changed(ch, 0, 0);
             emit channel_frequency_changed(ch, 0);
-        }
-    };
-
-    if (_channel_map.empty()) {
-        for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
-            emit_channel_signals(ch, channel);
-        }
-    } else {
-        for (auto const& mapped_channel : _channel_map) {
-            auto const [log_channel, hw_channel] = mapped_channel.second;
-            if (hw_channel >= 24) {
-                emit channel_sound_level_changed(log_channel, 0, 0);
-                emit channel_frequency_changed(log_channel, 0);
-                continue;
-            }
-            emit_channel_signals(log_channel, _control.output.channel[hw_channel]);
         }
     }
 }

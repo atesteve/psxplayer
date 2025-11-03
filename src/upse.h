@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio.h"
+#include "channel-mapper/channel-mapper.h"
 
 #include "libupse/upse.h"
 
@@ -104,11 +105,11 @@ private:
     QTimer _fast_timer;
     std::vector<ChannelState> _channel_state;
 
-    using channel_map_t = std::unordered_map<uint32_t, std::pair<int, int>>;
+    std::unique_ptr<ChannelMapper> _channel_mapper;
 
-    channel_map_t _channel_map;
-    std::vector<std::pair<std::chrono::milliseconds, std::pair<upse_snapshot_t, channel_map_t>>>
+    std::vector<std::pair<std::chrono::milliseconds, std::pair<upse_snapshot_t, std::any>>>
         _snapshots;
+
     emulation_control_t _control{
         .input =
             {
