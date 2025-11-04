@@ -81,8 +81,11 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect_module_signals();
 
-    _shortcuts.emplace_back(std::make_unique<QShortcut>(
-        Qt::Key_Space, this, [this] { emit _ui.playButton->clicked(); }));
+    _shortcuts.emplace_back(std::make_unique<QShortcut>(Qt::Key_Space, this, [this] {
+        if (_ui.playButton->isEnabled()) {
+            emit _ui.playButton->clicked();
+        }
+    }));
     _shortcuts.emplace_back(std::make_unique<QShortcut>(Qt::Key_Left, this, [this] {
         _ui.seekSlider->triggerAction(QSlider::SliderSingleStepSub);
     }));
@@ -210,6 +213,7 @@ void MainWindow::connect_module_signals()
             _cursorTimer.setInterval(500);
             _cursorTimer.setSingleShot(true);
             _cursorTimer.start();
+            _ui.playButton->setEnabled(false);
             return;
         }
 
@@ -220,9 +224,11 @@ void MainWindow::connect_module_signals()
         switch (new_state) {
         case State::Paused:
         case State::Stopped:
+            _ui.playButton->setEnabled(true);
             _ui.playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
             break;
         case State::Playing:
+            _ui.playButton->setEnabled(true);
             _ui.playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
             break;
         case State::Seeking:
