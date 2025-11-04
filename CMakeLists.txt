@@ -25,8 +25,6 @@ qt6_add_executable(${TARGET}
   src/main-window.h
   src/upse.cpp
   src/upse.h
-  src/audio.cpp
-  src/audio.h
   src/slider-mouse-events.cpp
   src/slider-mouse-events.h
   src/channel-widget.cpp

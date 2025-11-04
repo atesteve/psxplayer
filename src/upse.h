@@ -1,12 +1,12 @@
 #pragma once
 
-#include "audio.h"
 #include "channel-mapper/channel-mapper.h"
 
 #include "libupse/upse.h"
 
 #include <QThread>
 #include <QTimer>
+#include <QAudioSink>
 
 #include <memory>
 #include <chrono>
@@ -95,7 +95,10 @@ private:
     void sw_hook(upse_module_instance_t* ins, mem_access_size_t size, uint32_t addr, uint32_t data);
 
     upse_module_ptr _mod;
-    std::unique_ptr<Audio> _audio;
+
+    std::unique_ptr<QAudioSink> _sink;
+    QIODevice* _audio{};
+
     State _state{};
     bool _paused{};
     bool _shutdown{};
