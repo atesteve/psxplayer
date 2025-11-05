@@ -778,9 +778,6 @@ static void psxJAL(upse_module_instance_t *ins)
 static void psxJR(upse_module_instance_t *ins)
 {
     doBranch(ins, _u32(_rRs_));
-    if (ins->control->hooks.jal) {
-        ins->control->hooks.jal(ins->control->hooks.data, ins);
-    }
 }
 static void psxJALR(upse_module_instance_t *ins)
 {
@@ -789,6 +786,9 @@ static void psxJALR(upse_module_instance_t *ins)
 	_SetLink(_Rd_);
     }
     doBranch(ins, _u32(_rRs_));
+    if (ins->control->hooks.jal) {
+        ins->control->hooks.jal(ins->control->hooks.data, ins);
+    }
 }
 
 /*********************************************************
