@@ -48,14 +48,13 @@ int32_t adpcm_filter(uint8_t filter, int32_t sample, int32_t a, int32_t b)
 {
     // clang-format off
     switch (filter) {
-    case 0: return sample;
-    case 1: return sample + (60  * a          + 32) / 64;
-    case 2: return sample + (115 * a - 52 * b + 32) / 64;
-    case 3: return sample + (98  * a - 55 * b + 32) / 64;
-    case 4: return sample + (122 * a - 60 * b + 32) / 64;
-    default:
+        case 0: return sample;
+        case 1: return sample + (60  * a          + 32) / 64;
+        case 2: return sample + (115 * a - 52 * b + 32) / 64;
+        case 3: return sample + (98  * a - 55 * b + 32) / 64;
+        case 4: return sample + (122 * a - 60 * b + 32) / 64;
         // Invalid, just return the raw sample.
-        return sample;
+        default: return sample;
     }
     // clang-format on
 }
@@ -211,14 +210,17 @@ double find_peak_freq(FFTW3Holder<fftw_complex> const& fft, [[maybe_unused]] std
 
     double max_sum = 0;
     std::pair<size_t, size_t> max_sum_region = {0, 0};
+    std::vector<std::pair<double, double>> max_regions;
 
-    for (auto i = 0u; i < 168; ++i) {
-        auto const base_freq = C1 * std::pow(2, i / 24.0);
+    for (auto i = 0u; i < (84 * 8); ++i) {
+        auto const base_freq = C1 * std::pow(2, i / (12.0 * 8));
         int const n_regions = int(22050 / base_freq) - 1;
         int const half_width = std::max(1.0, (fft.size() * 0.1) / n_regions);
 
         double sum = 0;
         int n_samples = 0;
+        std::vector<std::pair<double, double>> regions;
+
         for (auto j = 0; j < n_regions; ++j) {
             int const index = (base_freq * (j + 1)) / bucket_size;
             int const start_index = std::max(0, index - half_width);
@@ -226,11 +228,13 @@ double find_peak_freq(FFTW3Holder<fftw_complex> const& fft, [[maybe_unused]] std
 
             if (j == 0) {
                 auto const [index, value] = max_element(start_index, end_index);
-                if (value < max_value * 0.01) {
+                if (value < max_value * 0.05) {
                     n_samples = 1;
                     break;
                 }
             }
+
+            regions.push_back({start_index * bucket_size, end_index * bucket_size});
 
             n_samples += end_index - start_index;
             sum += std::transform_reduce(fft.begin() + start_index,
@@ -246,6 +250,7 @@ double find_peak_freq(FFTW3Holder<fftw_complex> const& fft, [[maybe_unused]] std
             max_sum = sum;
             int const index = base_freq / bucket_size;
             max_sum_region = {index - half_width, index + half_width};
+            max_regions = std::move(regions);
         }
     }
 
@@ -259,7 +264,7 @@ double find_peak_freq(FFTW3Holder<fftw_complex> const& fft, [[maybe_unused]] std
         index * bucket_size + quinn_second_estimator(fft[index - 1], fft[index], fft[index + 1]);
 
     // fmt::print("{}: {},{}\n", name, freq, abs(*max_region_index));
-    // plot(fft, bucket_size, {}, {freq, value}, name);
+    // plot(fft, bucket_size, max_regions, {freq, value}, name);
 
     return freq;
 }

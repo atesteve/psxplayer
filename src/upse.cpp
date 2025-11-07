@@ -214,18 +214,19 @@ void UpseModule::find_sample_frequency()
 
         _sample_freq.emplace(
             key_pair,
-            std::async(
-                std::launch::async,
-                [sample_mem = std::move(sample_mem),
-                 addr = channel.sample_addr - min_addr,
-                 loop_addr = channel.loop_addr - min_addr,
-                 bounds,
-                 name = fmt::format(
-                     "channel {} - {:#x}, {:#x}", ch, channel.sample_addr, channel.loop_addr),
-                 this] {
-                    return find_sample_freq(
-                        sample_mem, addr, loop_addr, bounds, _sample_freq_mutex, name);
-                }));
+            std::async(std::launch::async,
+                       [sample_mem = std::move(sample_mem),
+                        addr = channel.sample_addr - min_addr,
+                        loop_addr = channel.loop_addr - min_addr,
+                        bounds,
+                        name = fmt::format("channel {} - {:#x}, {:#x}",
+                                           _channel_mapper->physical_to_logical(ch),
+                                           channel.sample_addr,
+                                           channel.loop_addr),
+                        this] {
+                           return find_sample_freq(
+                               sample_mem, addr, loop_addr, bounds, _sample_freq_mutex, name);
+                       }));
     }
 }
 
