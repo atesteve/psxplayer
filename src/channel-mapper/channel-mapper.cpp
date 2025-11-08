@@ -1,5 +1,6 @@
 #include "channel-mapper.h"
 #include "square-mapper.h"
+#include "ff6-mapper.h"
 #include "null-mapper.h"
 
 #include <unordered_map>
@@ -24,6 +25,10 @@ const std::unordered_map<std::string_view, cm_ptr (*)()> builder_map{
     {
         "Chrono Cross",
         [] -> cm_ptr { return std::make_unique<SquareMapper>(0x8004d084, 0x108, 0x124); },
+    },
+    {
+        "Final Fantasy VI",
+        [] -> cm_ptr { return std::make_unique<FF6Mapper>(); },
     },
 };
 } // namespace

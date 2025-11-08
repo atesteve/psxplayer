@@ -40,6 +40,8 @@ qt6_add_executable(${TARGET}
   src/channel-mapper/null-mapper.h
   src/channel-mapper/square-mapper.cpp
   src/channel-mapper/square-mapper.h
+  src/channel-mapper/ff6-mapper.cpp
+  src/channel-mapper/ff6-mapper.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
