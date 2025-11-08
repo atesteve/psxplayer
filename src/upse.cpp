@@ -287,9 +287,6 @@ void UpseModule::load_file(QString const& file_name)
 
     _snapshots.clear();
     _snapshots.shrink_to_fit();
-    _channel_mapper = ChannelMapper::build(_mod->metadata->game);
-    _channel_state.clear();
-    _channel_state.resize(_channel_mapper->supported_channels());
     _sample_freq.clear();
     _control.output = {};
 
@@ -298,6 +295,10 @@ void UpseModule::load_file(QString const& file_name)
         emit supported_channels(0);
         return;
     }
+
+    _channel_mapper = ChannelMapper::build(_mod->metadata->game);
+    _channel_state.clear();
+    _channel_state.resize(_channel_mapper->supported_channels());
 
     _snapshots.reserve(
         (_mod->metadata->length / duration_cast<milliseconds>(SNAPSHOT_INTERVAL).count()) + 1);
