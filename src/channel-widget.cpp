@@ -32,6 +32,8 @@ ChannelWidget::ChannelWidget(QWidget* parent)
 
     _ui.soundMeterBar->setOrientation(Qt::Orientation::Vertical);
     _ui.soundMeterBar->setLowpassDecay(0.5);
+    _ui.soundMeterBar->setFixedHeight(65);
+    _ui.volumeBar->setFixedHeight(65);
 
     QObject::connect(_ui.muteButton, &QPushButton::toggled, this, [this](bool checked) {
         emit muteChanged(checked);
