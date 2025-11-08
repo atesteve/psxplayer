@@ -2,8 +2,8 @@
 
 namespace {
 struct SaveState {
-    std::vector<int> pys_to_log;
-    std::vector<int> log_to_pys;
+    std::vector<int> phys_to_log;
+    std::vector<int> log_to_phys;
     uint32_t channel_base_addr;
 };
 
@@ -15,16 +15,16 @@ SquareMapper::SquareMapper(uint32_t jal_address,
     : _jal_address{jal_address}
     , _base_ptr_offset{base_ptr_offset}
     , _channel_ptr_pitch{channel_ptr_pitch}
-    , _pys_to_log(24, -1)
-    , _log_to_pys(32, -1)
+    , _phys_to_log(24, -1)
+    , _log_to_phys(32, -1)
     , _channel_base_addr{0}
 {}
 
 std::any SquareMapper::take_snapshot() const
 {
     return SaveState{
-        _pys_to_log,
-        _log_to_pys,
+        _phys_to_log,
+        _log_to_phys,
         _channel_base_addr,
     };
 }
@@ -32,25 +32,25 @@ std::any SquareMapper::take_snapshot() const
 void SquareMapper::restore_snapshot(std::any const& snapshot)
 {
     auto const& state = std::any_cast<SaveState>(snapshot);
-    _pys_to_log = state.pys_to_log;
-    _log_to_pys = state.log_to_pys;
+    _phys_to_log = state.phys_to_log;
+    _log_to_phys = state.log_to_phys;
     _channel_base_addr = state.channel_base_addr;
 }
 
 int SquareMapper::physical_to_logical(int phys_channel) const
 {
-    if (size_t(phys_channel) >= _pys_to_log.size()) {
+    if (size_t(phys_channel) >= _phys_to_log.size()) {
         return -1;
     }
-    return _pys_to_log[phys_channel];
+    return _phys_to_log[phys_channel];
 }
 
 int SquareMapper::logical_to_physical(int log_channel) const
 {
-    if (size_t(log_channel) >= _log_to_pys.size()) {
+    if (size_t(log_channel) >= _log_to_phys.size()) {
         return -1;
     }
-    return _log_to_pys[log_channel];
+    return _log_to_phys[log_channel];
 }
 
 bool SquareMapper::sw_hook(upse_module_instance_t*, mem_access_size_t, uint32_t addr, uint32_t data)
@@ -72,15 +72,15 @@ bool SquareMapper::sw_hook(upse_module_instance_t*, mem_access_size_t, uint32_t 
     }
 
     int const log = offset / _channel_ptr_pitch;
-    int const current_pys = _log_to_pys[log];
+    int const current_pys = _log_to_phys[log];
     int const pys = data < 24 ? data : -1;
 
-    _log_to_pys[log] = pys;
+    _log_to_phys[log] = pys;
     if (current_pys != -1) {
-        _pys_to_log[current_pys] = -1;
+        _phys_to_log[current_pys] = -1;
     }
     if (pys != -1) {
-        _pys_to_log[pys] = log;
+        _phys_to_log[pys] = log;
     }
 
     return true;

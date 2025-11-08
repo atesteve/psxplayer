@@ -23,7 +23,7 @@ private:
     uint32_t _base_ptr_offset;
     uint32_t _channel_ptr_pitch;
 
-    std::vector<int> _pys_to_log;
-    std::vector<int> _log_to_pys;
+    std::vector<int> _phys_to_log;
+    std::vector<int> _log_to_phys;
     uint32_t _channel_base_addr;
 };
