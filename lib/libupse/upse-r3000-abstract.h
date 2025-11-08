@@ -38,7 +38,7 @@ typedef enum
 #define _u32(x) (u32)x
 
 #define _i16(x) (s16)x
-#define _u16(x) (u32)x
+#define _u16(x) (u16)x
 
 #define _i8(x) (s8)x
 #define _u8(x) (u8)x

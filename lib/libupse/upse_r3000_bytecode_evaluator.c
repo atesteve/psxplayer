@@ -914,14 +914,14 @@ static void psxSB(upse_module_instance_t *ins)
 static void psxSH(upse_module_instance_t *ins)
 {
     if (ins->control->hooks.sw) {
-        ins->control->hooks.sw(ins->control->hooks.data, ins, MEM_ACCESS_HALF, _oB_, _u8(_rRt_));
+        ins->control->hooks.sw(ins->control->hooks.data, ins, MEM_ACCESS_HALF, _oB_, _u16(_rRt_));
     }
     upse_ps1_memory_write_16(ins, _oB_, _u16(_rRt_));
 }
 static void psxSW(upse_module_instance_t *ins)
 {
     if (ins->control->hooks.sw) {
-        ins->control->hooks.sw(ins->control->hooks.data, ins, MEM_ACCESS_WORD, _oB_, _u8(_rRt_));
+        ins->control->hooks.sw(ins->control->hooks.data, ins, MEM_ACCESS_WORD, _oB_, _u32(_rRt_));
     }
     upse_ps1_memory_write_32(ins, _oB_, _u32(_rRt_));
 }
