@@ -721,7 +721,7 @@ static uint32 EMU_CALL resampler(
         decode_sample_block(ram, memmax, sample, 0);
         ph -= 0x1C000;
       }
-      source_signal = sample->array + (ph >> 12);
+      source_signal = sample->array + ((ph >> 12) & 0x1f);
       mygauss = (sint16*) (((uint8*)gauss_shuffled_reverse_table) + ((ph & 0xFF0) >> 1));
 
       { sum =

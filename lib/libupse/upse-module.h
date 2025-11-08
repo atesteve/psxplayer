@@ -85,7 +85,7 @@ typedef struct upse_module_instance {
 
     size_t bump_ptr;
     void* opaque;
-    char storage[565160];
+    char storage[597920];
 } upse_module_instance_t;
 
 void *upse_ps1_alloc(upse_module_instance_t *ins, size_t size);

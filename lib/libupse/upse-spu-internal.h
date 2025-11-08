@@ -68,7 +68,7 @@ typedef struct {
 typedef struct upse_spu_state {
 	void *pCore;
 
-    u8 pSpuBuffer[32770];
+    u8 pSpuBuffer[65536];
 
     upse_audio_callback_func_t cb;
     const void *cb_userdata;
