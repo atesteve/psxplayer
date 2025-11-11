@@ -9,35 +9,36 @@ namespace {
 
 using cm_ptr = std::unique_ptr<ChannelMapper>;
 
-const std::unordered_map<std::string_view, cm_ptr (*)()> builder_map{
+const std::unordered_map<std::string_view, cm_ptr (*)(upse_module_instance_t* ins)> builder_map{
     {
         "Final Fantasy 7",
-        [] -> cm_ptr { return std::make_unique<NullMapper>(16); },
+        [](auto) -> cm_ptr { return std::make_unique<NullMapper>(16); },
     },
     {
         "Final Fantasy 8",
-        [] -> cm_ptr { return std::make_unique<SquareMapper>(0x80015fe0, 0xf4, 0x110); },
+        [](auto) -> cm_ptr { return std::make_unique<SquareMapper>(0x80015fe0, 0xf4, 0x110); },
     },
     {
         "Final Fantasy 9",
-        [] -> cm_ptr { return std::make_unique<SquareMapper>(0x800585e0, 0x118, 0x134); },
+        [](auto) -> cm_ptr { return std::make_unique<SquareMapper>(0x800585e0, 0x118, 0x134); },
     },
     {
         "Chrono Cross",
-        [] -> cm_ptr { return std::make_unique<SquareMapper>(0x8004d084, 0x108, 0x124); },
+        [](auto) -> cm_ptr { return std::make_unique<SquareMapper>(0x8004d084, 0x108, 0x124); },
     },
     {
         "Final Fantasy VI",
-        [] -> cm_ptr { return std::make_unique<FF6Mapper>(); },
+        [](auto ins) -> cm_ptr { return std::make_unique<FF6Mapper>(ins); },
     },
 };
 } // namespace
 
-std::unique_ptr<ChannelMapper> ChannelMapper::build(std::string_view game_name)
+std::unique_ptr<ChannelMapper> ChannelMapper::build(upse_module_instance_t* ins,
+                                                    std::string_view game_name)
 {
     auto const it = builder_map.find(game_name);
     if (it == builder_map.end()) {
         return std::make_unique<NullMapper>(24);
     }
-    return it->second();
+    return it->second(ins);
 }
