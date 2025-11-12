@@ -31,7 +31,7 @@ std::any SquareMapper::take_snapshot() const
 
 void SquareMapper::restore_snapshot(std::any const& snapshot)
 {
-    auto const& state = std::any_cast<SaveState>(snapshot);
+    auto const& state = std::any_cast<SaveState const&>(snapshot);
     _phys_to_log = state.phys_to_log;
     _log_to_phys = state.log_to_phys;
     _channel_base_addr = state.channel_base_addr;
