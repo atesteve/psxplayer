@@ -241,28 +241,27 @@ void MainWindow::connect_module_signals()
 
     QObject::connect(&_module,
                      &UpseModule::channel_sound_level_changed,
+                     this,
                      [this](size_t channel, float l, float r) {
                          if (channel >= _channelWidgets.size()) {
                              return;
                          }
-                         QMetaObject::invokeMethod(
-                             _channelWidgets[channel].get(), &ChannelWidget::setSoundLevel, l, r);
+                         _channelWidgets[channel]->setSoundLevel(l, r);
                      });
 
     QObject::connect(
-        &_module, &UpseModule::channel_frequency_changed, [this](size_t channel, double freq) {
+        &_module, &UpseModule::channel_frequency_changed, this, [this](size_t channel, double freq) {
             if (channel >= _channelWidgets.size()) {
                 return;
             }
-            QMetaObject::invokeMethod(
-                _channelWidgets[channel].get(), &ChannelWidget::setFrequency, freq);
+            _channelWidgets[channel]->setFrequency(freq);
         });
 
-    QObject::connect(&_module, &UpseModule::channel_fired, [this](size_t channel) {
+    QObject::connect(&_module, &UpseModule::channel_fired, this, [this](size_t channel) {
         if (channel >= _channelWidgets.size()) {
             return;
         }
-        QMetaObject::invokeMethod(_channelWidgets[channel].get(), &ChannelWidget::channelFired);
+        _channelWidgets[channel]->channelFired();
     });
 
     QObject::connect(&_module, &UpseModule::supported_channels, this, &MainWindow::create_channels);
