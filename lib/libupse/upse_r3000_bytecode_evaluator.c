@@ -1109,24 +1109,45 @@ int upse_r3000_cpu_execute_render(upse_module_instance_t *ins, s16 **s)
 
     for (;;)
     {
+        // static volatile bool dodump = false;
+
+        // if (dodump) {
+        //     FILE* f = fopen("dump.bin", "wb");
+        //     for (int i = 0; i < 0x200000; i += 4096) {
+        //         fwrite(ins->psxM + i, 4096, 1, f);
+        //     }
+        //     fclose(f);
+        //     dodump = false;
+        // }
+
         const u32 seek_current = upse_ps1_spu_tell_seek(ins);
         if (seek_current - seek_start > 5000) {
             *s = NULL;
             return 1;
         }
 
-        int r;
+        if (ins->sound_started) {
+            int r;
 
-        if (!upse_ps1_counter_run(ins))
-        {
+            if (!upse_ps1_counter_run(ins))
+            {
+                return 0;
+            }
+
+            r = upse_ps1_spu_finalize_count(ins->spu, s);
+            if (r && *s)
+                return r;
+        } else if (ins->cpustate.cycle > 165000000) {
+            // After around 5 seconds of emulated time, if the music hasn't started, just give up.
             return 0;
         }
 
-        r = upse_ps1_spu_finalize_count(ins->spu, s);
-        if (r && *s)
-            return r;
-
+        const bool sound_started_before = ins->sound_started;
         execI(ins);
+        if (ins->sound_started && !sound_started_before) {
+            ins->cpustate.cycle = 0;
+            return -1;
+        }
     }
 }
 

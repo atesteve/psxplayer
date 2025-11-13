@@ -29,9 +29,9 @@
 // WRITE REGISTERS: called by main emu
 ////////////////////////////////////////////////////////////////////////
 
-void upse_ps1_spu_write_register(upse_spu_state_t *spu, u32 reg, u16 val)
+bool upse_ps1_spu_write_register(upse_spu_state_t *spu, u32 reg, u16 val)
 {
-	spu_sh( spu->pCore, reg, val );
+	return spu_sh( spu->pCore, reg, val );
 }
 
 ////////////////////////////////////////////////////////////////////////

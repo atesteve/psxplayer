@@ -55,15 +55,18 @@ void upse_ps1_spu_dma_read_memory(upse_spu_state_t *spu, u32 usPSXMem, int iSize
 // WRITE DMA (many values)
 ////////////////////////////////////////////////////////////////////////
 
-void upse_ps1_spu_dma_write_memory(upse_spu_state_t *spu, u32 usPSXMem, int iSize)
+bool upse_ps1_spu_dma_write_memory(upse_spu_state_t *spu, u32 usPSXMem, int iSize)
 {
     int i;
+    bool ret = false;
 
     for (i = 0; i < iSize; i++)
     {
-	spu_sh(spu->pCore, 0x1F801DA8, *(u16 *) PSXM(spu->ins, usPSXMem));
+	ret |= spu_sh(spu->pCore, 0x1F801DA8, *(u16 *) PSXM(spu->ins, usPSXMem));
 	usPSXMem += 2;		// spu addr got by writeregister
-	}
+    }
+
+    return ret;
 }
 
 ////////////////////////////////////////////////////////////////////////

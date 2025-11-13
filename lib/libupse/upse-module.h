@@ -84,6 +84,9 @@ typedef struct upse_module_instance {
     emulation_control_t *control;
 
     size_t bump_ptr;
+
+    bool sound_started;
+
     void* opaque;
     char storage[597920];
 } upse_module_instance_t;

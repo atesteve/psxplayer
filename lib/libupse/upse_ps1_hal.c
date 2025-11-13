@@ -228,7 +228,9 @@ void upse_ps1_hal_write_16(upse_module_instance_t *ins, u32 add, u16 value)
       default:
 	  if (add >= 0x1f801c00 && add < 0x1f801e00)
 	  {
-	      upse_ps1_spu_write_register(ins->spu, add, value);
+	      if (upse_ps1_spu_write_register(ins->spu, add, value)) {
+                   ins->sound_started = true;
+              }
 	      return;
 	  }
 

@@ -124,7 +124,7 @@ void UpseModule::run()
     _slow_timer.start(500);
 
     int16_t* buf;
-    size_t n;
+    int n;
 
     while (!_shutdown) {
         if (_state == State::Seeking) {
@@ -145,13 +145,18 @@ void UpseModule::run()
                 _control.input.speed_multiplier = _speed;
                 slow_timer_fired();
             }
+
+            if (n == -1) {
+                _snapshots.clear();
+                take_snapshot();
+            }
         } else {
             n = 0;
         }
 
         if (n > 0 && buf) {
             if (_state != State::Seeking) {
-                write_audio(_audio, {buf, n * 2});
+                write_audio(_audio, {buf, (unsigned) n * 2});
             }
             if (_state == State::Seeking) {
                 _control.input.speed_multiplier = _speed;

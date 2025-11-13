@@ -22,7 +22,7 @@ void   EMU_CALL spu_clear_state(void *state, uint8 version, emulation_control_t 
 void   EMU_CALL spu_render    (void *state, sint16 *buf, uint32 samples);
 void   EMU_CALL spu_render_ext(void *state, sint16 *buf, sint16 *ext, uint32 samples);
 uint16 EMU_CALL spu_lh(void *state, uint32 a);
-void   EMU_CALL spu_sh(void *state, uint32 a, uint16 d);
+bool   EMU_CALL spu_sh(void *state, uint32 a, uint16 d);
 
 void   EMU_CALL spu_dma(void *state, uint32 core, void *mem, uint32 mem_ofs, uint32 mem_mask, uint32 bytes, int iswrite);
 
