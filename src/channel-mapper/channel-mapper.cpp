@@ -1,6 +1,6 @@
 #include "channel-mapper.h"
 #include "square-mapper.h"
-#include "ff6-mapper.h"
+#include "square-retro-mapper.h"
 #include "null-mapper.h"
 
 #include <unordered_map>
@@ -28,7 +28,11 @@ const std::unordered_map<std::string_view, cm_ptr (*)(upse_module_instance_t* in
     },
     {
         "Final Fantasy VI",
-        [](auto ins) -> cm_ptr { return std::make_unique<FF6Mapper>(ins); },
+        [](auto ins) -> cm_ptr { return std::make_unique<SquareRetroMapper>(ins, 0x80150000); },
+    },
+    {
+        "Chrono Trigger",
+        [](auto ins) -> cm_ptr { return std::make_unique<SquareRetroMapper>(ins, 0x80170000); },
     },
 };
 } // namespace

@@ -1,4 +1,4 @@
-#include "ff6-mapper.h"
+#include "square-retro-mapper.h"
 
 #include <fmt/format.h>
 
@@ -21,26 +21,24 @@ auto read_psx_memory(upse_module_instance_t* ins, uint32_t addr)
 
 } // namespace
 
-FF6Mapper::FF6Mapper(upse_module_instance_t* ins)
+SquareRetroMapper::SquareRetroMapper(upse_module_instance_t* ins, uint32_t module_base_addr)
     : _phys_to_log(24, -1)
     , _log_to_phys(SUPPORTED_CHANNELS, -1)
 {
-    static constexpr uint32_t MODULE_BASE_ADDR = 0x80150000;
-
-    if (read_psx_memory(ins, MODULE_BASE_ADDR) != 2
-        || read_psx_memory(ins, MODULE_BASE_ADDR + 4) != 12) {
+    if (read_psx_memory(ins, module_base_addr) != 2
+        || read_psx_memory(ins, module_base_addr + 4) != 12) {
         fmt::println("Warning: unrecognized module format");
         return;
     }
 
     auto const channels_offsets = [&] -> uint32_t {
         int found_nulls = 0;
-        for (uint32_t i = 0; i < 0x10000; i += 4) {
-            if (read_psx_memory(ins, MODULE_BASE_ADDR + i) == 0) {
+        for (uint32_t i = 0; i < 0x10000; i += sizeof(uint32_t)) {
+            if (read_psx_memory(ins, module_base_addr + i) == 0) {
                 found_nulls += 1;
             }
             if (found_nulls == 2) {
-                return MODULE_BASE_ADDR + i + 4;
+                return module_base_addr + i + sizeof(uint32_t);
             }
         }
         return 0;
@@ -108,7 +106,7 @@ FF6Mapper::FF6Mapper(upse_module_instance_t* ins)
     }
 }
 
-std::any FF6Mapper::take_snapshot() const
+std::any SquareRetroMapper::take_snapshot() const
 {
     return SaveState{
         _phys_to_log,
@@ -117,7 +115,7 @@ std::any FF6Mapper::take_snapshot() const
     };
 }
 
-void FF6Mapper::restore_snapshot(std::any const& snapshot)
+void SquareRetroMapper::restore_snapshot(std::any const& snapshot)
 {
     auto const& state = std::any_cast<SaveState const&>(snapshot);
     _phys_to_log = state.phys_to_log;
@@ -125,7 +123,7 @@ void FF6Mapper::restore_snapshot(std::any const& snapshot)
     _next_log = state.next_log;
 }
 
-int FF6Mapper::physical_to_logical(int phys_channel) const
+int SquareRetroMapper::physical_to_logical(int phys_channel) const
 {
     if (size_t(phys_channel) >= _phys_to_log.size()) {
         return -1;
@@ -133,7 +131,7 @@ int FF6Mapper::physical_to_logical(int phys_channel) const
     return _phys_to_log[phys_channel];
 }
 
-int FF6Mapper::logical_to_physical(int log_channel) const
+int SquareRetroMapper::logical_to_physical(int log_channel) const
 {
     if (size_t(log_channel) >= _log_to_phys.size()) {
         return -1;
@@ -141,7 +139,7 @@ int FF6Mapper::logical_to_physical(int log_channel) const
     return _log_to_phys[log_channel];
 }
 
-bool FF6Mapper::sw_hook(upse_module_instance_t* ins,
+bool SquareRetroMapper::sw_hook(upse_module_instance_t* ins,
                         mem_access_size_t,
                         uint32_t addr,
                         uint32_t value)

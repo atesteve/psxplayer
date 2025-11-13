@@ -4,9 +4,9 @@
 
 #include <vector>
 
-class FF6Mapper : public ChannelMapper {
+class SquareRetroMapper : public ChannelMapper {
 public:
-    explicit FF6Mapper(upse_module_instance_t* ins);
+    explicit SquareRetroMapper(upse_module_instance_t* ins, uint32_t module_base_addr);
 
     static constexpr size_t SUPPORTED_CHANNELS = 16;
 
