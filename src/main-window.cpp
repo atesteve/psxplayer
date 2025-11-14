@@ -92,6 +92,12 @@ MainWindow::MainWindow(QWidget* parent)
     _shortcuts.emplace_back(std::make_unique<QShortcut>(Qt::Key_Right, this, [this] {
         _ui.seekSlider->triggerAction(QSlider::SliderSingleStepAdd);
     }));
+    _shortcuts.emplace_back(std::make_unique<QShortcut>(Qt::Key_Down, this, [this] {
+        _ui.speedSlider->triggerAction(QSlider::SliderSingleStepSub);
+    }));
+    _shortcuts.emplace_back(std::make_unique<QShortcut>(Qt::Key_Up, this, [this] {
+        _ui.speedSlider->triggerAction(QSlider::SliderSingleStepAdd);
+    }));
 
     _module.start();
 }
