@@ -16,6 +16,7 @@ public:
 
     float lowpassDecay() const { return _decay; }
     void setLowpassDecay(float decay) { _decay = decay; }
+    void setMultiplier(float multiplier) { _multiplier = multiplier; }
 
 public slots:
     void set_level(float l, float r);
@@ -29,6 +30,7 @@ private:
     Qt::Orientation _orientation = Qt::Orientation::Horizontal;
     float _l{};
     float _r{};
-    float _decay = 1;
+    float _decay = 0.5;
     float _fire = 100;
+    float _multiplier = 1;
 };

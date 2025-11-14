@@ -30,6 +30,7 @@ ChannelWidget::ChannelWidget(QWidget* parent)
     _ui.freqLabel->setFixedWidth(QFontMetrics(font).horizontalAdvance(*std::ranges::max_element(
         notes, [](auto&& a, auto&& b) { return std::strlen(a) < std::strlen(b); })));
 
+    _ui.soundMeterBar->setMultiplier(1.5);
     _ui.soundMeterBar->setOrientation(Qt::Orientation::Vertical);
     _ui.soundMeterBar->setLowpassDecay(0.5);
     _ui.soundMeterBar->setFixedHeight(65);

@@ -14,14 +14,12 @@ namespace {
 constexpr auto MARGIN = 4;
 constexpr auto BAR_WIDTH = 0.25f;
 
-float toDB(float rms)
+float toDB(float rms, float multiplier)
 {
     if (rms <= 0) {
         return 0;
     }
-    float ret = 20 * std::log10(rms);
-    // Normalize -95,0 to 0,1.
-    return (std::clamp<float>(ret, -95, 0) + 95) / 95;
+    return std::clamp<float>(pow(rms, 0.25) * multiplier, 0, 1);
 }
 
 } // namespace
@@ -32,8 +30,8 @@ SoundMeterBar::SoundMeterBar(QWidget* p)
 
 void SoundMeterBar::set_level(float l, float r)
 {
-    auto const new_l = toDB(l);
-    auto const new_r = toDB(r);
+    auto const new_l = toDB(l, _multiplier);
+    auto const new_r = toDB(r, _multiplier);
 
     auto const decay = (new_l == 0 && new_r == 0) ? _decay * 0.33 : _decay;
 
