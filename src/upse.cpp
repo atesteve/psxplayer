@@ -5,7 +5,6 @@
 #include <fmt/format.h>
 
 #include <QAbstractEventDispatcher>
-#include <QMediaDevices>
 
 #include <algorithm>
 #include <cassert>
@@ -26,29 +25,6 @@ upse_iofuncs_t stdio_funcs{
 
 constexpr auto SNAPSHOT_INTERVAL = 30s;
 
-void write_audio(QIODevice* audio, std::span<int16_t const> buffer)
-{
-    size_t bytes_written = 0;
-    size_t const bytes_to_write = buffer.size() * sizeof(int16_t);
-    while (bytes_written < bytes_to_write) {
-        if (bytes_written != 0) {
-            std::this_thread::sleep_for(5ms);
-        }
-        auto const actually_written =
-            audio->write((char const*)&buffer[0] + bytes_written, bytes_to_write - bytes_written);
-        if (actually_written < 0) {
-            break;
-        }
-        bytes_written += actually_written;
-    }
-}
-
-void flush_audio(QIODevice* audio)
-{
-    static constexpr std::array<int16_t, 1024> dummy{};
-    write_audio(audio, dummy);
-}
-
 } // namespace
 
 UpseModule::UpseModule(QObject* parent)
@@ -58,23 +34,7 @@ UpseModule::UpseModule(QObject* parent)
     _slow_timer.moveToThread(this);
     _fast_timer.moveToThread(this);
 
-    QAudioFormat format{};
-    format.setSampleRate(44100);
-    format.setChannelCount(2);
-    format.setSampleFormat(QAudioFormat::Int16);
-
-    QAudioDevice info{QMediaDevices::defaultAudioOutput()};
-
-    if (!info.isFormatSupported(format)) {
-        return;
-    }
-
-    _sink = std::make_unique<QAudioSink>(format);
-    _audio = _sink->start();
-
-    if (!_audio) {
-        return;
-    }
+    _audio.emplace(this, this);
 
     QObject::connect(&_slow_timer, &QTimer::timeout, this, &UpseModule::slow_timer_fired);
     _slow_timer.setSingleShot(false);
@@ -128,7 +88,7 @@ void UpseModule::run()
 
     while (!_shutdown) {
         if (_state == State::Seeking) {
-            _control.input.speed_multiplier = 10;
+            _control.input.speed_multiplier = 2.5;
         }
 
         if (_mod && (_state == State::Playing || _state == State::Seeking)) {
@@ -156,7 +116,7 @@ void UpseModule::run()
 
         if (n > 0 && buf) {
             if (_state != State::Seeking) {
-                write_audio(_audio, {buf, (unsigned) n * 2});
+                _audio->write({buf, (unsigned)n * 2});
             }
             if (_state == State::Seeking) {
                 _control.input.speed_multiplier = _speed;
@@ -399,10 +359,11 @@ void UpseModule::shutdown()
 void UpseModule::set_state(State new_state)
 {
     if (new_state == State::Playing) {
+        _audio->start();
         _fast_timer.start(33);
     } else {
         if (_state == State::Playing) {
-            flush_audio(_audio);
+            _audio->stop();
         }
         _stopped_cycles = 0;
     }
