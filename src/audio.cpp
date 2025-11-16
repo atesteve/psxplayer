@@ -23,16 +23,16 @@ Audio::Audio(QThread* t, QObject* o)
             return;
         }
 
-        bool restart = false;
-        if (_sink && _sink->state() == QAudio::ActiveState) {
-            stop();
-            restart = true;
+        _audio = nullptr;
+
+        if (_sink && _running) {
+            _sink->reset();
         }
 
         _sink = std::make_unique<QAudioSink>(format);
 
-        if (restart) {
-            start();
+        if (_running) {
+            _audio = _sink->start();
         }
     };
 
@@ -43,6 +43,8 @@ Audio::Audio(QThread* t, QObject* o)
 
 void Audio::start()
 {
+    _running = true;
+
     if (!_sink) {
         return;
     }
@@ -51,6 +53,8 @@ void Audio::start()
 
 void Audio::stop()
 {
+    _running = false;
+
     if (!_sink) {
         return;
     }
@@ -60,12 +64,14 @@ void Audio::stop()
 
 void Audio::write(std::span<int16_t const> buffer)
 {
+    static constexpr auto MAX_RETRIES = 10;
     if (!_audio) {
         return;
     }
     size_t bytes_written = 0;
     size_t const bytes_to_write = buffer.size() * sizeof(int16_t);
-    while (bytes_written < bytes_to_write) {
+    int retries = 0;
+    while (bytes_written < bytes_to_write && retries < MAX_RETRIES) {
         if (bytes_written != 0) {
             std::this_thread::sleep_for(5ms);
         }
@@ -75,5 +81,6 @@ void Audio::write(std::span<int16_t const> buffer)
             break;
         }
         bytes_written += actually_written;
+        retries++;
     }
 }

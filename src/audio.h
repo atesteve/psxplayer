@@ -19,4 +19,5 @@ private:
     QMediaDevices _mediaDevices;
     std::unique_ptr<QAudioSink> _sink;
     QIODevice* _audio{};
+    bool _running{};
 };
