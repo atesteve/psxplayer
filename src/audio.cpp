@@ -72,7 +72,7 @@ void Audio::write(std::span<int16_t const> buffer)
     size_t const bytes_to_write = buffer.size() * sizeof(int16_t);
     int retries = 0;
     while (bytes_written < bytes_to_write && retries < MAX_RETRIES) {
-        if (bytes_written != 0) {
+        if (retries != 0) {
             std::this_thread::sleep_for(5ms);
         }
         auto const actually_written =
@@ -80,7 +80,11 @@ void Audio::write(std::span<int16_t const> buffer)
         if (actually_written < 0) {
             break;
         }
+        if (actually_written == 0) {
+            retries++;
+        } else {
+            retries = 1;
+        }
         bytes_written += actually_written;
-        retries++;
     }
 }
