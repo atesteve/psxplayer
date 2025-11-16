@@ -248,12 +248,15 @@ void UpseModule::seek(int pos)
 
 void UpseModule::load_file(QString const& file_name)
 {
+    _audio->stop();
+
     _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs, &_control));
 
     _snapshots.clear();
     _snapshots.shrink_to_fit();
     _sample_freq.clear();
     _control.output = {};
+    _control.input.speed_multiplier = _speed;
 
     if (!_mod) {
         set_state(State::Unloaded);
