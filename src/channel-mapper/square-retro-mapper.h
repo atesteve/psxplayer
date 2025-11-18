@@ -8,7 +8,7 @@ class SquareRetroMapper : public ChannelMapper {
 public:
     explicit SquareRetroMapper(upse_module_instance_t* ins, uint32_t module_base_addr);
 
-    static constexpr size_t SUPPORTED_CHANNELS = 16;
+    static constexpr size_t SUPPORTED_CHANNELS = 24;
 
     std::any take_snapshot() const override;
     void restore_snapshot(std::any const&) override;
