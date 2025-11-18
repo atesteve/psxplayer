@@ -43,6 +43,7 @@ typedef void (*sw_hook_ptr)(void* hook_data, upse_module_instance_t *ins, mem_ac
 typedef struct emulation_config {
     struct {
         float speed_multiplier;
+        bool endless_play;
         struct {
             float vol_multiplier;
             bool mute;

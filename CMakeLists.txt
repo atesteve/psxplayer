@@ -37,6 +37,7 @@ qt6_add_executable(${TARGET}
   src/sound-meter-bar.h
   src/adpcm.cpp
   src/adpcm.h
+  src/square-button.h
   src/channel-mapper/channel-mapper.cpp
   src/channel-mapper/channel-mapper.h
   src/channel-mapper/null-mapper.h

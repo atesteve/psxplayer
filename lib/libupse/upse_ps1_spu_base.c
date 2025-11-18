@@ -122,7 +122,7 @@ int upse_ps1_spu_render(upse_spu_state_t *spu, u32 cycles)
 
 	for ( dosamples = 0; dosamples < temp; dosamples++ )
 	{
-		if (spu->decaybegin != 0 && spu->cyclecount >= spu->decaybegin)
+		if (!spu->control->input.endless_play && spu->decaybegin != 0 && spu->cyclecount >= spu->decaybegin)
 		{
 			s32 dmul;
 			if (spu->decaybegin != 0)

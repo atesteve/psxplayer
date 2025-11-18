@@ -108,16 +108,29 @@
      <widget class="QWidget" name="controlsContainer" native="true">
       <layout class="QHBoxLayout" name="horizontalLayout">
        <item>
-        <widget class="QPushButton" name="playButton">
+        <widget class="SquareButton" name="playButton">
          <property name="text">
           <string/>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="stopButton">
+        <widget class="SquareButton" name="stopButton">
          <property name="text">
           <string/>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="SquareButton" name="endlessButton">
+         <property name="toolTip">
+          <string>Endless play</string>
+         </property>
+         <property name="text">
+          <string notr="true">∞</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -251,6 +264,11 @@
    <extends>QWidget</extends>
    <header>sound-meter-bar.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SquareButton</class>
+   <extends>QPushButton</extends>
+   <header>square-button.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

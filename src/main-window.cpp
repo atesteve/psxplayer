@@ -32,8 +32,14 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow{parent}
 {
     _ui.setupUi(this);
+
     _ui.playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
     _ui.stopButton->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
+
+    auto font = _ui.endlessButton->font();
+    font.setPointSizeF(font.pointSizeF() * 1.75);
+    _ui.endlessButton->setFont(font);
+    _ui.endlessButton->setStyleSheet("padding: 0;");
 
     this->adjustSize();
 
@@ -87,10 +93,14 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }));
     _shortcuts.emplace_back(std::make_unique<QShortcut>(Qt::Key_Left, this, [this] {
-        _ui.seekSlider->triggerAction(QSlider::SliderSingleStepSub);
+        if (_ui.seekSlider->isEnabled()) {
+            _ui.seekSlider->triggerAction(QSlider::SliderSingleStepSub);
+        }
     }));
     _shortcuts.emplace_back(std::make_unique<QShortcut>(Qt::Key_Right, this, [this] {
-        _ui.seekSlider->triggerAction(QSlider::SliderSingleStepAdd);
+        if (_ui.seekSlider->isEnabled()) {
+            _ui.seekSlider->triggerAction(QSlider::SliderSingleStepAdd);
+        }
     }));
     _shortcuts.emplace_back(std::make_unique<QShortcut>(Qt::Key_Down, this, [this] {
         _ui.speedSlider->triggerAction(QSlider::SliderSingleStepSub);
@@ -175,6 +185,8 @@ void MainWindow::connect_module_signals()
     QObject::connect(_ui.seekSlider, &QSlider::valueChanged, &_module, &UpseModule::seek);
     QObject::connect(_ui.playButton, &QPushButton::clicked, &_module, &UpseModule::toggle_pause);
     QObject::connect(_ui.stopButton, &QPushButton::clicked, &_module, &UpseModule::stop);
+    QObject::connect(
+        _ui.endlessButton, &QPushButton::toggled, &_module, &UpseModule::set_endless_play);
 
     QObject::connect(_ui.speedSlider, &QSlider::valueChanged, [this](int position) {
         position *= 5;
@@ -191,12 +203,12 @@ void MainWindow::connect_module_signals()
         &_module, &UpseModule::total_time_changed, this, &MainWindow::total_time_changed);
     QObject::connect(&_module, &UpseModule::seek_changed, this, &MainWindow::seek_changed);
 
-    static void (*set_all_disabled)(QObject*, bool) = [](QObject* o, bool disabled) {
+    static auto const set_all_disabled = [](this auto&& self, QObject* o, bool disabled) -> void {
         if (auto* widget = dynamic_cast<QWidget*>(o)) {
             widget->setDisabled(disabled);
         }
         for (auto* child : o->children()) {
-            set_all_disabled(child, disabled);
+            self(child, disabled);
         }
     };
 
@@ -255,13 +267,15 @@ void MainWindow::connect_module_signals()
                          _channelWidgets[channel]->setSoundLevel(l, r);
                      });
 
-    QObject::connect(
-        &_module, &UpseModule::channel_frequency_changed, this, [this](size_t channel, double freq) {
-            if (channel >= _channelWidgets.size()) {
-                return;
-            }
-            _channelWidgets[channel]->setFrequency(freq);
-        });
+    QObject::connect(&_module,
+                     &UpseModule::channel_frequency_changed,
+                     this,
+                     [this](size_t channel, double freq) {
+                         if (channel >= _channelWidgets.size()) {
+                             return;
+                         }
+                         _channelWidgets[channel]->setFrequency(freq);
+                     });
 
     QObject::connect(&_module, &UpseModule::channel_fired, this, [this](size_t channel) {
         if (channel >= _channelWidgets.size()) {

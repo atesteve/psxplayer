@@ -95,7 +95,8 @@ void UpseModule::run()
             n = upse_eventloop_render(_mod.get(), &buf);
 
             auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
-            if (_snapshots.back().first + SNAPSHOT_INTERVAL < current_seek) {
+            if (current_seek < milliseconds{_mod->metadata->length}
+                && _snapshots.back().first + SNAPSHOT_INTERVAL < current_seek) {
                 take_snapshot();
             }
 
@@ -350,6 +351,11 @@ void UpseModule::set_channel_vol(int ch, float vol)
 {
     _channel_state[ch].vol = vol;
     update_mapped_channels();
+}
+
+void UpseModule::set_endless_play(bool nonstop)
+{
+    _control.input.endless_play = nonstop;
 }
 
 void UpseModule::shutdown()

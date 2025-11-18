@@ -64,7 +64,7 @@ void Audio::stop()
 
 void Audio::write(std::span<int16_t const> buffer)
 {
-    static constexpr auto MAX_RETRIES = 10;
+    static constexpr auto MAX_RETRIES = 100;
     if (!_audio) {
         return;
     }
