@@ -4,9 +4,11 @@ set(TARGET_LIBUPSE "libupse")
 set(TARGET_XPRINTF "xprintf")
 project(${TARGET} VERSION 0.0.1 LANGUAGES C CXX)
 
-set(vcpkg "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
-set(CMAKE_TOOLCHAIN_FILE "${vcpkg}" CACHE FILEPATH "CMake toolchain file")
-include(${vcpkg})
+if(WIN32)
+  set(vcpkg "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+  set(CMAKE_TOOLCHAIN_FILE "${vcpkg}" CACHE FILEPATH "CMake toolchain file")
+  include(${vcpkg})
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -101,7 +103,11 @@ find_package(fmt REQUIRED)
 target_link_libraries(${TARGET} PRIVATE fmt::fmt)
 
 find_package(FFTW3 REQUIRED)
-target_link_libraries(${TARGET} PRIVATE FFTW3::fftw3)
+if(WIN32)
+  target_link_libraries(${TARGET} PRIVATE FFTW3::fftw3)
+else()
+  target_link_libraries(${TARGET} PRIVATE fftw3)
+endif()
 
 target_link_libraries(${TARGET} PRIVATE Qt6::Widgets Qt6::Multimedia)
 
