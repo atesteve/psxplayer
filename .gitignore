@@ -31,3 +31,5 @@ Thumbs.db
 
 # Test data directory for ad-hoc tests files
 test-data
+
+vcpkg_installed

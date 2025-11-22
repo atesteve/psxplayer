@@ -138,6 +138,9 @@ void UpseModule::run()
                                              ? QEventLoop::AllEvents
                                              : QEventLoop::WaitForMoreEvents);
     }
+
+    _slow_timer.stop();
+    _fast_timer.stop();
 }
 
 void UpseModule::find_sample_frequency()
@@ -360,8 +363,6 @@ void UpseModule::set_endless_play(bool nonstop)
 
 void UpseModule::shutdown()
 {
-    _slow_timer.stop();
-    _fast_timer.stop();
     _shutdown = true;
 }
 

@@ -4,6 +4,7 @@
 #include "libupse/upse-ps1-memory-manager.h"
 
 #include <cstring>
+#include <limits>
 
 using namespace std::literals;
 
@@ -15,7 +16,7 @@ uint32_t PSF2::iop_memset(PointerArg<void*> ptr, int c, uint32_t n)
 
 void PSF2::iop_bzero(PointerArg<void*> ptr, uint32_t n)
 {
-    bzero(ptr.ptr, n);
+    memset(ptr.ptr, 0, n);
 }
 
 uint32_t PSF2::iop_strcpy(PointerArg<char*> dst, PointerArg<char const*> src)

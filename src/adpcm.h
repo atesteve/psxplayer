@@ -4,6 +4,8 @@
 #include <span>
 #include <optional>
 #include <memory>
+#include <mutex>
+#include <string_view>
 
 struct fftw_deleter {
     static void operator()(void* p) noexcept;

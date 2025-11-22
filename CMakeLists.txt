@@ -4,12 +4,13 @@ set(TARGET_LIBUPSE "libupse")
 set(TARGET_XPRINTF "xprintf")
 project(${TARGET} VERSION 0.0.1 LANGUAGES C CXX)
 
+set(vcpkg "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+set(CMAKE_TOOLCHAIN_FILE "${vcpkg}" CACHE FILEPATH "CMake toolchain file")
+include(${vcpkg})
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
-
-add_compile_options(-g3)
-add_link_options(-g3)
 
 if(FSANITIZE)
   add_compile_options(-fsanitize=${FSANITIZE})
@@ -19,7 +20,7 @@ endif()
 find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 qt_standard_project_setup()
 
-qt6_add_executable(${TARGET}
+set(TARGET_SRC
   src/main.cpp
   src/main-window.cpp
   src/main-window.h
@@ -58,9 +59,19 @@ qt6_add_executable(${TARGET}
   src/iop/iop-thevent.cpp
   src/iop/iop-thsemap.cpp
 )
-qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
 
-target_compile_options(${TARGET} PRIVATE -Wall -Wextra -pedantic)
+if(WIN32)
+  qt6_add_executable(${TARGET} WIN32 ${TARGET_SRC})
+  add_compile_options(-Zc:__cplusplus -Zc:preprocessor)
+  add_compile_definitions(NOMINMAX)
+else()
+  qt6_add_executable(${TARGET} ${TARGET_SRC})
+  target_compile_options(${TARGET} PRIVATE -Wall -Wextra -pedantic)
+  add_compile_options(-g3)
+  add_link_options(-g3)
+endif()
+
+qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
 
 # Scan files from libupse
 file(GLOB_RECURSE SOURCES_LIBUPSE "lib/libupse" "*.c")
@@ -87,16 +98,20 @@ set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
 include(CPack)
 
 find_package(fmt REQUIRED)
-target_link_libraries(${TARGET} PUBLIC fmt::fmt)
+target_link_libraries(${TARGET} PRIVATE fmt::fmt)
 
 find_package(FFTW3 REQUIRED)
-target_link_libraries(${TARGET} PUBLIC fftw3)
+target_link_libraries(${TARGET} PRIVATE FFTW3::fftw3)
 
 target_link_libraries(${TARGET} PRIVATE Qt6::Widgets Qt6::Multimedia)
 
 find_package(ZLIB REQUIRED)
-target_link_libraries(${TARGET_LIBUPSE} PUBLIC ZLIB::ZLIB)
+target_link_libraries(${TARGET_LIBUPSE} PRIVATE ZLIB::ZLIB)
 
 set_target_properties(${TARGET} PROPERTIES
     CXX_STANDARD 26
 )
+
+if(WIN32)
+  add_custom_command(TARGET ${TARGET} POST_BUILD COMMAND Qt6::windeployqt "$<TARGET_FILE:${TARGET}>")
+endif()

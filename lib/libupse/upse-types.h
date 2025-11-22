@@ -30,7 +30,7 @@
 #include <windows.h>
 #endif
 
-#ifndef WIN32_MSC
+#ifndef _MSC_VER
 
 typedef int8_t s8;
 typedef int16_t s16;

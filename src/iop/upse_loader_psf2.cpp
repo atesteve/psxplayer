@@ -1,10 +1,6 @@
 #include "iop.h"
 #include "util.h"
 
-#include "libupse/upse.h"
-#include "libupse/upse-r3000-abstract.h"
-#include "libupse/upse-ps1-spu-base.h"
-
 #include <fmt/format.h>
 #include <zlib.h>
 
@@ -15,6 +11,10 @@
 #include <concepts>
 #include <filesystem>
 #include <type_traits>
+
+#include "libupse/upse.h"
+#include "libupse/upse-r3000-abstract.h"
+#include "libupse/upse-ps1-spu-base.h"
 
 using namespace std::literals;
 
@@ -140,7 +140,7 @@ std::vector<uint8_t> load_vfs_file(std::basic_string_view<uint8_t> buffer,
 
     for (auto i = 0u; i < size_table_num_entries * sizeof(uint32_t); i += sizeof(uint32_t)) {
         auto const block_size = load<uint32_t>(&buffer[offset + i]);
-        size_t block_uncompressed_size = ret.size() - uncompressed_offset;
+        unsigned long block_uncompressed_size = ret.size() - uncompressed_offset;
         auto const err = uncompress(ret.data() + uncompressed_offset,
                                     &block_uncompressed_size,
                                     &buffer[block_offset],
@@ -211,7 +211,7 @@ malloc_ptr<upse_xsf_t> load_psf2_file(FILE* f,
             return false;
         }
 
-        FILE_ptr lib_f{fopen((path / psf2_lib_name).c_str(), "rb")};
+        FILE_ptr lib_f{fopen((path / psf2_lib_name).string().c_str(), "rb")};
         if (lib_f) {
             load_psf2_file(lib_f.get(), path, fs, rec_level + 1);
         }

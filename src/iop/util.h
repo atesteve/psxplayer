@@ -4,6 +4,8 @@
 #include <memory>
 #include <cstring>
 #include <bit>
+#include <string>
+#include <string_view>
 
 namespace stdx {
 
@@ -78,3 +80,15 @@ std::string_view load_string(char const (&buf)[N])
     std::string_view str{buf, N};
     return str.substr(0, str.find_first_of('\0'));
 }
+
+#ifdef _MSC_VER
+
+inline std::string operator+(std::string const& s1, std::string_view s2) {
+    return s1 + std::string{s2};
+}
+
+inline std::string operator+(std::string_view s1, std::string const& s2) {
+    return std::string{s1} + s2;
+}
+
+#endif

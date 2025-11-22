@@ -13,8 +13,12 @@
 #define BUILD_BUG_ON_ZERO(e) (sizeof(char[1 - 2 * !!(e)]) - 1)
 
 /* &a[0] degrades to a pointer: a different type from an array */
+#ifndef _MSC_VER
 #define __must_be_array(a) \
   BUILD_BUG_ON_ZERO(__builtin_types_compatible_p(typeof(a), typeof(&a[0])))
+#else
+#define __must_be_array(a) 0
+#endif
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]) + __must_be_array(arr))
 
