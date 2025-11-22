@@ -10,14 +10,18 @@ public:
     QSize sizeHint() const override
     {
         auto hint = QPushButton::sizeHint();
-        hint.setWidth(hint.height());
+        auto const dim = std::max(hint.height(), hint.width());
+        hint.setWidth(dim);
+        hint.setHeight(dim);
         return hint;
     }
 
     QSize minimumSizeHint() const override
     {
         auto hint = QPushButton::minimumSizeHint();
-        hint.setWidth(hint.height());
+        auto const dim = std::max(hint.height(), hint.width());
+        hint.setWidth(dim);
+        hint.setHeight(dim);
         return hint;
     }
 };

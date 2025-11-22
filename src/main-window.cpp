@@ -37,9 +37,10 @@ MainWindow::MainWindow(QWidget* parent)
     _ui.stopButton->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
 
     auto font = _ui.endlessButton->font();
-    font.setPointSizeF(font.pointSizeF() * 1.75);
+    font.setPointSizeF(font.pointSizeF() * 1.66);
     _ui.endlessButton->setFont(font);
     _ui.endlessButton->setStyleSheet("padding: 0;");
+    _ui.endlessButton->setFixedSize(_ui.playButton->sizeHint());
 
     this->adjustSize();
 

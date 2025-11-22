@@ -22,7 +22,7 @@ ChannelWidget::ChannelWidget(QWidget* parent)
     _ui.freqLabel->setFont(font);
     _ui.octaveLabel->setFont(font);
     _ui.centsLabel->setFont(font);
-    auto const text_color = _ui.centsLabel->style()->standardPalette().text().color();
+    auto const text_color = _ui.centsLabel->palette().color(_ui.centsLabel->foregroundRole());
     _ui.centsLabel->setStyleSheet(QString::asprintf(
         "color: rgba(%d,%d,%d,0.5)", text_color.red(), text_color.green(), text_color.blue()));
 
