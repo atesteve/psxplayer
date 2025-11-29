@@ -48,13 +48,12 @@ void Audio::stop()
 bool Audio::write(std::span<int16_t const> buffer)
 {
     static constexpr int MAX_SAMPLES = 8820; // 50ms
-    static constexpr int MAX_RETRIES = 100;
+    static constexpr int MAX_RETRIES = 100;  // ~500ms
 
     if (!_stream) {
         return false;
     }
 
-    int const bytes_to_write = buffer.size() * sizeof(int16_t);
     int retries = 0;
 
     while (retries < MAX_RETRIES) {
@@ -64,7 +63,7 @@ bool Audio::write(std::span<int16_t const> buffer)
             fmt::println("{}", SDL_GetError());
             return false;
         }
-        if (MAX_SAMPLES - nqueued > bytes_to_write) {
+        if (nqueued < MAX_SAMPLES) {
             if (!SDL_PutAudioStreamData(_stream.get(), buffer.data(), buffer.size_bytes())) {
                 fmt::println("{}", SDL_GetError());
                 return false;
