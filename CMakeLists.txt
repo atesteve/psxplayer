@@ -109,7 +109,7 @@ else()
   target_link_libraries(${TARGET} PRIVATE fftw3)
 endif()
 
-find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)
+find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
 target_link_libraries(${TARGET_LIBUPSE} PRIVATE SDL3::SDL3)
 
 target_link_libraries(${TARGET} PRIVATE Qt6::Widgets)

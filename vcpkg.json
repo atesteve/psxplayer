@@ -3,15 +3,12 @@
     "fmt",
     "fftw3",
     "zlib",
-    {
-      "name": "qtmultimedia",
-      "version>=": "6.9.1",
-      "features": ["widgets"]
-    },
+    "sdl3",
     {
       "name": "qtbase",
       "version>=": "6.9.1",
-      "features": ["widgets"]
+      "default-features": false,
+      "features": ["widgets", "concurrent", "thread", "gui", "jpeg", "png"]
     }
   ]
 }
