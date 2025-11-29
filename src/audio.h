@@ -19,5 +19,4 @@ private:
         static void operator()(SDL_AudioStream*) noexcept;
     };
     std::unique_ptr<SDL_AudioStream, SDL_AudioStreamDeleter> _stream;
-    bool _running{};
 };

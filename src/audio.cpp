@@ -26,12 +26,11 @@ Audio::Audio()
     if (!_stream) {
         fmt::println("{}", SDL_GetError());
     }
+    SDL_ResumeAudioStreamDevice(_stream.get());
 }
 
 void Audio::start()
 {
-    _running = true;
-
     if (!_stream) {
         return;
     }
@@ -40,13 +39,10 @@ void Audio::start()
 
 void Audio::stop()
 {
-    _running = false;
-
     if (!_stream) {
         return;
     }
     SDL_FlushAudioStream(_stream.get());
-    SDL_PauseAudioStreamDevice(_stream.get());
 }
 
 bool Audio::write(std::span<int16_t const> buffer)
@@ -69,7 +65,10 @@ bool Audio::write(std::span<int16_t const> buffer)
             return false;
         }
         if (MAX_SAMPLES - nqueued > bytes_to_write) {
-            SDL_PutAudioStreamData(_stream.get(), buffer.data(), buffer.size_bytes());
+            if (!SDL_PutAudioStreamData(_stream.get(), buffer.data(), buffer.size_bytes())) {
+                fmt::println("{}", SDL_GetError());
+                return false;
+            }
             return true;
         } else {
             std::this_thread::sleep_for(5ms);
