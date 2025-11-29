@@ -34,8 +34,6 @@ UpseModule::UpseModule(QObject* parent)
     _slow_timer.moveToThread(this);
     _fast_timer.moveToThread(this);
 
-    _audio.emplace(this, this);
-
     QObject::connect(&_slow_timer, &QTimer::timeout, this, &UpseModule::slow_timer_fired);
     _slow_timer.setSingleShot(false);
     QObject::connect(&_fast_timer, &QTimer::timeout, this, &UpseModule::fast_timer_fired);
@@ -117,7 +115,10 @@ void UpseModule::run()
 
         if (n > 0 && buf) {
             if (_state != State::Seeking) {
-                _audio->write({buf, (unsigned)n * 2});
+                auto const success = _audio.write({buf, (unsigned)n * 2});
+                if (!success) {
+                    toggle_pause();
+                }
             }
             if (_state == State::Seeking) {
                 _control.input.speed_multiplier = _speed;
@@ -252,7 +253,7 @@ void UpseModule::seek(int pos)
 
 void UpseModule::load_file(QString const& file_name)
 {
-    _audio->stop();
+    _audio.stop();
 
     _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs, &_control));
 
@@ -369,11 +370,11 @@ void UpseModule::shutdown()
 void UpseModule::set_state(State new_state)
 {
     if (new_state == State::Playing) {
-        _audio->start();
+        _audio.start();
         _fast_timer.start(33);
     } else {
         if (_state == State::Playing) {
-            _audio->stop();
+            _audio.stop();
         }
         _stopped_cycles = 0;
     }

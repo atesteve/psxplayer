@@ -1,90 +1,80 @@
 #include "audio.h"
 
+#include <SDL3/SDL_audio.h>
+#include <SDL3/SDL_events.h>
+
 #include <fmt/format.h>
 
 #include <thread>
 
 using namespace std::literals;
 
-Audio::Audio(QThread* t, QObject* o)
-    : QObject{o}
+void Audio::SDL_AudioStreamDeleter::operator()(SDL_AudioStream* ptr) noexcept
 {
-    moveToThread(t);
+    SDL_DestroyAudioStream(ptr);
+}
 
-    auto const refresh_media_device = [this] {
-        QAudioFormat format{};
-        format.setSampleRate(44100);
-        format.setChannelCount(2);
-        format.setSampleFormat(QAudioFormat::Int16);
-
-        QAudioDevice info{_mediaDevices.defaultAudioOutput()};
-
-        if (!info.isFormatSupported(format)) {
-            return;
-        }
-
-        _audio = nullptr;
-
-        if (_sink && _running) {
-            _sink->reset();
-        }
-
-        _sink = std::make_unique<QAudioSink>(format);
-
-        if (_running) {
-            _audio = _sink->start();
-        }
+Audio::Audio()
+{
+    SDL_AudioSpec const spec{
+        .format = SDL_AUDIO_S16LE,
+        .channels = 2,
+        .freq = 44100,
     };
-
-    refresh_media_device();
-    QObject::connect(
-        &_mediaDevices, &QMediaDevices::audioOutputsChanged, this, refresh_media_device);
+    _stream.reset(
+        SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr));
+    if (!_stream) {
+        fmt::println("{}", SDL_GetError());
+    }
 }
 
 void Audio::start()
 {
     _running = true;
 
-    if (!_sink) {
+    if (!_stream) {
         return;
     }
-    _audio = _sink->start();
+    SDL_ResumeAudioStreamDevice(_stream.get());
 }
 
 void Audio::stop()
 {
     _running = false;
 
-    if (!_sink) {
+    if (!_stream) {
         return;
     }
-    _sink->reset();
-    _audio = nullptr;
+    SDL_FlushAudioStream(_stream.get());
+    SDL_PauseAudioStreamDevice(_stream.get());
 }
 
-void Audio::write(std::span<int16_t const> buffer)
+bool Audio::write(std::span<int16_t const> buffer)
 {
-    static constexpr auto MAX_RETRIES = 100;
-    if (!_audio) {
-        return;
+    static constexpr int MAX_SAMPLES = 8820; // 50ms
+    static constexpr int MAX_RETRIES = 100;
+
+    if (!_stream) {
+        return false;
     }
-    size_t bytes_written = 0;
-    size_t const bytes_to_write = buffer.size() * sizeof(int16_t);
+
+    int const bytes_to_write = buffer.size() * sizeof(int16_t);
     int retries = 0;
-    while (bytes_written < bytes_to_write && retries < MAX_RETRIES) {
-        if (retries != 0) {
+
+    while (retries < MAX_RETRIES) {
+        retries++;
+        auto const nqueued = SDL_GetAudioStreamQueued(_stream.get());
+        if (nqueued == -1) {
+            fmt::println("{}", SDL_GetError());
+            return false;
+        }
+        if (MAX_SAMPLES - nqueued > bytes_to_write) {
+            SDL_PutAudioStreamData(_stream.get(), buffer.data(), buffer.size_bytes());
+            return true;
+        } else {
             std::this_thread::sleep_for(5ms);
         }
-        auto const actually_written =
-            _audio->write((char const*)&buffer[0] + bytes_written, bytes_to_write - bytes_written);
-        if (actually_written < 0) {
-            break;
-        }
-        if (actually_written == 0) {
-            retries++;
-        } else {
-            retries = 1;
-        }
-        bytes_written += actually_written;
     }
+
+    return false;
 }

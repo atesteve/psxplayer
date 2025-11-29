@@ -96,7 +96,7 @@ private:
     void sw_hook(upse_module_instance_t* ins, mem_access_size_t size, uint32_t addr, uint32_t data);
 
     upse_module_ptr _mod;
-    std::optional<Audio> _audio;
+    Audio _audio;
 
     State _state{};
     bool _paused{};

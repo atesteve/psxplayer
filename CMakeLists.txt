@@ -19,7 +19,7 @@ if(FSANITIZE)
   add_link_options(-fsanitize=${FSANITIZE})
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
 qt_standard_project_setup()
 
 set(TARGET_SRC
@@ -109,7 +109,10 @@ else()
   target_link_libraries(${TARGET} PRIVATE fftw3)
 endif()
 
-target_link_libraries(${TARGET} PRIVATE Qt6::Widgets Qt6::Multimedia)
+find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)
+target_link_libraries(${TARGET_LIBUPSE} PRIVATE SDL3::SDL3)
+
+target_link_libraries(${TARGET} PRIVATE Qt6::Widgets)
 
 find_package(ZLIB REQUIRED)
 target_link_libraries(${TARGET_LIBUPSE} PRIVATE ZLIB::ZLIB)

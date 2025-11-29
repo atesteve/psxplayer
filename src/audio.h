@@ -1,23 +1,23 @@
 #pragma once
 
-#include <QAudioSink>
-#include <QMediaDevices>
-
 #include <cstdint>
 #include <span>
+#include <memory>
 
-class Audio : public QObject {
-    Q_OBJECT
+struct SDL_AudioStream;
+
+class Audio {
 public:
-    explicit Audio(QThread* t, QObject* o = nullptr);
+    explicit Audio();
 
-    void write(std::span<int16_t const> buffer);
+    bool write(std::span<int16_t const> buffer);
     void start();
     void stop();
 
 private:
-    QMediaDevices _mediaDevices;
-    std::unique_ptr<QAudioSink> _sink;
-    QIODevice* _audio{};
+    struct SDL_AudioStreamDeleter {
+        static void operator()(SDL_AudioStream*) noexcept;
+    };
+    std::unique_ptr<SDL_AudioStream, SDL_AudioStreamDeleter> _stream;
     bool _running{};
 };
