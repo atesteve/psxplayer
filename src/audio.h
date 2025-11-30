@@ -4,6 +4,7 @@
 #include <span>
 #include <memory>
 
+// Forward declaration.
 struct SDL_AudioStream;
 
 class Audio {
