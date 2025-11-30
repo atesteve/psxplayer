@@ -49,7 +49,7 @@ void Audio::stop()
 bool Audio::write(std::span<int16_t const> buffer)
 {
     static constexpr int MAX_SAMPLES = 8820; // 50ms
-    static constexpr int MAX_RETRIES = 100;  // ~500ms
+    static constexpr int MAX_RETRIES = 500;  // ~2.5s
 
     if (!_stream) {
         return false;
