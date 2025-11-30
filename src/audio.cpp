@@ -17,7 +17,7 @@ void Audio::SDL_AudioStreamDeleter::operator()(SDL_AudioStream* ptr) noexcept
 Audio::Audio()
 {
     SDL_AudioSpec const spec{
-        .format = SDL_AUDIO_S16LE,
+        .format = SDL_AUDIO_S16,
         .channels = 2,
         .freq = 44100,
     };
