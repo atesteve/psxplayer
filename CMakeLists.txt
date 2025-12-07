@@ -63,14 +63,14 @@ set(TARGET_SRC
 )
 
 if(WIN32)
-  qt6_add_executable(${TARGET} WIN32 ${TARGET_SRC})
   add_compile_options(-Zc:__cplusplus -Zc:preprocessor)
   add_compile_definitions(NOMINMAX)
+  qt6_add_executable(${TARGET} WIN32 ${TARGET_SRC})
 else()
-  qt6_add_executable(${TARGET} ${TARGET_SRC})
-  target_compile_options(${TARGET} PRIVATE -Wall -Wextra -pedantic)
   add_compile_options(-g3)
   add_link_options(-g3)
+  qt6_add_executable(${TARGET} ${TARGET_SRC})
+  target_compile_options(${TARGET} PRIVATE -Wall -Wextra -pedantic)
 endif()
 
 qt_add_ui(${TARGET} SOURCES src/main-window.ui src/channel-widget.ui)
