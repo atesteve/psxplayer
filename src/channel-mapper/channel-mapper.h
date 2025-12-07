@@ -21,6 +21,6 @@ public:
                          uint32_t data) = 0;
     virtual bool jal_hook(upse_module_instance_t* ins) = 0;
 
-    static std::unique_ptr<ChannelMapper> build(upse_module_instance_t* ins,
-                                                std::string_view game_name);
+    static std::unique_ptr<ChannelMapper>
+        build(upse_module_instance_t* ins, std::string_view game_name, std::string_view title);
 };

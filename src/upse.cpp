@@ -269,7 +269,8 @@ void UpseModule::load_file(QString const& file_name)
         return;
     }
 
-    _channel_mapper = ChannelMapper::build(&_mod->instance, _mod->metadata->game);
+    _channel_mapper =
+        ChannelMapper::build(&_mod->instance, _mod->metadata->game, _mod->metadata->title);
     _channel_state.clear();
     _channel_state.resize(_channel_mapper->supported_channels());
 
