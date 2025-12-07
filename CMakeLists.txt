@@ -48,6 +48,8 @@ set(TARGET_SRC
   src/channel-mapper/square-mapper.h
   src/channel-mapper/square-retro-mapper.cpp
   src/channel-mapper/square-retro-mapper.h
+  src/core/r3000.cpp
+  src/core/r3000.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
