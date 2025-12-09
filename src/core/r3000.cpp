@@ -225,15 +225,15 @@ struct R3000Core<c>::Private {
     void run_ij_lui(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_lb(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_lh(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
-    void run_ij_lwl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_lw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_lbu(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_lhu(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
+    void run_ij_lwl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_lwr(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_sb(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_sh(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
-    void run_ij_swl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_sw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
+    void run_ij_swl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_swr(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_unk(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
 
@@ -850,23 +850,6 @@ void R3000Core<c>::Private::run_ij_lh(uint32_t rs, uint32_t rt, uint32_t imm, ui
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_ij_lwl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
-{
-    auto const prev_value = load_slot
-                                .and_then([&](auto const& l) {
-                                    return l.rt == rt ? std::make_optional(l.value) : std::nullopt;
-                                })
-                                .value_or(gpr[rt]);
-    auto const addr = gpr[rs] + sign_extend_16(imm);
-    auto const misalignment = addr & 0x3;
-    auto const aligned_addr = addr & ~0x3;
-    auto const word = read_mem<uint32_t>(aligned_addr);
-    auto const mask = 0xffffffffu << ((4 - misalignment) * 8);
-    auto const result = (prev_value & mask) | (word << (misalignment * 8));
-    load_slot.emplace(rt, result);
-}
-
-template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
     load_slot.emplace(rt, read_mem<uint32_t>(rs + sign_extend_16(imm)));
@@ -885,6 +868,23 @@ void R3000Core<c>::Private::run_ij_lhu(uint32_t rs, uint32_t rt, uint32_t imm, u
 }
 
 template<R3000CoreConfig c>
+void R3000Core<c>::Private::run_ij_lwl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
+{
+    auto const prev_value = load_slot
+                                .and_then([&](auto const& l) {
+                                    return l.rt == rt ? std::make_optional(l.value) : std::nullopt;
+                                })
+                                .value_or(gpr[rt]);
+    auto const addr = gpr[rs] + sign_extend_16(imm);
+    auto const misalignment = addr & 0x3;
+    auto const aligned_addr = addr & ~0x3;
+    auto const word = read_mem<uint32_t>(aligned_addr);
+    auto const mask = 0x00ffffffu >> (misalignment * 8);
+    auto const result = (prev_value & mask) | (word << ((3 - misalignment) * 8));
+    load_slot.emplace(rt, result);
+}
+
+template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lwr(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
     auto const prev_value = load_slot
@@ -896,30 +896,52 @@ void R3000Core<c>::Private::run_ij_lwr(uint32_t rs, uint32_t rt, uint32_t imm, u
     auto const misalignment = addr & 0x3;
     auto const aligned_addr = addr & ~0x3;
     auto const word = read_mem<uint32_t>(aligned_addr);
-    auto const mask = 0xffffffffu >> ((4 - misalignment) * 8);
+    auto const mask = 0xffffff00u << ((3 - misalignment) * 8);
     auto const result = (prev_value & mask) | (word >> (misalignment * 8));
     load_slot.emplace(rt, result);
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_ij_sb(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target)
-{}
+void R3000Core<c>::Private::run_ij_sb(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
+{
+    write_mem<uint8_t>(gpr[rs] + sign_extend_16(imm), gpr[rt]);
+}
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_ij_sh(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target)
-{}
+void R3000Core<c>::Private::run_ij_sh(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
+{
+    write_mem<uint16_t>(gpr[rs] + sign_extend_16(imm), gpr[rt]);
+}
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_ij_swl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target)
-{}
+void R3000Core<c>::Private::run_ij_sw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
+{
+    write_mem<uint32_t>(gpr[rs] + sign_extend_16(imm), gpr[rt]);
+}
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_ij_sw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target)
-{}
+void R3000Core<c>::Private::run_ij_swl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
+{
+    auto unaligned_ptr = gpr[rs] + sign_extend_16(imm);
+    auto value = gpr[rt];
+    do {
+        write_mem<uint8_t>(unaligned_ptr, value >> 24);
+        unaligned_ptr -= 1;
+        value <<= 8;
+    } while ((unaligned_ptr & 0x3) != 3);
+}
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_ij_swr(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target)
-{}
+void R3000Core<c>::Private::run_ij_swr(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
+{
+    auto unaligned_ptr = gpr[rs] + sign_extend_16(imm);
+    auto value = gpr[rt];
+    do {
+        write_mem<uint8_t>(unaligned_ptr, value);
+        unaligned_ptr += 1;
+        value >>= 8;
+    } while (unaligned_ptr & 0x3);
+}
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_unk(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target)
