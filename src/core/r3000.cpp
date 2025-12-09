@@ -72,7 +72,6 @@ auto* container_of_impl(T* t, size_t offset)
 
 #define container_of(ptr, type, member) container_of_impl<type>(ptr, offsetof(type, member))
 
-// clang-format off
 struct GPRName {
     [[maybe_unused]] static constexpr size_t r0{0};
     [[maybe_unused]] static constexpr size_t at{1};
@@ -107,7 +106,6 @@ struct GPRName {
     [[maybe_unused]] static constexpr size_t s8{30};
     [[maybe_unused]] static constexpr size_t ra{31};
 };
-// clang-format on
 
 } // namespace
 
