@@ -27,6 +27,18 @@ template<> [[maybe_unused]] constexpr std::string_view int_name<int32_t>  = "i32
 template<> [[maybe_unused]] constexpr std::string_view int_name<uint32_t> = "u32";
 // clang-format on
 
+template<std::integral>
+constexpr AccessWidth int_width{};
+
+// clang-format off
+template<> [[maybe_unused]] constexpr auto int_width<int8_t>   = AccessWidth::A8;
+template<> [[maybe_unused]] constexpr auto int_width<uint8_t>  = AccessWidth::A8;
+template<> [[maybe_unused]] constexpr auto int_width<int16_t>  = AccessWidth::A16;
+template<> [[maybe_unused]] constexpr auto int_width<uint16_t> = AccessWidth::A16;
+template<> [[maybe_unused]] constexpr auto int_width<int32_t>  = AccessWidth::A32;
+template<> [[maybe_unused]] constexpr auto int_width<uint32_t> = AccessWidth::A32;
+// clang-format on
+
 using r3000_ptr_t = uint32_t;
 
 struct reg_inst_t {
@@ -109,36 +121,22 @@ struct GPRName {
 
 } // namespace
 
-class AddressException : public R3000Exception {
+struct MipsException {};
+
+class AddressException : public MipsException {
 public:
-    explicit AddressException(r3000_ptr_t addr, AccessType rw, std::string_view access_width)
-        : R3000Exception{fmt::format("Misaligned {} {} access at address {:08x}",
-                                     access_width,
-                                     rw == AccessType::READ ? "read" : "write",
-                                     addr)}
-        , addr{addr}
+    explicit AddressException(r3000_ptr_t addr, AccessType rw, AccessWidth access_width)
+        : addr{addr}
         , rw{rw}
         , access_width{access_width}
     {}
 
     r3000_ptr_t addr;
     AccessType rw;
-    std::string_view access_width;
+    AccessWidth access_width;
 };
 
-class OverflowException : public R3000Exception {
-public:
-    explicit OverflowException(std::string_view operation, int32_t a, int32_t b)
-        : R3000Exception{fmt::format("Integer overflow {} on operands {}, {}", operation, a, b)}
-        , operation{operation}
-        , a{a}
-        , b{b}
-    {}
-
-    std::string_view operation;
-    int32_t a;
-    int32_t b;
-};
+class OverflowException : public MipsException {};
 
 template<R3000CoreConfig c>
 struct R3000Core<c>::Private {
@@ -243,7 +241,7 @@ struct R3000Core<c>::Private {
         if constexpr (c.alignment_check == AlignmentCheck::SOFTWARE) {
             static constexpr r3000_ptr_t mask = (1 << sizeof(Int)) - 1;
             if (addr & mask) {
-                throw AddressException{addr, rw, int_name<Int>};
+                throw AddressException{addr, rw, int_width<Int>};
             }
         }
         // Do nothing otherwise.
@@ -647,7 +645,7 @@ void R3000Core<c>::Private::run_r_add(uint32_t rs, uint32_t rt, uint32_t rd, uin
     auto const overflow = ckd_add(&result, signed_rs, signed_rt);
     if (overflow) {
         HWAlignmentCheck::disable();
-        throw OverflowException{"add", signed_rs, signed_rt};
+        throw OverflowException{};
     }
     gpr[rd] = result;
 }
@@ -667,7 +665,7 @@ void R3000Core<c>::Private::run_r_sub(uint32_t rs, uint32_t rt, uint32_t rd, uin
     auto const overflow = ckd_sub(&result, signed_rs, signed_rt);
     if (overflow) {
         HWAlignmentCheck::disable();
-        throw OverflowException{"sub", signed_rs, signed_rt};
+        throw OverflowException{};
     }
     gpr[rd] = result;
 }
@@ -788,7 +786,7 @@ void R3000Core<c>::Private::run_ij_addi(uint32_t rs, uint32_t rt, uint32_t imm, 
     auto const overflow = ckd_add(&result, signed_rs, signed_imm);
     if (overflow) {
         HWAlignmentCheck::disable();
-        throw OverflowException{"addi", signed_rs, signed_imm};
+        throw OverflowException{};
     }
     gpr[rt] = result;
 }

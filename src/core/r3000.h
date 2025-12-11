@@ -17,6 +17,10 @@ enum class AccessType {
     WRITE,
 };
 
+enum class AccessWidth {
+    A8, A16, A32,
+};
+
 struct R3000CoreConfig {
     FaultCheck fault_check{};
     AlignmentCheck alignment_check{};
