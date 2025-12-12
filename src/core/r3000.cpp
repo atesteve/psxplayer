@@ -1,4 +1,5 @@
 #include "r3000.h"
+#include "mmap-r3000bus.h"
 
 #include <fmt/format.h>
 
@@ -9,9 +10,7 @@
 #include <bit>
 #include <utility>
 #include <stdckdint.h>
-#include <optional>
 #include <cstddef>
-#include <new>
 
 namespace {
 
@@ -71,19 +70,6 @@ uint32_t sign_extend_16(uint32_t x)
     return (int16_t)x;
 }
 
-template<typename C, typename T>
-auto* container_of_impl(T* t, size_t offset)
-{
-    using return_t = std::conditional_t<std::is_const_v<T>, const C, C>;
-    using byte_t = std::conditional_t<std::is_const_v<T>, const std::byte, std::byte>;
-
-    auto* byte_ptr = reinterpret_cast<byte_t*>(t);
-    byte_ptr -= offset;
-    return std::launder(reinterpret_cast<return_t*>(byte_ptr));
-}
-
-#define container_of(ptr, type, member) container_of_impl<type>(ptr, offsetof(type, member))
-
 struct GPRName {
     [[maybe_unused]] static constexpr size_t r0{0};
     [[maybe_unused]] static constexpr size_t at{1};
@@ -140,7 +126,6 @@ class OverflowException : public MipsException {};
 
 template<R3000CoreConfig c>
 struct R3000Core<c>::Private {
-    explicit Private();
 
     struct HWAlignmentCheck {
         static void enable()
@@ -248,16 +233,17 @@ struct R3000Core<c>::Private {
     }
 
     template<std::integral Int>
-    Int read_mem(r3000_ptr_t addr) const
+    Int read_mem(r3000_ptr_t addr)
     {
         check_alignment<Int>(addr, AccessType::READ);
-        return 0;
+        return bus.read_mem<Int>(addr);
     }
 
     template<std::integral Int>
-    void write_mem(r3000_ptr_t addr, Int value) const
+    void write_mem(r3000_ptr_t addr, Int value)
     {
         check_alignment<Int>(addr, AccessType::WRITE);
+        bus.write_mem<Int>(addr, value);
     }
 
     std::array<uint32_t, 32> gpr{};
@@ -268,36 +254,33 @@ struct R3000Core<c>::Private {
     struct load_delay_slot {
         uint32_t rt;
         uint32_t value;
-        int count{};
-
-        ~load_delay_slot()
-        {
-            // Given that:
-            //  1. std::optional<load_delay_slot> is standard layout.
-            //  2. The cotained object in std::optional is at offset 0.
-            //  3. R3000Core<c>::Private itself is standard layout.
-            //  4. This destructor is always called on the `load_slot` data member.
-            // Then it should be safe to get the pointer to its container object using
-            // `container_of()`
-            auto* container = container_of(this, R3000Core<c>::Private, load_slot);
-            container->gpr[rt] = value;
-        }
+        int enabled = 2;
     };
 
-    std::optional<load_delay_slot> load_slot;
+    load_delay_slot load_slot;
+
+    void load_slot_tick()
+    {
+        if (!load_slot.enabled) {
+            return;
+        }
+        load_slot.enabled--;
+        if (!load_slot.enabled) {
+            gpr[load_slot.rt] = load_slot.value;
+        }
+    }
+
+    void load(uint32_t rt, uint32_t value) {
+        if (load_slot.enabled) {
+            gpr[load_slot.rt] = load_slot.value;
+        }
+        load_slot = {rt, value};
+    }
 
     int branch_slot_count = 0;
     r3000_ptr_t branch_target{};
-
-    static_assert(std::is_standard_layout_v<decltype(load_slot)>);
-    static_assert(requires(decltype(load_slot)& b) { (void*)&b == (void*)&*b; });
+    MMAPR3000Bus bus;
 };
-
-template<R3000CoreConfig c>
-R3000Core<c>::Private::Private()
-{
-    static_assert(std::is_standard_layout_v<R3000Core<c>::Private>);
-}
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::set_branch_target(r3000_ptr_t target)
@@ -315,12 +298,7 @@ void R3000Core<c>::Private::run_instruction()
     HWAlignmentCheckGuard align_check_guard{};
 
     // Check load delay slot.
-    if (load_slot) {
-        load_slot->count++;
-        if (load_slot->count >= 2) {
-            load_slot.reset();
-        }
-    }
+    load_slot_tick();
 
     // Check branch slot
     if (branch_slot_count > 0 && --branch_slot_count == 0) {
@@ -838,65 +816,57 @@ void R3000Core<c>::Private::run_ij_lui(uint32_t, uint32_t rt, uint32_t imm, uint
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lb(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load_slot.emplace(rt, read_mem<int8_t>(gpr[rs] + sign_extend_16(imm)));
+    load(rt, read_mem<int8_t>(gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lh(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load_slot.emplace(rt, read_mem<int16_t>(gpr[rs] + sign_extend_16(imm)));
+    load(rt, read_mem<int16_t>(gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load_slot.emplace(rt, read_mem<uint32_t>(rs + sign_extend_16(imm)));
+    load(rt, read_mem<uint32_t>(rs + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lbu(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load_slot.emplace(rt, read_mem<uint8_t>(rs + sign_extend_16(imm)));
+    load(rt, read_mem<uint8_t>(rs + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lhu(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load_slot.emplace(rt, read_mem<uint16_t>(rs + sign_extend_16(imm)));
+    load(rt, read_mem<uint16_t>(rs + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lwl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    auto const prev_value = load_slot
-                                .and_then([&](auto const& l) {
-                                    return l.rt == rt ? std::make_optional(l.value) : std::nullopt;
-                                })
-                                .value_or(gpr[rt]);
+    auto const prev_value = load_slot.enabled && load_slot.rt == rt ? load_slot.value : gpr[rt];
     auto const addr = gpr[rs] + sign_extend_16(imm);
     auto const misalignment = addr & 0x3;
     auto const aligned_addr = addr & ~0x3;
     auto const word = read_mem<uint32_t>(aligned_addr);
     auto const mask = 0x00ffffffu >> (misalignment * 8);
     auto const result = (prev_value & mask) | (word << ((3 - misalignment) * 8));
-    load_slot.emplace(rt, result);
+    load(rt, result);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lwr(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    auto const prev_value = load_slot
-                                .and_then([&](auto const& l) {
-                                    return l.rt == rt ? std::make_optional(l.value) : std::nullopt;
-                                })
-                                .value_or(gpr[rt]);
+    auto const prev_value = load_slot.enabled && load_slot.rt == rt ? load_slot.value : gpr[rt];
     auto const addr = gpr[rs] + sign_extend_16(imm);
     auto const misalignment = addr & 0x3;
     auto const aligned_addr = addr & ~0x3;
     auto const word = read_mem<uint32_t>(aligned_addr);
     auto const mask = 0xffffff00u << ((3 - misalignment) * 8);
     auto const result = (prev_value & mask) | (word >> (misalignment * 8));
-    load_slot.emplace(rt, result);
+    load(rt, result);
 }
 
 template<R3000CoreConfig c>
