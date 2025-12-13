@@ -318,7 +318,7 @@ void R3000Core<c>::Private::run_instruction()
     }
 
     // After execution of the instruction, set R0 back to 0 in case it was written.
-    gpr[0] = 0;
+    gpr[GPRName::r0] = 0;
 
     // Advance PC.
     pc += sizeof(uint32_t);
