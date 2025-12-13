@@ -52,6 +52,7 @@ set(TARGET_SRC
   src/core/r3000.h
   src/core/mmap-r3000bus.cpp
   src/core/mmap-r3000bus.h
+  src/core/mmap-r3000bus-rw.cpp
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
@@ -65,6 +66,8 @@ set(TARGET_SRC
   src/iop/iop-thevent.cpp
   src/iop/iop-thsemap.cpp
 )
+
+set_source_files_properties(src/core/mmap-r3000bus-rw.cpp PROPERTIES COMPILE_FLAGS -fnon-call-exceptions)
 
 if(WIN32)
   add_compile_options(-Zc:__cplusplus -Zc:preprocessor)

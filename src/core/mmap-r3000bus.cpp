@@ -4,6 +4,7 @@
 
 #include <sys/mman.h>
 #include <unistd.h>
+#include <signal.h>
 #include <string.h>
 
 #include <stdexcept>
@@ -59,13 +60,39 @@ void unmap_memory(int fd, uint8_t* mem_space, uint32_t size, auto const& offsets
     }
 }
 
+void install_handler(int signal,
+                     std::string_view signal_name,
+                     void (*handler)(int, siginfo_t*, void*))
+{
+    struct sigaction sa{};
+    sa.sa_sigaction = handler;
+    sa.sa_flags = SA_SIGINFO;
+    if (sigaction(signal, &sa, nullptr) == -1) {
+        throw_errno(fmt::format("Failed to register signal handler for {}", signal_name));
+    }
+}
+
+void uninstall_handler(int signal)
+{
+    struct sigaction sa{};
+    sa.sa_handler = SIG_DFL;
+    sigaction(signal, &sa, nullptr);
+}
+
 } // namespace
 
 struct MMAPR3000Bus::Private {
+    static void static_sigsegv_hanlder(int, siginfo_t*, void*);
+    static void static_sigbus_hanlder(int, siginfo_t*, void*);
+    static inline MMAPR3000Bus::Private* signal_ptr;
+
     ~Private();
 
     // Use an initialization function instead of a constructor so that the destructor always runs.
     void init();
+
+    void sigsegv_hanlder(siginfo_t* signifo, ucontext_t* ucp);
+    void sigbus_hanlder(siginfo_t* signifo, ucontext_t* ucp);
 
     uint8_t* mem_space = nullptr;
     int ram_memfd = -1;
@@ -74,6 +101,14 @@ struct MMAPR3000Bus::Private {
 
 void MMAPR3000Bus::Private::init()
 {
+    if (signal_ptr) {
+        throw std::runtime_error{"The signal handler is already installed!"};
+    }
+
+    signal_ptr = this;
+    install_handler(SIGSEGV, "SIGSEGV", static_sigsegv_hanlder);
+    install_handler(SIGBUS, "SIGBUS", static_sigbus_hanlder);
+
     mem_space = (uint8_t*)mmap(nullptr, MEMORY_SPACE_SIZE, 0, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (!mem_space) {
         throw_errno("Can't get 4GB memory block");
@@ -90,7 +125,26 @@ MMAPR3000Bus::Private::~Private()
     if (mem_space) {
         munmap(mem_space, MEMORY_SPACE_SIZE);
     }
+    uninstall_handler(SIGSEGV);
+    uninstall_handler(SIGBUS);
+    signal_ptr = nullptr;
 }
+
+void MMAPR3000Bus::Private::static_sigsegv_hanlder(int, siginfo_t* siginfo, void* ucp)
+{
+    signal_ptr->sigsegv_hanlder(siginfo, (ucontext_t*)ucp);
+}
+
+void MMAPR3000Bus::Private::static_sigbus_hanlder(int, siginfo_t* siginfo, void* ucp)
+{
+    signal_ptr->sigbus_hanlder(siginfo, (ucontext_t*)ucp);
+}
+
+void MMAPR3000Bus::Private::sigsegv_hanlder(siginfo_t*, ucontext_t*)
+{}
+
+void MMAPR3000Bus::Private::sigbus_hanlder(siginfo_t*, ucontext_t*)
+{}
 
 MMAPR3000Bus::MMAPR3000Bus()
     : _p{std::make_unique<Private>()}

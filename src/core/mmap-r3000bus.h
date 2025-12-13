@@ -10,16 +10,10 @@ public:
     ~MMAPR3000Bus();
 
     template<std::integral Int>
-    Int read_mem(uint32_t addr)
-    {
-        return *(volatile Int*)&_mem_space[addr];
-    }
+    Int read_mem(uint32_t addr);
 
     template<std::integral Int>
-    void write_mem(uint32_t addr, Int value)
-    {
-        *((volatile Int*)&_mem_space[addr]) = value;
-    }
+    void write_mem(uint32_t addr, Int value);
 
 private:
     struct Private;
