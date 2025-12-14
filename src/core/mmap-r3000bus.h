@@ -23,10 +23,10 @@ public:
     }
 
     template<std::integral Int>
-    static Int read_mem_impl(volatile uint8_t* addr);
+    static Int read_mem_impl(volatile void* addr);
 
     template<std::integral Int>
-    static void write_mem_impl(volatile uint8_t* addr, Int value);
+    static void write_mem_impl(volatile void* addr, Int value);
 
 private:
     struct Private;
