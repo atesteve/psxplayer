@@ -125,7 +125,10 @@ public:
 class OverflowException : public MipsException {};
 
 template<R3000CoreConfig c>
-struct R3000Core<c>::Private {
+struct R3000Core<c>::Private : public MMAPR3000Bus::Callback {
+    explicit Private()
+        : bus{this}
+    {}
 
     struct HWAlignmentCheck {
         static void enable()
@@ -270,7 +273,8 @@ struct R3000Core<c>::Private {
         }
     }
 
-    void load(uint32_t rt, uint32_t value) {
+    void load(uint32_t rt, uint32_t value)
+    {
         if (load_slot.enabled) {
             gpr[load_slot.rt] = load_slot.value;
         }
@@ -816,13 +820,13 @@ void R3000Core<c>::Private::run_ij_lui(uint32_t, uint32_t rt, uint32_t imm, uint
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lb(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load(rt, read_mem<int8_t>(gpr[rs] + sign_extend_16(imm)));
+    load(rt, (int8_t)read_mem<uint8_t>(gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lh(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load(rt, read_mem<int16_t>(gpr[rs] + sign_extend_16(imm)));
+    load(rt, (int16_t)read_mem<uint16_t>(gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>

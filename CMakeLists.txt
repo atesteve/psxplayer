@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 set(TARGET "psxplayer")
 set(TARGET_LIBUPSE "libupse")
 set(TARGET_XPRINTF "xprintf")
-project(${TARGET} VERSION 0.0.1 LANGUAGES C CXX)
+project(${TARGET} VERSION 0.0.1 LANGUAGES C CXX ASM)
 
 if(WIN32)
   set(vcpkg "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
@@ -52,7 +52,7 @@ set(TARGET_SRC
   src/core/r3000.h
   src/core/mmap-r3000bus.cpp
   src/core/mmap-r3000bus.h
-  src/core/mmap-r3000bus-rw.cpp
+  src/core/mmap-r3000bus-rw.s
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
@@ -66,8 +66,6 @@ set(TARGET_SRC
   src/iop/iop-thevent.cpp
   src/iop/iop-thsemap.cpp
 )
-
-set_source_files_properties(src/core/mmap-r3000bus-rw.cpp PROPERTIES COMPILE_FLAGS -fnon-call-exceptions)
 
 if(WIN32)
   add_compile_options(-Zc:__cplusplus -Zc:preprocessor)
@@ -118,6 +116,9 @@ endif()
 
 find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
 target_link_libraries(${TARGET} PRIVATE SDL3::SDL3)
+
+find_package(ZYDIS REQUIRED)
+target_link_libraries(${TARGET} PRIVATE Zydis::Zydis)
 
 target_link_libraries(${TARGET} PRIVATE Qt6::Widgets)
 

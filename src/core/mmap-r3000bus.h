@@ -6,14 +6,27 @@
 
 class MMAPR3000Bus {
 public:
-    explicit MMAPR3000Bus();
+    struct Callback {
+    };
+
+    explicit MMAPR3000Bus(Callback* callback);
     ~MMAPR3000Bus();
 
     template<std::integral Int>
-    Int read_mem(uint32_t addr);
+    Int read_mem(uint32_t addr) {
+        return read_mem_impl<Int>(_mem_space + addr);
+    }
 
     template<std::integral Int>
-    void write_mem(uint32_t addr, Int value);
+    void write_mem(uint32_t addr, Int value) {
+        write_mem_impl<Int>(_mem_space + addr, value);
+    }
+
+    template<std::integral Int>
+    static Int read_mem_impl(volatile uint8_t* addr);
+
+    template<std::integral Int>
+    static void write_mem_impl(volatile uint8_t* addr, Int value);
 
 private:
     struct Private;
