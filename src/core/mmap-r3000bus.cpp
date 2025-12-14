@@ -82,6 +82,14 @@ void uninstall_handler(int signal)
     sigaction(signal, &sa, nullptr);
 }
 
+void disable_alignment_check()
+{
+    asm("pushf\n"
+        "andl $~0x40000, (%%rsp)\n"
+        "popf\n" ::
+            : "memory");
+}
+
 consteval int BIT(int n)
 {
     return 1 << n;
@@ -161,21 +169,22 @@ MMAPR3000Bus::Private::~Private()
     signal_ptr = nullptr;
 }
 
-void MMAPR3000Bus::Private::static_sigsegv_hanlder(int, siginfo_t* siginfo, void* ucp)
+void MMAPR3000Bus::Private::static_sigsegv_hanlder(int, siginfo_t*, void* ucp)
 {
     signal_ptr->sigsegv_hanlder((ucontext_t*)ucp);
 }
 
-void MMAPR3000Bus::Private::static_sigbus_hanlder(int, siginfo_t* siginfo, void* ucp)
+void MMAPR3000Bus::Private::static_sigbus_hanlder(int, siginfo_t*, void* ucp)
 {
     signal_ptr->sigbus_hanlder((ucontext_t*)ucp);
 }
 
-uint32_t MMAPR3000Bus::Private::sigsegv_hanlder(void* ptr,
-                                                AccessType type,
-                                                AccessWidth width,
-                                                uint32_t value)
+uint32_t
+    MMAPR3000Bus::Private::sigsegv_hanlder(void* ptr, AccessType type, AccessWidth width, uint32_t)
 {
+    disable_alignment_check();
+    auto const addr = (uint8_t*)ptr - mem_space;
+    throw AddressException{(uint32_t)addr, type, width};
     return 0;
 }
 
@@ -187,9 +196,8 @@ void MMAPR3000Bus::Private::throw_from_handler()
 void MMAPR3000Bus::Private::sigsegv_hanlder(ucontext_t* ucontext)
 {
     auto const reg_err = ucontext->uc_mcontext.gregs[REG_ERR];
-    if ((reg_err
-         & (X86_PF_PROT | X86_PF_USER | X86_PF_RSVD | X86_PF_INSTR | X86_PF_PK | X86_PF_SHSTK))
-        != (X86_PF_PROT | X86_PF_USER)) {
+    if ((reg_err & (X86_PF_USER | X86_PF_RSVD | X86_PF_INSTR | X86_PF_PK | X86_PF_SHSTK))
+        != X86_PF_USER) {
         // Not the kind of fault we are expecting. Restore the default handler and return to let the
         // program crash.
         uninstall_handler(SIGSEGV);
@@ -244,6 +252,10 @@ void MMAPR3000Bus::Private::sigsegv_hanlder(ucontext_t* ucontext)
         // intersecting are C++ functions with noexcept(false), the return address is a landing pad,
         // so returning to rethrow_exception and immediately throwing will always work.
         ucontext->uc_mcontext.gregs[REG_RIP] = (greg_t)throw_from_handler;
+        // Disable alignment check before returning. The C++ runtime generally doesn't respect
+        // alignment.
+        auto const eflags = ucontext->uc_mcontext.gregs[REG_EFL];
+        ucontext->uc_mcontext.gregs[REG_EFL] = eflags & ~0x40000;
     }
 }
 

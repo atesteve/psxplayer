@@ -38,8 +38,6 @@ template<> [[maybe_unused]] constexpr auto int_width<int32_t>  = AccessWidth::A3
 template<> [[maybe_unused]] constexpr auto int_width<uint32_t> = AccessWidth::A32;
 // clang-format on
 
-using r3000_ptr_t = uint32_t;
-
 struct reg_inst_t {
     uint32_t function : 6;
     uint32_t shift : 5;
@@ -107,28 +105,13 @@ struct GPRName {
 
 } // namespace
 
-struct MipsException {};
-
-class AddressException : public MipsException {
-public:
-    explicit AddressException(r3000_ptr_t addr, AccessType rw, AccessWidth access_width)
-        : addr{addr}
-        , rw{rw}
-        , access_width{access_width}
-    {}
-
-    r3000_ptr_t addr;
-    AccessType rw;
-    AccessWidth access_width;
-};
-
-class OverflowException : public MipsException {};
-
 template<R3000CoreConfig c>
 struct R3000Core<c>::Private : public MMAPR3000Bus::Callback {
     explicit Private()
         : bus{this}
-    {}
+    {
+        load_slot.enabled = 0;
+    }
 
     struct HWAlignmentCheck {
         static void enable()
@@ -832,19 +815,19 @@ void R3000Core<c>::Private::run_ij_lh(uint32_t rs, uint32_t rt, uint32_t imm, ui
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load(rt, read_mem<uint32_t>(rs + sign_extend_16(imm)));
+    load(rt, read_mem<uint32_t>(gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lbu(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load(rt, read_mem<uint8_t>(rs + sign_extend_16(imm)));
+    load(rt, read_mem<uint8_t>(gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lhu(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load(rt, read_mem<uint16_t>(rs + sign_extend_16(imm)));
+    load(rt, read_mem<uint16_t>(gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
@@ -931,6 +914,18 @@ template<R3000CoreConfig c>
 void R3000Core<c>::run()
 {
     p->run_instruction();
+}
+
+template<R3000CoreConfig c>
+uint8_t* R3000Core<c>::get_mem_ptr() {
+    return p->bus.get_mem_ptr();
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::set_regs(uint32_t sp, uint32_t pc)
+{
+    p->pc = pc;
+    p->gpr[GPRName::sp] = sp;
 }
 
 // Explicit instantiation

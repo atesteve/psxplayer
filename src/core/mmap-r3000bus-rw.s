@@ -1,38 +1,38 @@
-.globl _ZN12MMAPR3000Bus13read_mem_implIhEET_PVv
-.globl _ZN12MMAPR3000Bus13read_mem_implItEET_PVv
-.globl _ZN12MMAPR3000Bus13read_mem_implIjEET_PVv
-.globl _ZN12MMAPR3000Bus14write_mem_implIhEEvPVvT_
-.globl _ZN12MMAPR3000Bus14write_mem_implItEEvPVvT_
-.globl _ZN12MMAPR3000Bus14write_mem_implIjEEvPVvT_
+.globl _ZN12MMAPR3000Bus13read_mem_implIhEET_Pv
+.globl _ZN12MMAPR3000Bus13read_mem_implItEET_Pv
+.globl _ZN12MMAPR3000Bus13read_mem_implIjEET_Pv
+.globl _ZN12MMAPR3000Bus14write_mem_implIhEEvPvT_
+.globl _ZN12MMAPR3000Bus14write_mem_implItEEvPvT_
+.globl _ZN12MMAPR3000Bus14write_mem_implIjEEvPvT_
 
 .section .text
 
-// unsigned char MMAPR3000Bus::read_mem_impl<unsigned char>(void volatile*)
-_ZN12MMAPR3000Bus13read_mem_implIhEET_PVv:
+// unsigned char MMAPR3000Bus::read_mem_impl<unsigned char>(void*)
+_ZN12MMAPR3000Bus13read_mem_implIhEET_Pv:
     movzbl (%rdi), %eax
     ret
 
-// unsigned short MMAPR3000Bus::read_mem_impl<unsigned short>(void volatile*)
-_ZN12MMAPR3000Bus13read_mem_implItEET_PVv:
+// unsigned short MMAPR3000Bus::read_mem_impl<unsigned short>(void*)
+_ZN12MMAPR3000Bus13read_mem_implItEET_Pv:
     movzwl (%rdi), %eax
     ret
 
-// unsigned int MMAPR3000Bus::read_mem_impl<unsigned int>(void volatile*)
-_ZN12MMAPR3000Bus13read_mem_implIjEET_PVv:
+// unsigned int MMAPR3000Bus::read_mem_impl<unsigned int>(void*)
+_ZN12MMAPR3000Bus13read_mem_implIjEET_Pv:
     mov    (%rdi), %eax
     ret
 
-// void MMAPR3000Bus::write_mem_impl<unsigned char>(void volatile*, unsigned char)
-_ZN12MMAPR3000Bus14write_mem_implIhEEvPVvT_:
+// void MMAPR3000Bus::write_mem_impl<unsigned char>(void*, unsigned char)
+_ZN12MMAPR3000Bus14write_mem_implIhEEvPvT_:
     mov    %dl, (%rdi)
     ret
 
-// void MMAPR3000Bus::write_mem_impl<unsigned short>(void volatile*, unsigned short)
-_ZN12MMAPR3000Bus14write_mem_implItEEvPVvT_:
+// void MMAPR3000Bus::write_mem_impl<unsigned short>(void*, unsigned short)
+_ZN12MMAPR3000Bus14write_mem_implItEEvPvT_:
     mov    %dx, (%rdi)
     ret
 
-// void MMAPR3000Bus::write_mem_impl<unsigned int>(void volatile*, unsigned int)
-_ZN12MMAPR3000Bus14write_mem_implIjEEvPVvT_:
+// void MMAPR3000Bus::write_mem_impl<unsigned int>(void*, unsigned int)
+_ZN12MMAPR3000Bus14write_mem_implIjEEvPvT_:
     mov    %edx, (%rdi)
     ret

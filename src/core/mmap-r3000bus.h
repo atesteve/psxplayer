@@ -23,13 +23,17 @@ public:
     }
 
     template<std::integral Int>
-    static Int read_mem_impl(volatile void* addr);
+    static Int read_mem_impl(void* addr);
 
     template<std::integral Int>
-    static void write_mem_impl(volatile void* addr, Int value);
+    static void write_mem_impl(void* addr, Int value);
+
+    uint8_t* get_mem_ptr() {
+        return _mem_space;
+    }
 
 private:
     struct Private;
-    volatile uint8_t* _mem_space;
+    uint8_t* _mem_space;
     std::unique_ptr<Private> _p;
 };
