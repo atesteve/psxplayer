@@ -12,7 +12,6 @@
 #include <stdexcept>
 #include <string_view>
 #include <array>
-#include <exception>
 
 namespace {
 
@@ -90,6 +89,31 @@ void disable_alignment_check()
             : "memory");
 }
 
+void emulate_ret(ucontext_t* ucontext)
+{
+    // This funcion is always called from a signal handler when it is already known that the fault
+    // happened at one of the "supported" functions (read_mem_impl<...>, write_mem_impl<...>). Those
+    // functions are implemented in assembler so we know that they are a mov followed by a ret. We
+    // can change the return address of the signal handler by emulating the ret instruction, e.g.,
+    // read the return address from the stack and return "manually" by incrementing RSP and setting
+    // RIP to the return address. This has two benefits:
+    //
+    //  1. If we are returning normally, we can't just return to the mov instruction because it will
+    //     fault again. We have emulated the mov instruction anyway, so we don't want to execute it
+    //     again even if it didn't fault. We could return to the ret instruction, but that would
+    //     require knowing the length of the mov instruction, which is not that difficult to do, but
+    //     just emulating ret works just as well and independently of the length of mov.
+    //
+    //  2. If we are throwing, returning to the caller directly makes the C++ exception work
+    //     magically accross the signal handler. read_mem_impl<...> and write_mem_impl<...> are C++
+    //     functions with noexcept(false), so the return addresses are landing pads. Under these
+    //     circumstances, the exception just works even when thrown from a signal handler.
+
+    auto* const rsp_ptr = (uintptr_t const*)ucontext->uc_mcontext.gregs[REG_RSP];
+    ucontext->uc_mcontext.gregs[REG_RIP] = *rsp_ptr;
+    ucontext->uc_mcontext.gregs[REG_RSP] += sizeof(void*);
+}
+
 consteval int BIT(int n)
 {
     return 1 << n;
@@ -114,9 +138,7 @@ enum x86_pf_error_code {
 struct MMAPR3000Bus::Private {
     static void static_sigsegv_hanlder(int, siginfo_t*, void*);
     static void static_sigbus_hanlder(int, siginfo_t*, void*);
-    static void throw_from_handler();
     static inline MMAPR3000Bus::Private* signal_ptr;
-    static inline std::exception_ptr exception;
 
     explicit Private(MMAPR3000Bus::Callback* callback)
         : callback{callback}
@@ -188,11 +210,6 @@ uint32_t
     return 0;
 }
 
-void MMAPR3000Bus::Private::throw_from_handler()
-{
-    std::rethrow_exception(exception);
-}
-
 void MMAPR3000Bus::Private::sigsegv_hanlder(ucontext_t* ucontext)
 {
     auto const reg_err = ucontext->uc_mcontext.gregs[REG_ERR];
@@ -237,25 +254,14 @@ void MMAPR3000Bus::Private::sigsegv_hanlder(ucontext_t* ucontext)
                 return;
             }
         }
-
-        // We have already emulated whatever the instruction was trying to write or read. If we just
-        // return, the instruction will run again (and fault again). We need to point RIP to the
-        // next instruction. But we know that the next instruction is always ret, so actually we can
-        // pop the return address from the stack and return "manually" by incrementing RSP and
-        // setting RIP to the return address.
-        auto* const rsp_ptr = (uintptr_t const*)ucontext->uc_mcontext.gregs[REG_RSP];
-        ucontext->uc_mcontext.gregs[REG_RIP] = *rsp_ptr;
-        ucontext->uc_mcontext.gregs[REG_RSP] += sizeof(void*);
+        emulate_ret(ucontext);
     } catch (...) {
-        exception = std::current_exception();
-        // Return to rethrow_exception instead of the original function. Since the functions we are
-        // intersecting are C++ functions with noexcept(false), the return address is a landing pad,
-        // so returning to rethrow_exception and immediately throwing will always work.
-        ucontext->uc_mcontext.gregs[REG_RIP] = (greg_t)throw_from_handler;
-        // Disable alignment check before returning. The C++ runtime generally doesn't respect
+        // Disable alignment check before rethrowing. The C++ runtime generally doesn't respect
         // alignment.
         auto const eflags = ucontext->uc_mcontext.gregs[REG_EFL];
         ucontext->uc_mcontext.gregs[REG_EFL] = eflags & ~0x40000;
+        emulate_ret(ucontext);
+        throw;
     }
 }
 
