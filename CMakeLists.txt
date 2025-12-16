@@ -53,6 +53,8 @@ set(TARGET_SRC
   src/core/mmap-r3000bus.cpp
   src/core/mmap-r3000bus.h
   src/core/mmap-r3000bus-rw.s
+  src/core/bios.cpp
+  src/core/bios.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp

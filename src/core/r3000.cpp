@@ -1,42 +1,16 @@
-#include "r3000.h"
+#include "r3000-impl.h"
 #include "mmap-r3000bus.h"
+#include "bios.h"
 
 #include <fmt/format.h>
 
-#include <array>
 #include <cstdint>
 #include <concepts>
-#include <string_view>
 #include <bit>
 #include <utility>
 #include <stdckdint.h>
-#include <cstddef>
 
 namespace {
-
-template<std::integral>
-constexpr std::string_view int_name;
-
-// clang-format off
-template<> [[maybe_unused]] constexpr std::string_view int_name<int8_t>   = "i8";
-template<> [[maybe_unused]] constexpr std::string_view int_name<uint8_t>  = "u8";
-template<> [[maybe_unused]] constexpr std::string_view int_name<int16_t>  = "i16";
-template<> [[maybe_unused]] constexpr std::string_view int_name<uint16_t> = "u16";
-template<> [[maybe_unused]] constexpr std::string_view int_name<int32_t>  = "i32";
-template<> [[maybe_unused]] constexpr std::string_view int_name<uint32_t> = "u32";
-// clang-format on
-
-template<std::integral>
-constexpr AccessWidth int_width{};
-
-// clang-format off
-template<> [[maybe_unused]] constexpr auto int_width<int8_t>   = AccessWidth::A8;
-template<> [[maybe_unused]] constexpr auto int_width<uint8_t>  = AccessWidth::A8;
-template<> [[maybe_unused]] constexpr auto int_width<int16_t>  = AccessWidth::A16;
-template<> [[maybe_unused]] constexpr auto int_width<uint16_t> = AccessWidth::A16;
-template<> [[maybe_unused]] constexpr auto int_width<int32_t>  = AccessWidth::A32;
-template<> [[maybe_unused]] constexpr auto int_width<uint32_t> = AccessWidth::A32;
-// clang-format on
 
 struct reg_inst_t {
     uint32_t function : 6;
@@ -68,47 +42,13 @@ uint32_t sign_extend_16(uint32_t x)
     return (int16_t)x;
 }
 
-struct GPRName {
-    [[maybe_unused]] static constexpr size_t r0{0};
-    [[maybe_unused]] static constexpr size_t at{1};
-    [[maybe_unused]] static constexpr size_t v0{2};
-    [[maybe_unused]] static constexpr size_t v1{3};
-    [[maybe_unused]] static constexpr size_t a0{4};
-    [[maybe_unused]] static constexpr size_t a1{5};
-    [[maybe_unused]] static constexpr size_t a2{6};
-    [[maybe_unused]] static constexpr size_t a3{7};
-    [[maybe_unused]] static constexpr size_t t0{8};
-    [[maybe_unused]] static constexpr size_t t1{9};
-    [[maybe_unused]] static constexpr size_t t2{10};
-    [[maybe_unused]] static constexpr size_t t3{11};
-    [[maybe_unused]] static constexpr size_t t4{12};
-    [[maybe_unused]] static constexpr size_t t5{13};
-    [[maybe_unused]] static constexpr size_t t6{14};
-    [[maybe_unused]] static constexpr size_t t7{15};
-    [[maybe_unused]] static constexpr size_t s0{16};
-    [[maybe_unused]] static constexpr size_t s1{17};
-    [[maybe_unused]] static constexpr size_t s2{18};
-    [[maybe_unused]] static constexpr size_t s3{19};
-    [[maybe_unused]] static constexpr size_t s4{20};
-    [[maybe_unused]] static constexpr size_t s5{21};
-    [[maybe_unused]] static constexpr size_t s6{22};
-    [[maybe_unused]] static constexpr size_t s7{23};
-    [[maybe_unused]] static constexpr size_t t8{24};
-    [[maybe_unused]] static constexpr size_t t9{25};
-    [[maybe_unused]] static constexpr size_t k0{26};
-    [[maybe_unused]] static constexpr size_t k1{27};
-    [[maybe_unused]] static constexpr size_t gp{28};
-    [[maybe_unused]] static constexpr size_t sp{29};
-    [[maybe_unused]] static constexpr size_t s8{30};
-    [[maybe_unused]] static constexpr size_t ra{31};
-};
-
 } // namespace
 
 template<R3000CoreConfig c>
 struct R3000Core<c>::Private : public MMAPR3000Bus::Callback {
-    explicit Private()
+    explicit Private(R3000Core<c>* parent)
         : bus{this}
+        , parent{parent}
     {
         load_slot.enabled = 0;
     }
@@ -204,6 +144,7 @@ struct R3000Core<c>::Private : public MMAPR3000Bus::Callback {
     void run_ij_sw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_swl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_swr(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
+    void run_ij_bios(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_unk(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
 
     template<std::integral Int>
@@ -232,18 +173,16 @@ struct R3000Core<c>::Private : public MMAPR3000Bus::Callback {
         bus.write_mem<Int>(addr, value);
     }
 
-    std::array<uint32_t, 32> gpr{};
-    uint32_t lo{};
-    uint32_t hi{};
-    r3000_ptr_t pc{};
-
     struct load_delay_slot {
         uint32_t rt;
         uint32_t value;
         int enabled = 2;
     };
 
-    load_delay_slot load_slot;
+    struct branch_delay_slot {
+        int count = 0;
+        r3000_ptr_t target{};
+    };
 
     void load_slot_tick()
     {
@@ -252,31 +191,43 @@ struct R3000Core<c>::Private : public MMAPR3000Bus::Callback {
         }
         load_slot.enabled--;
         if (!load_slot.enabled) {
-            gpr[load_slot.rt] = load_slot.value;
+            core.gpr[load_slot.rt] = load_slot.value;
         }
+    }
+
+    void load_slot_flush()
+    {
+        if (!load_slot.enabled) {
+            return;
+        }
+        load_slot.enabled = 0;
+        core.gpr[load_slot.rt] = load_slot.value;
     }
 
     void load(uint32_t rt, uint32_t value)
     {
         if (load_slot.enabled) {
-            gpr[load_slot.rt] = load_slot.value;
+            core.gpr[load_slot.rt] = load_slot.value;
         }
         load_slot = {rt, value};
     }
 
-    int branch_slot_count = 0;
-    r3000_ptr_t branch_target{};
+    Core core;
+    load_delay_slot load_slot;
+    branch_delay_slot branch_slot;
     MMAPR3000Bus bus;
+    Bios bios;
+    R3000Core<c>* parent;
 };
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::set_branch_target(r3000_ptr_t target)
 {
-    if (branch_slot_count > 0) {
+    if (branch_slot.count > 0) {
         return;
     }
-    branch_slot_count = 2;
-    branch_target = target;
+    branch_slot.count = 2;
+    branch_slot.target = target;
 }
 
 template<R3000CoreConfig c>
@@ -288,11 +239,11 @@ void R3000Core<c>::Private::run_instruction()
     load_slot_tick();
 
     // Check branch slot
-    if (branch_slot_count > 0 && --branch_slot_count == 0) {
-        pc = branch_target;
+    if (branch_slot.count > 0 && --branch_slot.count == 0) {
+        core.pc = branch_slot.target;
     }
 
-    auto const raw_inst = read_mem<r3000_ptr_t>(pc);
+    auto const raw_inst = read_mem<r3000_ptr_t>(core.pc);
     auto const opcode = raw_inst >> 26;
 
     if (opcode == 0) {
@@ -305,10 +256,10 @@ void R3000Core<c>::Private::run_instruction()
     }
 
     // After execution of the instruction, set R0 back to 0 in case it was written.
-    gpr[GPRName::r0] = 0;
+    core.gpr[GPRName::r0] = 0;
 
     // Advance PC.
-    pc += sizeof(uint32_t);
+    core.pc += sizeof(uint32_t);
 }
 
 template<R3000CoreConfig c>
@@ -462,7 +413,7 @@ void R3000Core<c>::Private::run_ij_inst(uint32_t opcode,
         case 0x3c: return run_ij_unk  (rs, rt, imm, target);
         case 0x3d: return run_ij_unk  (rs, rt, imm, target);
         case 0x3e: return run_ij_unk  (rs, rt, imm, target);
-        case 0x3f: return run_ij_unk  (rs, rt, imm, target);
+        case 0x3f: return run_ij_bios (rs, rt, imm, target);
         // `opcode` is 6 bit wide, so it's impossible to receive anything higher than 0x3f (63).
         default: return std::unreachable();
     };
@@ -472,54 +423,54 @@ void R3000Core<c>::Private::run_ij_inst(uint32_t opcode,
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_sll(uint32_t, uint32_t rt, uint32_t rd, uint32_t shift)
 {
-    gpr[rd] = gpr[rt] << shift;
+    core.gpr[rd] = core.gpr[rt] << shift;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_srl(uint32_t, uint32_t rt, uint32_t rd, uint32_t shift)
 {
-    gpr[rd] = gpr[rt] >> shift;
+    core.gpr[rd] = core.gpr[rt] >> shift;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_sra(uint32_t, uint32_t rt, uint32_t rd, uint32_t shift)
 {
-    int32_t const signed_rt = gpr[rt];
-    gpr[rd] = signed_rt >> shift;
+    int32_t const signed_rt = core.gpr[rt];
+    core.gpr[rd] = signed_rt >> shift;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_sllv(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    gpr[rd] = gpr[rt] << (gpr[rs] & 0x1f);
+    core.gpr[rd] = core.gpr[rt] << (core.gpr[rs] & 0x1f);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_srlv(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    gpr[rd] = gpr[rt] >> (gpr[rs] & 0x1f);
+    core.gpr[rd] = core.gpr[rt] >> (core.gpr[rs] & 0x1f);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_srav(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    int32_t const signed_rt = gpr[rt];
-    gpr[rd] = signed_rt >> (gpr[rs] & 0x1f);
+    int32_t const signed_rt = core.gpr[rt];
+    core.gpr[rd] = signed_rt >> (core.gpr[rs] & 0x1f);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_jr(uint32_t rs, uint32_t, uint32_t, uint32_t)
 {
-    set_branch_target(gpr[rs]);
+    set_branch_target(core.gpr[rs]);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_jalr(uint32_t rs, uint32_t, uint32_t rd, uint32_t)
 {
-    // TODO: this instruction traps immediately when gpr[rs] is an invalid address, and not after
-    // the delay slot is executed like other branch instructions.
-    gpr[rd] = pc + sizeof(uint32_t) * 2;
-    set_branch_target(gpr[rs]);
+    // TODO: this instruction traps immediately when core.gpr[rs] is an invalid address, and not
+    // after the delay slot is executed like other branch instructions.
+    core.gpr[rd] = core.pc + sizeof(uint32_t) * 2;
+    set_branch_target(core.gpr[rs]);
 }
 
 template<R3000CoreConfig c>
@@ -533,150 +484,150 @@ void R3000Core<c>::Private::run_r_break(uint32_t rs, uint32_t rt, uint32_t rd, u
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_mfhi(uint32_t, uint32_t, uint32_t rd, uint32_t)
 {
-    gpr[rd] = hi;
+    core.gpr[rd] = core.hi;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_mthi(uint32_t rs, uint32_t, uint32_t, uint32_t)
 {
-    hi = gpr[rs];
+    core.hi = core.gpr[rs];
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_mflo(uint32_t, uint32_t, uint32_t rd, uint32_t)
 {
-    gpr[rd] = lo;
+    core.gpr[rd] = core.lo;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_mtlo(uint32_t rs, uint32_t, uint32_t, uint32_t)
 {
-    lo = gpr[rs];
+    core.lo = core.gpr[rs];
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_mult(uint32_t rs, uint32_t rt, uint32_t, uint32_t)
 {
-    int32_t const signed_rs = gpr[rs];
-    int32_t const signed_rt = gpr[rt];
+    int32_t const signed_rs = core.gpr[rs];
+    int32_t const signed_rt = core.gpr[rt];
     uint64_t const result = (int64_t)signed_rs * signed_rt;
-    lo = result;
-    hi = result >> 32;
+    core.lo = result;
+    core.hi = result >> 32;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_multu(uint32_t rs, uint32_t rt, uint32_t, uint32_t)
 {
-    uint64_t const result = (uint64_t)gpr[rs] * gpr[rt];
-    lo = result;
-    hi = result >> 32;
+    uint64_t const result = (uint64_t)core.gpr[rs] * core.gpr[rt];
+    core.lo = result;
+    core.hi = result >> 32;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_div(uint32_t rs, uint32_t rt, uint32_t, uint32_t)
 {
-    int32_t const signed_rs = gpr[rs];
-    int32_t const signed_rt = gpr[rt];
+    int32_t const signed_rs = core.gpr[rs];
+    int32_t const signed_rt = core.gpr[rt];
     if (signed_rt == 0) {
-        lo = signed_rs > 0 ? -1 : 1;
-        hi = signed_rs;
+        core.lo = signed_rs > 0 ? -1 : 1;
+        core.hi = signed_rs;
     } else if (signed_rs == std::numeric_limits<int32_t>::min() && signed_rt == -1) {
-        lo = std::numeric_limits<int32_t>::min();
-        hi = 0;
+        core.lo = std::numeric_limits<int32_t>::min();
+        core.hi = 0;
     } else {
-        lo = signed_rs / signed_rt;
-        hi = signed_rs % signed_rt;
+        core.lo = signed_rs / signed_rt;
+        core.hi = signed_rs % signed_rt;
     }
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_divu(uint32_t rs, uint32_t rt, uint32_t, uint32_t)
 {
-    if (gpr[rt] == 0) {
-        lo = 0xffffffff;
-        hi = gpr[rs];
+    if (core.gpr[rt] == 0) {
+        core.lo = 0xffffffff;
+        core.hi = core.gpr[rs];
     } else {
-        lo = gpr[rs] / gpr[rt];
-        hi = gpr[rs] % gpr[rt];
+        core.lo = core.gpr[rs] / core.gpr[rt];
+        core.hi = core.gpr[rs] % core.gpr[rt];
     }
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_add(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    int32_t const signed_rs = gpr[rs];
-    int32_t const signed_rt = gpr[rt];
+    int32_t const signed_rs = core.gpr[rs];
+    int32_t const signed_rt = core.gpr[rt];
     int32_t result;
     auto const overflow = ckd_add(&result, signed_rs, signed_rt);
     if (overflow) {
         HWAlignmentCheck::disable();
         throw OverflowException{};
     }
-    gpr[rd] = result;
+    core.gpr[rd] = result;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_addu(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    gpr[rd] = gpr[rs] + gpr[rt];
+    core.gpr[rd] = core.gpr[rs] + core.gpr[rt];
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_sub(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    int32_t const signed_rs = gpr[rs];
-    int32_t const signed_rt = gpr[rt];
+    int32_t const signed_rs = core.gpr[rs];
+    int32_t const signed_rt = core.gpr[rt];
     int32_t result;
     auto const overflow = ckd_sub(&result, signed_rs, signed_rt);
     if (overflow) {
         HWAlignmentCheck::disable();
         throw OverflowException{};
     }
-    gpr[rd] = result;
+    core.gpr[rd] = result;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_subu(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    gpr[rd] = gpr[rs] - gpr[rt];
+    core.gpr[rd] = core.gpr[rs] - core.gpr[rt];
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_and(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    gpr[rd] = gpr[rs] & gpr[rt];
+    core.gpr[rd] = core.gpr[rs] & core.gpr[rt];
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_or(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    gpr[rd] = gpr[rs] | gpr[rt];
+    core.gpr[rd] = core.gpr[rs] | core.gpr[rt];
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_xor(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    gpr[rd] = gpr[rs] ^ gpr[rt];
+    core.gpr[rd] = core.gpr[rs] ^ core.gpr[rt];
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_nor(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    gpr[rd] = ~(gpr[rs] | gpr[rt]);
+    core.gpr[rd] = ~(core.gpr[rs] | core.gpr[rt]);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_slt(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    int32_t const signed_rs = gpr[rs];
-    int32_t const signed_rt = gpr[rt];
-    gpr[rd] = signed_rs < signed_rt;
+    int32_t const signed_rs = core.gpr[rs];
+    int32_t const signed_rt = core.gpr[rt];
+    core.gpr[rd] = signed_rs < signed_rt;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_sltu(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t)
 {
-    gpr[rd] = gpr[rs] < gpr[rt];
+    core.gpr[rd] = core.gpr[rs] < core.gpr[rt];
 }
 
 template<R3000CoreConfig c>
@@ -686,7 +637,7 @@ void R3000Core<c>::Private::run_r_unk(uint32_t rs, uint32_t rt, uint32_t rd, uin
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_j(uint32_t, uint32_t, uint32_t, uint32_t target)
 {
-    auto const delay_slot_addr = pc + sizeof(uint32_t);
+    auto const delay_slot_addr = core.pc + sizeof(uint32_t);
     auto const target_addr = (delay_slot_addr & 0xfc000000u) | (target << 2);
     set_branch_target(target_addr);
 }
@@ -694,8 +645,8 @@ void R3000Core<c>::Private::run_ij_j(uint32_t, uint32_t, uint32_t, uint32_t targ
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_jal(uint32_t, uint32_t, uint32_t, uint32_t target)
 {
-    gpr[GPRName::ra] = pc + sizeof(uint32_t) * 2;
-    auto const delay_slot_addr = pc + sizeof(uint32_t);
+    core.gpr[GPRName::ra] = core.pc + sizeof(uint32_t) * 2;
+    auto const delay_slot_addr = core.pc + sizeof(uint32_t);
     auto const target_addr = (delay_slot_addr & 0xfc000000u) | (target << 2);
     set_branch_target(target_addr);
 }
@@ -705,13 +656,13 @@ void R3000Core<c>::Private::run_ij_branch(uint32_t offset)
 {
     int32_t signed_offset = sign_extend_16(offset);
     signed_offset <<= 2;
-    set_branch_target(pc + sizeof(uint32_t) + signed_offset);
+    set_branch_target(core.pc + sizeof(uint32_t) + signed_offset);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_beq(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    if (gpr[rs] == gpr[rt]) {
+    if (core.gpr[rs] == core.gpr[rt]) {
         run_ij_branch(imm);
     }
 }
@@ -719,7 +670,7 @@ void R3000Core<c>::Private::run_ij_beq(uint32_t rs, uint32_t rt, uint32_t imm, u
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_bne(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    if (gpr[rs] != gpr[rt]) {
+    if (core.gpr[rs] != core.gpr[rt]) {
         run_ij_branch(imm);
     }
 }
@@ -727,7 +678,7 @@ void R3000Core<c>::Private::run_ij_bne(uint32_t rs, uint32_t rt, uint32_t imm, u
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_blez(uint32_t rs, uint32_t, uint32_t imm, uint32_t)
 {
-    int32_t const signed_rs = gpr[rs];
+    int32_t const signed_rs = core.gpr[rs];
     if (signed_rs <= 0) {
         run_ij_branch(imm);
     }
@@ -736,7 +687,7 @@ void R3000Core<c>::Private::run_ij_blez(uint32_t rs, uint32_t, uint32_t imm, uin
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_bgtz(uint32_t rs, uint32_t, uint32_t imm, uint32_t)
 {
-    int32_t const signed_rs = gpr[rs];
+    int32_t const signed_rs = core.gpr[rs];
     if (signed_rs > 0) {
         run_ij_branch(imm);
     }
@@ -745,7 +696,7 @@ void R3000Core<c>::Private::run_ij_bgtz(uint32_t rs, uint32_t, uint32_t imm, uin
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_addi(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    int32_t const signed_rs = gpr[rs];
+    int32_t const signed_rs = core.gpr[rs];
     int32_t const signed_imm = sign_extend_16(imm);
     int32_t result;
     auto const overflow = ckd_add(&result, signed_rs, signed_imm);
@@ -753,88 +704,89 @@ void R3000Core<c>::Private::run_ij_addi(uint32_t rs, uint32_t rt, uint32_t imm, 
         HWAlignmentCheck::disable();
         throw OverflowException{};
     }
-    gpr[rt] = result;
+    core.gpr[rt] = result;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_addiu(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    gpr[rt] = gpr[rs] + sign_extend_16(imm);
+    core.gpr[rt] = core.gpr[rs] + sign_extend_16(imm);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_slti(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    int32_t const signed_rs = gpr[rs];
+    int32_t const signed_rs = core.gpr[rs];
     int32_t const signed_imm = sign_extend_16(imm);
-    gpr[rt] = signed_rs < signed_imm;
+    core.gpr[rt] = signed_rs < signed_imm;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_sltiu(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    gpr[rt] = gpr[rs] < sign_extend_16(imm);
+    core.gpr[rt] = core.gpr[rs] < sign_extend_16(imm);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_andi(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    gpr[rt] = gpr[rs] & imm;
+    core.gpr[rt] = core.gpr[rs] & imm;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_ori(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    gpr[rt] = gpr[rs] | imm;
+    core.gpr[rt] = core.gpr[rs] | imm;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_xori(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    gpr[rt] = gpr[rs] ^ imm;
+    core.gpr[rt] = core.gpr[rs] ^ imm;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lui(uint32_t, uint32_t rt, uint32_t imm, uint32_t)
 {
-    gpr[rt] = imm << 16;
+    core.gpr[rt] = imm << 16;
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lb(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load(rt, (int8_t)read_mem<uint8_t>(gpr[rs] + sign_extend_16(imm)));
+    load(rt, (int8_t)read_mem<uint8_t>(core.gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lh(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load(rt, (int16_t)read_mem<uint16_t>(gpr[rs] + sign_extend_16(imm)));
+    load(rt, (int16_t)read_mem<uint16_t>(core.gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load(rt, read_mem<uint32_t>(gpr[rs] + sign_extend_16(imm)));
+    load(rt, read_mem<uint32_t>(core.gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lbu(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load(rt, read_mem<uint8_t>(gpr[rs] + sign_extend_16(imm)));
+    load(rt, read_mem<uint8_t>(core.gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lhu(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    load(rt, read_mem<uint16_t>(gpr[rs] + sign_extend_16(imm)));
+    load(rt, read_mem<uint16_t>(core.gpr[rs] + sign_extend_16(imm)));
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lwl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    auto const prev_value = load_slot.enabled && load_slot.rt == rt ? load_slot.value : gpr[rt];
-    auto const addr = gpr[rs] + sign_extend_16(imm);
+    auto const prev_value =
+        load_slot.enabled && load_slot.rt == rt ? load_slot.value : core.gpr[rt];
+    auto const addr = core.gpr[rs] + sign_extend_16(imm);
     auto const misalignment = addr & 0x3;
     auto const aligned_addr = addr & ~0x3;
     auto const word = read_mem<uint32_t>(aligned_addr);
@@ -846,8 +798,9 @@ void R3000Core<c>::Private::run_ij_lwl(uint32_t rs, uint32_t rt, uint32_t imm, u
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_lwr(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    auto const prev_value = load_slot.enabled && load_slot.rt == rt ? load_slot.value : gpr[rt];
-    auto const addr = gpr[rs] + sign_extend_16(imm);
+    auto const prev_value =
+        load_slot.enabled && load_slot.rt == rt ? load_slot.value : core.gpr[rt];
+    auto const addr = core.gpr[rs] + sign_extend_16(imm);
     auto const misalignment = addr & 0x3;
     auto const aligned_addr = addr & ~0x3;
     auto const word = read_mem<uint32_t>(aligned_addr);
@@ -859,26 +812,26 @@ void R3000Core<c>::Private::run_ij_lwr(uint32_t rs, uint32_t rt, uint32_t imm, u
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_sb(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    write_mem<uint8_t>(gpr[rs] + sign_extend_16(imm), gpr[rt]);
+    write_mem<uint8_t>(core.gpr[rs] + sign_extend_16(imm), core.gpr[rt]);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_sh(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    write_mem<uint16_t>(gpr[rs] + sign_extend_16(imm), gpr[rt]);
+    write_mem<uint16_t>(core.gpr[rs] + sign_extend_16(imm), core.gpr[rt]);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_sw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    write_mem<uint32_t>(gpr[rs] + sign_extend_16(imm), gpr[rt]);
+    write_mem<uint32_t>(core.gpr[rs] + sign_extend_16(imm), core.gpr[rt]);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_swl(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    auto unaligned_ptr = gpr[rs] + sign_extend_16(imm);
-    auto value = gpr[rt];
+    auto unaligned_ptr = core.gpr[rs] + sign_extend_16(imm);
+    auto value = core.gpr[rt];
     do {
         write_mem<uint8_t>(unaligned_ptr, value >> 24);
         unaligned_ptr -= 1;
@@ -889,8 +842,8 @@ void R3000Core<c>::Private::run_ij_swl(uint32_t rs, uint32_t rt, uint32_t imm, u
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_swr(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    auto unaligned_ptr = gpr[rs] + sign_extend_16(imm);
-    auto value = gpr[rt];
+    auto unaligned_ptr = core.gpr[rs] + sign_extend_16(imm);
+    auto value = core.gpr[rt];
     do {
         write_mem<uint8_t>(unaligned_ptr, value);
         unaligned_ptr += 1;
@@ -899,12 +852,23 @@ void R3000Core<c>::Private::run_ij_swr(uint32_t rs, uint32_t rt, uint32_t imm, u
 }
 
 template<R3000CoreConfig c>
+void R3000Core<c>::Private::run_ij_bios(uint32_t, uint32_t, uint32_t imm, uint32_t)
+{
+    load_slot_flush();
+    auto const return_pc = core.gpr[GPRName::ra];
+    HWAlignmentCheck::disable();
+    bios.run_bios_fn(*parent, imm);
+    HWAlignmentCheck::enable();
+    core.pc = return_pc - sizeof(r3000_ptr_t);
+}
+
+template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_unk(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target)
 {}
 
 template<R3000CoreConfig c>
 R3000Core<c>::R3000Core()
-    : p{std::make_unique<R3000Core<c>::Private>()}
+    : p{std::make_unique<R3000Core<c>::Private>(this)}
 {}
 
 template<R3000CoreConfig c>
@@ -917,18 +881,79 @@ void R3000Core<c>::run()
 }
 
 template<R3000CoreConfig c>
-uint8_t* R3000Core<c>::get_mem_ptr() {
+uint8_t* R3000Core<c>::get_mem_ptr()
+{
     return p->bus.get_mem_ptr();
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::set_regs(uint32_t sp, uint32_t pc)
 {
-    p->pc = pc;
-    p->gpr[GPRName::sp] = sp;
+    p->core.pc = pc;
+    p->core.gpr[GPRName::sp] = sp;
+}
+
+template<R3000CoreConfig c>
+uint8_t R3000Core<c>::read_mem_u8(r3000_ptr_t addr) const
+{
+    return p->template read_mem<uint8_t>(addr);
+}
+
+template<R3000CoreConfig c>
+uint16_t R3000Core<c>::read_mem_u16(r3000_ptr_t addr) const
+{
+    return p->template read_mem<uint16_t>(addr);
+}
+
+template<R3000CoreConfig c>
+uint32_t R3000Core<c>::read_mem_u32(r3000_ptr_t addr) const
+{
+    return p->template read_mem<uint32_t>(addr);
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::write_mem_u8(r3000_ptr_t addr, uint8_t value)
+{
+    p->write_mem(addr, value);
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::write_mem_u16(r3000_ptr_t addr, uint16_t value)
+{
+    p->write_mem(addr, value);
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::write_mem_u32(r3000_ptr_t addr, uint32_t value)
+{
+    p->write_mem(addr, value);
+}
+
+template<R3000CoreConfig c>
+Core& R3000Core<c>::core()
+{
+    return p->core;
+}
+
+template<R3000CoreConfig c>
+Core const& R3000Core<c>::core() const
+{
+    return p->core;
+}
+
+uint8_t* get_buffer_checked(r3000_ptr_t addr, uint32_t size)
+{
+    // This function only allows getting a buffer for RAM, at either of its mirror locations. For
+    // this reason, the first check is that the size is no higher than 2MB.
+    if (size > 0x200000) {
+        throw AddressException{addr + size};
+    }
 }
 
 // Explicit instantiation
-template class R3000Core<{}>;
-template class R3000Core<{FaultCheck::SOFTWARE, AlignmentCheck::SOFTWARE}>;
 template class R3000Core<{FaultCheck::HARDWARE, AlignmentCheck::HARDWARE}>;
+
+std::unique_ptr<R3000> R3000::build()
+{
+    return std::make_unique<R3000Core<{FaultCheck::HARDWARE, AlignmentCheck::HARDWARE}>>();
+}
