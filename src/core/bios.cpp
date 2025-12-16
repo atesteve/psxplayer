@@ -29,6 +29,9 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
     {
         if constexpr (std::is_same_v<Arg, R3000&>) {
             return emu;
+        } else if constexpr (requires() { std::declval<Arg>().size_bytes(); }) {
+            uint32_t const raw_arg = get_raw_arg(emu, Index);
+            return emu.get_buffer<typename Arg::type>(raw_arg, 1);
         } else {
             return get_raw_arg(emu, Index);
         }
@@ -61,6 +64,7 @@ std::optional<uint32_t> bcall(Bios& bios, R3000& emu)
 }
 
 std::unordered_map<uint32_t, std::optional<uint32_t> (*)(Bios& bios, R3000& emu)> const bios_fns = {
+    {0xa013, bcall<&Bios::setjmp>},
     {0xa039, bcall<&Bios::InitHeap>},
 };
 

@@ -76,7 +76,9 @@ struct InstructionException {
 template<typename T>
 class EmuBuffer {
 public:
-    explicit EmuBuffer(T* ptr, uint32_t base_addr, uint32_t size)
+    using type = T;
+
+    explicit EmuBuffer(T* ptr, r3000_ptr_t base_addr, uint32_t size)
         : _ptr{ptr}
         , _base_addr{base_addr}
         , _size{size}
@@ -94,6 +96,22 @@ public:
 
     T const& operator[](uint32_t offset) const { return const_cast<EmuBuffer<T>*>(this)[offset]; }
 
+    T& operator*() {
+        return *_ptr;
+    }
+
+    T const& operator*() const {
+        return *_ptr;
+    }
+
+    T* operator->() {
+        return _ptr;
+    }
+
+    T const* operator->() const {
+        return _ptr;
+    }
+
     T* data() { return _ptr; }
 
     T const* data() const { return _ptr; }
@@ -101,9 +119,13 @@ public:
     uint32_t size() const { return _size; }
     uint32_t size_bytes() const { return _size * sizeof(T); }
 
+    r3000_ptr_t base_addr() const {
+        return _base_addr;
+    }
+
 private:
     T* _ptr;
-    uint32_t _base_addr;
+    r3000_ptr_t _base_addr;
     uint32_t _size;
 };
 
