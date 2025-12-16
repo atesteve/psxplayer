@@ -29,7 +29,7 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
     {
         if constexpr (std::is_same_v<Arg, R3000&>) {
             return emu;
-        } else if constexpr (requires() { std::declval<Arg>().size_bytes(); }) {
+        } else if constexpr (requires(Arg a) { a.size_bytes(); }) {
             uint32_t const raw_arg = get_raw_arg(emu, Index);
             return emu.get_buffer<typename Arg::type>(raw_arg, 1);
         } else {
