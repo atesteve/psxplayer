@@ -485,12 +485,18 @@ void R3000Core<c>::Private::run_r_jalr(uint32_t rs, uint32_t, uint32_t rd, uint3
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_r_syscall(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t shift)
-{}
+void R3000Core<c>::Private::run_r_syscall(uint32_t, uint32_t, uint32_t, uint32_t)
+{
+    // Not supported yet.
+    throw InstructionException{};
+}
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_r_break(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t shift)
-{}
+void R3000Core<c>::Private::run_r_break(uint32_t, uint32_t, uint32_t, uint32_t)
+{
+    // Not supported yet.
+    throw InstructionException{};
+}
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_mfhi(uint32_t, uint32_t, uint32_t rd, uint32_t)
