@@ -25,6 +25,9 @@ constexpr auto PSX_RAM_ADDRS = std::to_array<uint32_t>({0x0, 0x80000000, 0xa0000
 constexpr uint32_t PSX_SPAD_SIZE = 4096;
 constexpr auto PSX_SPAD_ADDRS = std::to_array<uint32_t>({0x1f800000, 0x9f800000});
 
+constexpr uint32_t PSX_IO_SIZE = 4096;
+constexpr auto PSX_IO_ADDRS = std::to_array<uint32_t>({0x1f801000, 0x9f801000, 0xbf801000});
+
 void throw_errno(std::string_view msg)
 {
     auto const* errordesc = strerrordesc_np(errno);
@@ -157,6 +160,7 @@ struct MMAPR3000Bus::Private {
     uint8_t* mem_space = nullptr;
     int ram_memfd = -1;
     int spad_memfd = -1;
+    int io_memfd = -1;
     MMAPR3000Bus::Callback* callback;
 };
 
@@ -177,12 +181,14 @@ void MMAPR3000Bus::Private::init()
 
     map_memory("psx-ram", ram_memfd, mem_space, PSX_RAM_SIZE, PSX_RAM_ADDRS);
     map_memory("psx-scratchpad", spad_memfd, mem_space, PSX_SPAD_SIZE, PSX_SPAD_ADDRS);
+    map_memory("psx-io", io_memfd, mem_space, PSX_IO_SIZE, PSX_IO_ADDRS);
 }
 
 MMAPR3000Bus::Private::~Private()
 {
     unmap_memory(ram_memfd, mem_space, PSX_RAM_SIZE, PSX_RAM_ADDRS);
     unmap_memory(spad_memfd, mem_space, PSX_SPAD_SIZE, PSX_SPAD_ADDRS);
+    unmap_memory(io_memfd, mem_space, PSX_IO_SIZE, PSX_IO_ADDRS);
     if (mem_space) {
         munmap(mem_space, MEMORY_SPACE_SIZE);
     }
