@@ -60,20 +60,18 @@ struct Core {
     r3000_ptr_t pc{};
 };
 
-class AddressException {
-public:
-    explicit AddressException(r3000_ptr_t addr, AccessType rw = {}, AccessWidth access_width = {})
-        : addr{addr}
-        , rw{rw}
-        , access_width{access_width}
-    {}
-
-    r3000_ptr_t addr;
-    AccessType rw;
-    AccessWidth access_width;
+struct AddressException {
+    r3000_ptr_t addr{};
+    AccessType rw{};
+    AccessWidth access_width{};
 };
 
-class OverflowException {};
+struct OverflowException {};
+
+struct InstructionException {
+    uint16_t opcode{};
+    uint16_t func_code{};
+};
 
 template<typename T>
 class EmuBuffer {
@@ -87,11 +85,18 @@ public:
     T& operator[](uint32_t offset)
     {
         if (offset >= _size) {
+            r3000_ptr_t const offset_bytes = offset * sizeof(T);
             throw AddressException{
-                _base_addr + offset / sizeof(T), AccessType::READ, int_width<std::remove_cv_t<T>>};
+                _base_addr + offset_bytes, AccessType::READ, int_width<std::remove_cv_t<T>>};
         }
         return _ptr[offset];
     }
+
+    T const& operator[](uint32_t offset) const { return const_cast<EmuBuffer<T>*>(this)[offset]; }
+
+    T* data() { return _ptr; }
+
+    T const* data() const { return _ptr; }
 
     uint32_t size() const { return _size; }
     uint32_t size_bytes() const { return _size * sizeof(T); }
@@ -142,7 +147,6 @@ struct R3000 {
 
     static std::unique_ptr<R3000> build();
 
-    virtual uint8_t* get_mem_ptr() = 0;
     virtual void set_regs(uint32_t sp, uint32_t pc) = 0;
     virtual void run() = 0;
 
@@ -173,8 +177,15 @@ struct R3000 {
     virtual Core& core() = 0;
     virtual Core const& core() const = 0;
 
-    template<typename T>
+    template<typename T = uint8_t>
     EmuBuffer<T> get_buffer(uint32_t addr, uint32_t size)
+    {
+        auto* ptr = get_buffer_checked(addr, sizeof(T) * size);
+        return EmuBuffer<T>{reinterpret_cast<T*>(ptr), addr, size};
+    }
+
+    template<typename T = uint8_t const>
+    EmuBuffer<T> get_buffer(uint32_t addr, uint32_t size) const
     {
         auto* ptr = get_buffer_checked(addr, sizeof(T) * size);
         return EmuBuffer<T>{reinterpret_cast<T*>(ptr), addr, size};
@@ -189,5 +200,5 @@ protected:
     virtual void write_mem_u16(r3000_ptr_t addr, uint16_t value) = 0;
     virtual void write_mem_u32(r3000_ptr_t addr, uint32_t value) = 0;
 
-    virtual uint8_t* get_buffer_checked(r3000_ptr_t addr, uint32_t size) = 0;
+    virtual uint8_t* get_buffer_checked(r3000_ptr_t addr, uint32_t size) const = 0;
 };

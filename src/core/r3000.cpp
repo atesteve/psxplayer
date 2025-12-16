@@ -8,6 +8,7 @@
 #include <concepts>
 #include <bit>
 #include <utility>
+#include <algorithm>
 #include <stdckdint.h>
 
 namespace {
@@ -269,76 +270,81 @@ void R3000Core<c>::Private::run_r_inst(uint32_t function,
                                        uint32_t rd,
                                        uint32_t shift)
 {
-    // clang-format off
-    switch (function) {
-        case 0x00: return run_r_sll    (rs, rt, rd, shift);
-        case 0x01: return run_r_unk    (rs, rt, rd, shift);
-        case 0x02: return run_r_srl    (rs, rt, rd, shift);
-        case 0x03: return run_r_sra    (rs, rt, rd, shift);
-        case 0x04: return run_r_sllv   (rs, rt, rd, shift);
-        case 0x05: return run_r_unk    (rs, rt, rd, shift);
-        case 0x06: return run_r_srlv   (rs, rt, rd, shift);
-        case 0x07: return run_r_srav   (rs, rt, rd, shift);
-        case 0x08: return run_r_jr     (rs, rt, rd, shift);
-        case 0x09: return run_r_jalr   (rs, rt, rd, shift);
-        case 0x0a: return run_r_unk    (rs, rt, rd, shift);
-        case 0x0b: return run_r_unk    (rs, rt, rd, shift);
-        case 0x0c: return run_r_syscall(rs, rt, rd, shift);
-        case 0x0d: return run_r_break  (rs, rt, rd, shift);
-        case 0x0e: return run_r_unk    (rs, rt, rd, shift);
-        case 0x0f: return run_r_unk    (rs, rt, rd, shift);
-        case 0x10: return run_r_mfhi   (rs, rt, rd, shift);
-        case 0x11: return run_r_mthi   (rs, rt, rd, shift);
-        case 0x12: return run_r_mflo   (rs, rt, rd, shift);
-        case 0x13: return run_r_mtlo   (rs, rt, rd, shift);
-        case 0x14: return run_r_unk    (rs, rt, rd, shift);
-        case 0x15: return run_r_unk    (rs, rt, rd, shift);
-        case 0x16: return run_r_unk    (rs, rt, rd, shift);
-        case 0x17: return run_r_unk    (rs, rt, rd, shift);
-        case 0x18: return run_r_mult   (rs, rt, rd, shift);
-        case 0x19: return run_r_multu  (rs, rt, rd, shift);
-        case 0x1a: return run_r_div    (rs, rt, rd, shift);
-        case 0x1b: return run_r_divu   (rs, rt, rd, shift);
-        case 0x1c: return run_r_unk    (rs, rt, rd, shift);
-        case 0x1d: return run_r_unk    (rs, rt, rd, shift);
-        case 0x1e: return run_r_unk    (rs, rt, rd, shift);
-        case 0x1f: return run_r_unk    (rs, rt, rd, shift);
-        case 0x20: return run_r_add    (rs, rt, rd, shift);
-        case 0x21: return run_r_addu   (rs, rt, rd, shift);
-        case 0x22: return run_r_sub    (rs, rt, rd, shift);
-        case 0x23: return run_r_subu   (rs, rt, rd, shift);
-        case 0x24: return run_r_and    (rs, rt, rd, shift);
-        case 0x25: return run_r_or     (rs, rt, rd, shift);
-        case 0x26: return run_r_xor    (rs, rt, rd, shift);
-        case 0x27: return run_r_nor    (rs, rt, rd, shift);
-        case 0x28: return run_r_unk    (rs, rt, rd, shift);
-        case 0x29: return run_r_unk    (rs, rt, rd, shift);
-        case 0x2a: return run_r_slt    (rs, rt, rd, shift);
-        case 0x2b: return run_r_sltu   (rs, rt, rd, shift);
-        case 0x2c: return run_r_unk    (rs, rt, rd, shift);
-        case 0x2d: return run_r_unk    (rs, rt, rd, shift);
-        case 0x2e: return run_r_unk    (rs, rt, rd, shift);
-        case 0x2f: return run_r_unk    (rs, rt, rd, shift);
-        case 0x30: return run_r_unk    (rs, rt, rd, shift);
-        case 0x31: return run_r_unk    (rs, rt, rd, shift);
-        case 0x32: return run_r_unk    (rs, rt, rd, shift);
-        case 0x33: return run_r_unk    (rs, rt, rd, shift);
-        case 0x34: return run_r_unk    (rs, rt, rd, shift);
-        case 0x35: return run_r_unk    (rs, rt, rd, shift);
-        case 0x36: return run_r_unk    (rs, rt, rd, shift);
-        case 0x37: return run_r_unk    (rs, rt, rd, shift);
-        case 0x38: return run_r_unk    (rs, rt, rd, shift);
-        case 0x39: return run_r_unk    (rs, rt, rd, shift);
-        case 0x3a: return run_r_unk    (rs, rt, rd, shift);
-        case 0x3b: return run_r_unk    (rs, rt, rd, shift);
-        case 0x3c: return run_r_unk    (rs, rt, rd, shift);
-        case 0x3d: return run_r_unk    (rs, rt, rd, shift);
-        case 0x3e: return run_r_unk    (rs, rt, rd, shift);
-        case 0x3f: return run_r_unk    (rs, rt, rd, shift);
-        // `function` is 6 bit wide, so it's impossible to receive anything higher than 0x3f (63).
-        default: return std::unreachable();
+    try {
+        // clang-format off
+        switch (function) {
+            case 0x00: return run_r_sll    (rs, rt, rd, shift);
+            case 0x01: return run_r_unk    (rs, rt, rd, shift);
+            case 0x02: return run_r_srl    (rs, rt, rd, shift);
+            case 0x03: return run_r_sra    (rs, rt, rd, shift);
+            case 0x04: return run_r_sllv   (rs, rt, rd, shift);
+            case 0x05: return run_r_unk    (rs, rt, rd, shift);
+            case 0x06: return run_r_srlv   (rs, rt, rd, shift);
+            case 0x07: return run_r_srav   (rs, rt, rd, shift);
+            case 0x08: return run_r_jr     (rs, rt, rd, shift);
+            case 0x09: return run_r_jalr   (rs, rt, rd, shift);
+            case 0x0a: return run_r_unk    (rs, rt, rd, shift);
+            case 0x0b: return run_r_unk    (rs, rt, rd, shift);
+            case 0x0c: return run_r_syscall(rs, rt, rd, shift);
+            case 0x0d: return run_r_break  (rs, rt, rd, shift);
+            case 0x0e: return run_r_unk    (rs, rt, rd, shift);
+            case 0x0f: return run_r_unk    (rs, rt, rd, shift);
+            case 0x10: return run_r_mfhi   (rs, rt, rd, shift);
+            case 0x11: return run_r_mthi   (rs, rt, rd, shift);
+            case 0x12: return run_r_mflo   (rs, rt, rd, shift);
+            case 0x13: return run_r_mtlo   (rs, rt, rd, shift);
+            case 0x14: return run_r_unk    (rs, rt, rd, shift);
+            case 0x15: return run_r_unk    (rs, rt, rd, shift);
+            case 0x16: return run_r_unk    (rs, rt, rd, shift);
+            case 0x17: return run_r_unk    (rs, rt, rd, shift);
+            case 0x18: return run_r_mult   (rs, rt, rd, shift);
+            case 0x19: return run_r_multu  (rs, rt, rd, shift);
+            case 0x1a: return run_r_div    (rs, rt, rd, shift);
+            case 0x1b: return run_r_divu   (rs, rt, rd, shift);
+            case 0x1c: return run_r_unk    (rs, rt, rd, shift);
+            case 0x1d: return run_r_unk    (rs, rt, rd, shift);
+            case 0x1e: return run_r_unk    (rs, rt, rd, shift);
+            case 0x1f: return run_r_unk    (rs, rt, rd, shift);
+            case 0x20: return run_r_add    (rs, rt, rd, shift);
+            case 0x21: return run_r_addu   (rs, rt, rd, shift);
+            case 0x22: return run_r_sub    (rs, rt, rd, shift);
+            case 0x23: return run_r_subu   (rs, rt, rd, shift);
+            case 0x24: return run_r_and    (rs, rt, rd, shift);
+            case 0x25: return run_r_or     (rs, rt, rd, shift);
+            case 0x26: return run_r_xor    (rs, rt, rd, shift);
+            case 0x27: return run_r_nor    (rs, rt, rd, shift);
+            case 0x28: return run_r_unk    (rs, rt, rd, shift);
+            case 0x29: return run_r_unk    (rs, rt, rd, shift);
+            case 0x2a: return run_r_slt    (rs, rt, rd, shift);
+            case 0x2b: return run_r_sltu   (rs, rt, rd, shift);
+            case 0x2c: return run_r_unk    (rs, rt, rd, shift);
+            case 0x2d: return run_r_unk    (rs, rt, rd, shift);
+            case 0x2e: return run_r_unk    (rs, rt, rd, shift);
+            case 0x2f: return run_r_unk    (rs, rt, rd, shift);
+            case 0x30: return run_r_unk    (rs, rt, rd, shift);
+            case 0x31: return run_r_unk    (rs, rt, rd, shift);
+            case 0x32: return run_r_unk    (rs, rt, rd, shift);
+            case 0x33: return run_r_unk    (rs, rt, rd, shift);
+            case 0x34: return run_r_unk    (rs, rt, rd, shift);
+            case 0x35: return run_r_unk    (rs, rt, rd, shift);
+            case 0x36: return run_r_unk    (rs, rt, rd, shift);
+            case 0x37: return run_r_unk    (rs, rt, rd, shift);
+            case 0x38: return run_r_unk    (rs, rt, rd, shift);
+            case 0x39: return run_r_unk    (rs, rt, rd, shift);
+            case 0x3a: return run_r_unk    (rs, rt, rd, shift);
+            case 0x3b: return run_r_unk    (rs, rt, rd, shift);
+            case 0x3c: return run_r_unk    (rs, rt, rd, shift);
+            case 0x3d: return run_r_unk    (rs, rt, rd, shift);
+            case 0x3e: return run_r_unk    (rs, rt, rd, shift);
+            case 0x3f: return run_r_unk    (rs, rt, rd, shift);
+            // `function` is 6 bit wide, so it's impossible to receive anything higher than 0x3f (63).
+            default: return std::unreachable();
+        }
+        // clang-format on
+    } catch (InstructionException& ex) {
+        ex.func_code = function;
+        throw;
     }
-    // clang-format on
 }
 
 template<R3000CoreConfig c>
@@ -348,7 +354,8 @@ void R3000Core<c>::Private::run_ij_inst(uint32_t opcode,
                                         uint32_t imm,
                                         uint32_t target)
 {
-    // clang-format off
+    try {
+        // clang-format off
     switch (opcode) {
         case 0x00: return run_ij_unk  (rs, rt, imm, target);
         case 0x01: return run_ij_unk  (rs, rt, imm, target);
@@ -417,7 +424,11 @@ void R3000Core<c>::Private::run_ij_inst(uint32_t opcode,
         // `opcode` is 6 bit wide, so it's impossible to receive anything higher than 0x3f (63).
         default: return std::unreachable();
     };
-    // clang-format on
+        // clang-format on
+    } catch (InstructionException& e) {
+        e.opcode = opcode;
+        throw;
+    }
 }
 
 template<R3000CoreConfig c>
@@ -631,8 +642,10 @@ void R3000Core<c>::Private::run_r_sltu(uint32_t rs, uint32_t rt, uint32_t rd, ui
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_r_unk(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t shift)
-{}
+void R3000Core<c>::Private::run_r_unk(uint32_t, uint32_t, uint32_t, uint32_t)
+{
+    throw InstructionException{};
+}
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_j(uint32_t, uint32_t, uint32_t, uint32_t target)
@@ -863,8 +876,10 @@ void R3000Core<c>::Private::run_ij_bios(uint32_t, uint32_t, uint32_t imm, uint32
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_ij_unk(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target)
-{}
+void R3000Core<c>::Private::run_ij_unk(uint32_t, uint32_t, uint32_t, uint32_t)
+{
+    throw InstructionException{};
+}
 
 template<R3000CoreConfig c>
 R3000Core<c>::R3000Core()
@@ -878,12 +893,6 @@ template<R3000CoreConfig c>
 void R3000Core<c>::run()
 {
     p->run_instruction();
-}
-
-template<R3000CoreConfig c>
-uint8_t* R3000Core<c>::get_mem_ptr()
-{
-    return p->bus.get_mem_ptr();
 }
 
 template<R3000CoreConfig c>
@@ -941,13 +950,27 @@ Core const& R3000Core<c>::core() const
     return p->core;
 }
 
-uint8_t* get_buffer_checked(r3000_ptr_t addr, uint32_t size)
+template<R3000CoreConfig c>
+uint8_t* R3000Core<c>::get_buffer_checked(r3000_ptr_t addr, uint32_t size) const
 {
     // This function only allows getting a buffer for RAM, at either of its mirror locations. For
     // this reason, the first check is that the size is no higher than 2MB.
-    if (size > 0x200000) {
+    if (size > 0x200000u) {
         throw AddressException{addr + size};
     }
+
+    // Now, check that the base address is within any of the RAM regions.
+    if (auto const addr_prefix = addr & 0xffe00000u;
+        !std::ranges::contains(std::array{0x0u, 0x80000000u, 0xa0000000u}, addr_prefix)) {
+        throw AddressException{addr};
+    }
+
+    // Lastly, check that addr + size lies within the limits.
+    if (auto const addr_suffix = addr & 0x1fffffu; addr_suffix + size > 0x200000u) {
+        throw AddressException{addr + size};
+    }
+
+    return p->bus.get_mem_ptr() + addr;
 }
 
 // Explicit instantiation

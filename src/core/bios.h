@@ -8,6 +8,8 @@ class Bios {
 public:
     void run_bios_fn(R3000& emu, uint32_t group);
 
+    void InitHeap(R3000& emu, uint32_t base, uint32_t size);
+
     struct empty_block {
         struct empty_block_* next;
         size_t size;

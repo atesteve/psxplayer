@@ -21,14 +21,13 @@ public:
     void write_mem_u16(r3000_ptr_t addr, uint16_t value) override;
     void write_mem_u32(r3000_ptr_t addr, uint32_t value) override;
 
-    uint8_t* get_mem_ptr() override;
     void set_regs(uint32_t sp, uint32_t pc) override;
     void run() override;
 
     Core& core() override;
     Core const& core() const override;
 
-    uint8_t* get_buffer_checked(r3000_ptr_t addr, uint32_t size) override;
+    uint8_t* get_buffer_checked(r3000_ptr_t addr, uint32_t size) const override;
 
 private:
     struct Private;
