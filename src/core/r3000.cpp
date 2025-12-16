@@ -86,7 +86,9 @@ struct R3000Core<c>::Private : public MMAPR3000Bus::Callback {
     void set_branch_target(r3000_ptr_t target);
 
     void run_r_inst(uint32_t function, uint32_t rs, uint32_t rt, uint32_t rd, uint32_t shift);
+    void run_bcond_inst(uint32_t function, uint32_t rs, uint32_t offset);
     void run_ij_inst(uint32_t opcode, uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
+    void run_branch(uint32_t offset);
 
     void run_r_sll(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t shift);
     void run_r_srl(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t shift);
@@ -118,9 +120,11 @@ struct R3000Core<c>::Private : public MMAPR3000Bus::Callback {
     void run_r_sltu(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t shift);
     void run_r_unk(uint32_t rs, uint32_t rt, uint32_t rd, uint32_t shift);
 
+    void run_bcond_bltz(uint32_t rs, uint32_t offset, bool link);
+    void run_bcond_bgez(uint32_t rs, uint32_t offset, bool link);
+
     void run_ij_j(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_jal(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
-    void run_ij_branch(uint32_t offset);
     void run_ij_beq(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_bne(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_ij_blez(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
@@ -250,6 +254,9 @@ void R3000Core<c>::Private::run_instruction()
     if (opcode == 0) {
         auto const [function, shift, rd, rt, rs, _] = std::bit_cast<reg_inst_t>(raw_inst);
         run_r_inst(function, rs, rt, rd, shift);
+    } else if (opcode == 1) {
+        auto const [offset, function, rs, _] = std::bit_cast<imm_inst_t>(raw_inst);
+        run_bcond_inst(function, rs, offset);
     } else {
         auto const [imm, rt, rs, _] = std::bit_cast<imm_inst_t>(raw_inst);
         auto const [target, _] = std::bit_cast<jump_inst_t>(raw_inst);
@@ -348,6 +355,19 @@ void R3000Core<c>::Private::run_r_inst(uint32_t function,
 }
 
 template<R3000CoreConfig c>
+void R3000Core<c>::Private::run_bcond_inst(uint32_t function, uint32_t rs, uint32_t offset)
+{
+    bool const link = function & 0x10;
+    // clang-format off
+    switch (function & 0xf) {
+        case 0: return run_bcond_bltz(rs, offset, link);
+        case 1: return run_bcond_bgez(rs, offset, link);
+        default: throw InstructionException{1, uint16_t(function)};
+    }
+    // clang-format on
+}
+
+template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_inst(uint32_t opcode,
                                         uint32_t rs,
                                         uint32_t rt,
@@ -430,6 +450,15 @@ void R3000Core<c>::Private::run_ij_inst(uint32_t opcode,
         throw;
     }
 }
+
+template<R3000CoreConfig c>
+void R3000Core<c>::Private::run_branch(uint32_t offset)
+{
+    int32_t signed_offset = sign_extend_16(offset);
+    signed_offset <<= 2;
+    set_branch_target(core.pc + sizeof(uint32_t) + signed_offset);
+}
+
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_sll(uint32_t, uint32_t rt, uint32_t rd, uint32_t shift)
@@ -654,6 +683,30 @@ void R3000Core<c>::Private::run_r_unk(uint32_t, uint32_t, uint32_t, uint32_t)
 }
 
 template<R3000CoreConfig c>
+void R3000Core<c>::Private::run_bcond_bltz(uint32_t rs, uint32_t offset, bool link)
+{
+    int32_t const signed_rs = core.gpr[rs];
+    if (signed_rs < 0) {
+        run_branch(offset);
+    }
+    if (link) {
+        core.gpr[GPRName::ra] = core.pc + sizeof(uint32_t) * 2;
+    }
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::Private::run_bcond_bgez(uint32_t rs, uint32_t offset, bool link)
+{
+    int32_t const signed_rs = core.gpr[rs];
+    if (signed_rs >= 0) {
+        run_branch(offset);
+    }
+    if (link) {
+        core.gpr[GPRName::ra] = core.pc + sizeof(uint32_t) * 2;
+    }
+}
+
+template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_j(uint32_t, uint32_t, uint32_t, uint32_t target)
 {
     auto const delay_slot_addr = core.pc + sizeof(uint32_t);
@@ -671,18 +724,10 @@ void R3000Core<c>::Private::run_ij_jal(uint32_t, uint32_t, uint32_t, uint32_t ta
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_ij_branch(uint32_t offset)
-{
-    int32_t signed_offset = sign_extend_16(offset);
-    signed_offset <<= 2;
-    set_branch_target(core.pc + sizeof(uint32_t) + signed_offset);
-}
-
-template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_beq(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
     if (core.gpr[rs] == core.gpr[rt]) {
-        run_ij_branch(imm);
+        run_branch(imm);
     }
 }
 
@@ -690,7 +735,7 @@ template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_bne(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
     if (core.gpr[rs] != core.gpr[rt]) {
-        run_ij_branch(imm);
+        run_branch(imm);
     }
 }
 
@@ -699,7 +744,7 @@ void R3000Core<c>::Private::run_ij_blez(uint32_t rs, uint32_t, uint32_t imm, uin
 {
     int32_t const signed_rs = core.gpr[rs];
     if (signed_rs <= 0) {
-        run_ij_branch(imm);
+        run_branch(imm);
     }
 }
 
@@ -708,7 +753,7 @@ void R3000Core<c>::Private::run_ij_bgtz(uint32_t rs, uint32_t, uint32_t imm, uin
 {
     int32_t const signed_rs = core.gpr[rs];
     if (signed_rs > 0) {
-        run_ij_branch(imm);
+        run_branch(imm);
     }
 }
 
