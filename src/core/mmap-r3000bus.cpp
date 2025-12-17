@@ -234,7 +234,7 @@ void MMAPR3000Bus::Private::sigsegv_hanlder(ucontext_t* ucontext)
 
     try {
         if (write_access) {
-            auto const value = ucontext->uc_mcontext.gregs[REG_RDX];
+            auto const value = ucontext->uc_mcontext.gregs[REG_RSI];
             if (rip == (uintptr_t)write_mem_impl<uint8_t>) {
                 sigsegv_hanlder(addr, AccessType::WRITE, AccessWidth::A8, (uint8_t)value);
             } else if (rip == (uintptr_t)write_mem_impl<uint16_t>) {

@@ -24,15 +24,15 @@ _ZN12MMAPR3000Bus13read_mem_implIjEET_Pv:
 
 // void MMAPR3000Bus::write_mem_impl<unsigned char>(void*, unsigned char)
 _ZN12MMAPR3000Bus14write_mem_implIhEEvPvT_:
-    mov    %dl, (%rdi)
+    mov    %sil, (%rdi)
     ret
 
 // void MMAPR3000Bus::write_mem_impl<unsigned short>(void*, unsigned short)
 _ZN12MMAPR3000Bus14write_mem_implItEEvPvT_:
-    mov    %dx, (%rdi)
+    mov    %si, (%rdi)
     ret
 
 // void MMAPR3000Bus::write_mem_impl<unsigned int>(void*, unsigned int)
 _ZN12MMAPR3000Bus14write_mem_implIjEEvPvT_:
-    mov    %edx, (%rdi)
+    mov    %esi, (%rdi)
     ret
