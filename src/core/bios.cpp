@@ -14,9 +14,8 @@ struct bcall_impl;
 template<auto Fn, typename Result, typename... Args>
 struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
 
-    static uint32_t get_raw_arg(R3000 const& emu, size_t index)
+    static uint32_t get_raw_arg(R3000 const& emu, Core const& core, size_t index)
     {
-        auto const& core = emu.core();
         if (index <= 3) { // Registers $a0 - $a3
             return core.gpr[index + 4];
         }
@@ -25,15 +24,15 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
     }
 
     template<typename Arg, size_t Index>
-    static decltype(auto) get_argument(R3000& emu)
+    static decltype(auto) get_argument(R3000& emu, Core const& core)
     {
         if constexpr (std::is_same_v<Arg, R3000&>) {
             return emu;
         } else if constexpr (requires(Arg a) { a.size_bytes(); }) {
-            uint32_t const raw_arg = get_raw_arg(emu, Index);
+            uint32_t const raw_arg = get_raw_arg(emu, core, Index);
             return emu.get_buffer<typename Arg::type>(raw_arg, 1);
         } else {
-            return get_raw_arg(emu, Index);
+            return get_raw_arg(emu, core, Index);
         }
     }
 
@@ -42,12 +41,23 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
     {
         using FirstArg = std::tuple_element_t<0, std::tuple<Args...>>;
         constexpr bool sub_one = std::is_same_v<FirstArg, R3000&>;
+        auto const& core = emu.core();
 
         if constexpr (std::is_void_v<Result>) {
-            std::invoke(Fn, bios, get_argument<Args, Ints - sub_one>(emu)...);
+            std::invoke(Fn, bios, get_argument<Args, Ints - sub_one>(emu, core)...);
             return std::nullopt;
         } else {
-            return std::invoke(Fn, bios, get_argument<Args, Ints - sub_one>(emu)...);
+            return std::invoke(Fn, bios, get_argument<Args, Ints - sub_one>(emu, core)...);
+        }
+    }
+
+    static std::optional<uint32_t> run(Bios& bios, R3000&, std::index_sequence<>)
+    {
+        if constexpr (std::is_void_v<Result>) {
+            std::invoke(Fn, bios);
+            return std::nullopt;
+        } else {
+            return std::invoke(Fn, bios);
         }
     }
 
@@ -66,6 +76,8 @@ std::optional<uint32_t> bcall(Bios& bios, R3000& emu)
 std::unordered_map<uint32_t, std::optional<uint32_t> (*)(Bios& bios, R3000& emu)> const bios_fns = {
     {0xa013, bcall<&Bios::setjmp>},
     {0xa039, bcall<&Bios::InitHeap>},
+    {0xb019, bcall<&Bios::HookEntryInt>},
+    {0xb05b, bcall<&Bios::unimplemented>},
 };
 
 } // namespace

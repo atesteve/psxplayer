@@ -26,22 +26,13 @@ public:
     uint32_t setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf);
     void InitHeap(R3000& emu, uint32_t base, uint32_t size);
 
-    struct empty_block {
-        struct empty_block_* next;
-        size_t size;
+    void unimplemented() {}
+
+    void HookEntryInt(uint32_t entry_point);
+
+    struct State {
+        uint32_t int_entry_point{};
     };
 
-    struct allocated_block {
-        uintptr_t dummy;
-        size_t size;
-    };
-
-    static_assert(sizeof(Bios::empty_block) == (2 * sizeof(void*)),
-                  "empty_block is of the wrong size");
-    static_assert(sizeof(Bios::allocated_block) == (2 * sizeof(void*)),
-                  "allocated_block is of the wrong size");
-
-    empty_block* user_heap_head = nullptr;
-    empty_block* kern_heap_head = nullptr;
-    empty_block marker = {.next = nullptr, .size = 0};
+    State state;
 };
