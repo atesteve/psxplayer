@@ -24,11 +24,16 @@ public:
     void run_bios_fn(R3000& emu, uint32_t group);
 
     uint32_t setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf);
+
     void InitHeap(R3000& emu, uint32_t base, uint32_t size);
+
     void setIrqAutoAck(uint32_t irq, int value);
 
     void unimplemented() {}
 
+    uint32_t openEvent(uint32_t clazz, uint32_t spec, uint32_t mode, uint32_t handler);
+    int32_t waitEvent(uint32_t event);
+    int32_t enableEvent(uint32_t event);
     void HookEntryInt(uint32_t entry_point);
 
     struct State {
