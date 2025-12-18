@@ -923,6 +923,7 @@ void R3000Core<c>::Private::run_ij_bios(uint32_t, uint32_t, uint32_t imm, uint32
     HWAlignmentCheck::disable();
     bios.run_bios_fn(*parent, imm);
     HWAlignmentCheck::enable();
+    // Substract 4, we are about to add 4 again.
     core.pc = return_pc - sizeof(r3000_ptr_t);
 }
 

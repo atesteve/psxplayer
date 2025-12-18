@@ -57,6 +57,7 @@ set(TARGET_SRC
   src/core/bios-alloc.cpp
   src/core/bios-a0.cpp
   src/core/bios-b0.cpp
+  src/core/bios-c0.cpp
   src/core/bios.h
   src/iop/iop.cpp
   src/iop/iop.h

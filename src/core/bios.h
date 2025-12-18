@@ -25,6 +25,7 @@ public:
 
     uint32_t setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf);
     void InitHeap(R3000& emu, uint32_t base, uint32_t size);
+    void setIrqAutoAck(uint32_t irq, int value);
 
     void unimplemented() {}
 
@@ -32,6 +33,7 @@ public:
 
     struct State {
         uint32_t int_entry_point{};
+        int irq_auto_ack[11]{};
     };
 
     State state;
