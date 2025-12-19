@@ -1,15 +1,14 @@
 #pragma once
 
+#include "r3000.h"
+
 #include <memory>
 #include <concepts>
 #include <cstdint>
 
 class MMAPR3000Bus {
 public:
-    struct Callback {
-    };
-
-    explicit MMAPR3000Bus(Callback* callback);
+    explicit MMAPR3000Bus(R3000* emu);
     ~MMAPR3000Bus();
 
     template<std::integral Int>

@@ -1,5 +1,5 @@
 #include "mmap-r3000bus.h"
-#include "r3000.h"
+#include "register-dispatcher.h"
 
 #include <fmt/format.h>
 
@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string_view>
 #include <array>
+#include <algorithm>
 
 namespace {
 
@@ -19,14 +20,14 @@ namespace {
 constexpr uintptr_t MEMORY_SPACE_SIZE = 0x100000000ul;
 
 constexpr uint32_t PSX_RAM_SIZE = 2 * 1024 * 1024;
-constexpr auto PSX_RAM_ADDRS = std::to_array<uint32_t>({0x0, 0x80000000, 0xa0000000});
+constexpr auto PSX_RAM_ADDRS = std::to_array<r3000_ptr_t>({0x0, 0x80000000, 0xa0000000});
 
 // It's 1024 bytes, not 4096, but we are limited by the page size.
 constexpr uint32_t PSX_SPAD_SIZE = 4096;
-constexpr auto PSX_SPAD_ADDRS = std::to_array<uint32_t>({0x1f800000, 0x9f800000});
+constexpr auto PSX_SPAD_ADDRS = std::to_array<r3000_ptr_t>({0x1f800000, 0x9f800000});
 
-constexpr uint32_t PSX_IO_SIZE = 4096;
-constexpr auto PSX_IO_ADDRS = std::to_array<uint32_t>({0x1f801000, 0x9f801000, 0xbf801000});
+constexpr uint32_t PSX_IO_SIZE = 8192;
+constexpr auto PSX_IO_ADDRS = std::to_array<r3000_ptr_t>({0x1f801000, 0x9f801000, 0xbf801000});
 
 void throw_errno(std::string_view msg)
 {
@@ -34,7 +35,12 @@ void throw_errno(std::string_view msg)
     throw std::runtime_error{fmt::format("{}: {}", msg, errordesc)};
 }
 
-void map_memory(std::string name, int& fd, uint8_t* mem_space, uint32_t size, auto const& offsets)
+void map_memory(std::string name,
+                int& fd,
+                uint8_t* mem_space,
+                uint32_t size,
+                auto const& offsets,
+                int flags = PROT_READ | PROT_WRITE)
 {
     fd = memfd_create(name.c_str(), 0);
     if (fd == -1) {
@@ -47,7 +53,7 @@ void map_memory(std::string name, int& fd, uint8_t* mem_space, uint32_t size, au
 
     for (auto const offset : offsets) {
         auto* addr = mem_space + offset;
-        if (mmap(addr, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == nullptr) {
+        if (mmap(addr, size, flags, MAP_SHARED | MAP_FIXED, fd, 0) == nullptr) {
             throw_errno(fmt::format("Failed to map {} to address {:#010x}", name, offset));
         }
     }
@@ -143,8 +149,8 @@ struct MMAPR3000Bus::Private {
     static void static_sigbus_handler(int, siginfo_t*, void*);
     static inline MMAPR3000Bus::Private* signal_ptr;
 
-    explicit Private(MMAPR3000Bus::Callback* callback)
-        : callback{callback}
+    explicit Private(R3000* emu)
+        : emu{emu}
     {}
 
     ~Private();
@@ -161,7 +167,8 @@ struct MMAPR3000Bus::Private {
     int ram_memfd = -1;
     int spad_memfd = -1;
     int io_memfd = -1;
-    MMAPR3000Bus::Callback* callback;
+    R3000* emu;
+    RegisterDispatcher dispatcher;
 };
 
 void MMAPR3000Bus::Private::init()
@@ -181,7 +188,9 @@ void MMAPR3000Bus::Private::init()
 
     map_memory("psx-ram", ram_memfd, mem_space, PSX_RAM_SIZE, PSX_RAM_ADDRS);
     map_memory("psx-scratchpad", spad_memfd, mem_space, PSX_SPAD_SIZE, PSX_SPAD_ADDRS);
-    map_memory("psx-io", io_memfd, mem_space, PSX_IO_SIZE, PSX_IO_ADDRS);
+    map_memory("psx-io", io_memfd, mem_space, PSX_IO_SIZE, PSX_IO_ADDRS, PROT_NONE);
+
+    dispatcher.set_mem_space(mem_space);
 }
 
 MMAPR3000Bus::Private::~Private()
@@ -207,13 +216,59 @@ void MMAPR3000Bus::Private::static_sigbus_handler(int, siginfo_t*, void* ucp)
     signal_ptr->sigbus_handler((ucontext_t*)ucp);
 }
 
-uint32_t
-    MMAPR3000Bus::Private::sigsegv_handler(void* ptr, AccessType type, AccessWidth width, uint32_t)
+uint32_t MMAPR3000Bus::Private::sigsegv_handler(void* ptr,
+                                                AccessType type,
+                                                AccessWidth width,
+                                                uint32_t value)
 {
     disable_alignment_check();
+    r3000_ptr_t const cpu_addr = (uint8_t*)ptr - mem_space;
+
+    if (std::ranges::any_of(PSX_IO_ADDRS, [&](r3000_ptr_t hw_base_addr) {
+            return cpu_addr >= hw_base_addr && cpu_addr < hw_base_addr + PSX_IO_SIZE;
+        })) {
+        // This is an address pointing to the lower mirror.
+        auto const reg_addr = 0x1f800000u | (cpu_addr & (PSX_IO_SIZE - 1));
+
+        // Open only the lower mirror. The handlers will use only that mirror.
+        if (mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_READ | PROT_WRITE) == -1) {
+            throw_errno("mprotect");
+        }
+        struct Reprotect {
+            uint8_t* mem_space;
+            ~Reprotect()
+            {
+                // Reprotect before returning.
+                mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_NONE);
+            }
+        } reprotect{mem_space};
+
+        if (type == AccessType::WRITE) {
+            switch (width) {
+            case AccessWidth::A32:
+                dispatcher.write_reg_32(*emu, reg_addr, value, *(uint32_t*)(mem_space + reg_addr));
+                return 0;
+            case AccessWidth::A16:
+                dispatcher.write_reg_16(*emu, reg_addr, value, *(uint16_t*)(mem_space + reg_addr));
+                return 0;
+            case AccessWidth::A8:
+                dispatcher.write_reg_8(*emu, reg_addr, value, mem_space[reg_addr]);
+                return 0;
+            }
+        } else {
+            switch (width) {
+            case AccessWidth::A32:
+                return dispatcher.read_reg_32(*emu, reg_addr, *(uint32_t*)(mem_space + reg_addr));
+            case AccessWidth::A16:
+                return dispatcher.read_reg_16(*emu, reg_addr, *(uint16_t*)(mem_space + reg_addr));
+            case AccessWidth::A8:
+                return dispatcher.read_reg_8(*emu, reg_addr, mem_space[reg_addr]);
+            }
+        }
+    }
+
     auto const addr = (uint8_t*)ptr - mem_space;
     throw AddressException{(uint32_t)addr, type, width};
-    return 0;
 }
 
 void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
@@ -274,8 +329,8 @@ void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
 void MMAPR3000Bus::Private::sigbus_handler(ucontext_t* ucontext)
 {}
 
-MMAPR3000Bus::MMAPR3000Bus(Callback* callback)
-    : _p{std::make_unique<Private>(callback)}
+MMAPR3000Bus::MMAPR3000Bus(R3000* emu)
+    : _p{std::make_unique<Private>(emu)}
 {
     _p->init();
     _mem_space = _p->mem_space;

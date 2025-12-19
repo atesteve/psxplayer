@@ -46,9 +46,9 @@ uint32_t sign_extend_16(uint32_t x)
 } // namespace
 
 template<R3000CoreConfig c>
-struct R3000Core<c>::Private : public MMAPR3000Bus::Callback {
+struct R3000Core<c>::Private {
     explicit Private(R3000Core<c>* parent)
-        : bus{this}
+        : bus{parent}
         , parent{parent}
     {
         load_slot.enabled = 0;
@@ -517,7 +517,7 @@ template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_syscall(uint32_t, uint32_t, uint32_t, uint32_t)
 {
     // Not supported yet.
-    throw InstructionException{};
+    //throw InstructionException{};
 }
 
 template<R3000CoreConfig c>

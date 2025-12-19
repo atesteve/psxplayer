@@ -59,6 +59,8 @@ set(TARGET_SRC
   src/core/bios-b0.cpp
   src/core/bios-c0.cpp
   src/core/bios.h
+  src/core/register-dispatcher.cpp
+  src/core/register-dispatcher.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
