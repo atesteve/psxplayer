@@ -139,8 +139,8 @@ enum x86_pf_error_code {
 } // namespace
 
 struct MMAPR3000Bus::Private {
-    static void static_sigsegv_hanlder(int, siginfo_t*, void*);
-    static void static_sigbus_hanlder(int, siginfo_t*, void*);
+    static void static_sigsegv_handler(int, siginfo_t*, void*);
+    static void static_sigbus_handler(int, siginfo_t*, void*);
     static inline MMAPR3000Bus::Private* signal_ptr;
 
     explicit Private(MMAPR3000Bus::Callback* callback)
@@ -152,10 +152,10 @@ struct MMAPR3000Bus::Private {
     // Use an initialization function instead of a constructor so that the destructor always runs.
     void init();
 
-    uint32_t sigsegv_hanlder(void* ptr, AccessType type, AccessWidth width, uint32_t value = 0);
+    uint32_t sigsegv_handler(void* ptr, AccessType type, AccessWidth width, uint32_t value = 0);
 
-    void sigsegv_hanlder(ucontext_t* ucp);
-    void sigbus_hanlder(ucontext_t* ucp);
+    void sigsegv_handler(ucontext_t* ucp);
+    void sigbus_handler(ucontext_t* ucp);
 
     uint8_t* mem_space = nullptr;
     int ram_memfd = -1;
@@ -171,8 +171,8 @@ void MMAPR3000Bus::Private::init()
     }
 
     signal_ptr = this;
-    install_handler(SIGSEGV, "SIGSEGV", static_sigsegv_hanlder);
-    install_handler(SIGBUS, "SIGBUS", static_sigbus_hanlder);
+    install_handler(SIGSEGV, "SIGSEGV", static_sigsegv_handler);
+    install_handler(SIGBUS, "SIGBUS", static_sigbus_handler);
 
     mem_space = (uint8_t*)mmap(nullptr, MEMORY_SPACE_SIZE, 0, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (!mem_space) {
@@ -197,18 +197,18 @@ MMAPR3000Bus::Private::~Private()
     signal_ptr = nullptr;
 }
 
-void MMAPR3000Bus::Private::static_sigsegv_hanlder(int, siginfo_t*, void* ucp)
+void MMAPR3000Bus::Private::static_sigsegv_handler(int, siginfo_t*, void* ucp)
 {
-    signal_ptr->sigsegv_hanlder((ucontext_t*)ucp);
+    signal_ptr->sigsegv_handler((ucontext_t*)ucp);
 }
 
-void MMAPR3000Bus::Private::static_sigbus_hanlder(int, siginfo_t*, void* ucp)
+void MMAPR3000Bus::Private::static_sigbus_handler(int, siginfo_t*, void* ucp)
 {
-    signal_ptr->sigbus_hanlder((ucontext_t*)ucp);
+    signal_ptr->sigbus_handler((ucontext_t*)ucp);
 }
 
 uint32_t
-    MMAPR3000Bus::Private::sigsegv_hanlder(void* ptr, AccessType type, AccessWidth width, uint32_t)
+    MMAPR3000Bus::Private::sigsegv_handler(void* ptr, AccessType type, AccessWidth width, uint32_t)
 {
     disable_alignment_check();
     auto const addr = (uint8_t*)ptr - mem_space;
@@ -216,7 +216,7 @@ uint32_t
     return 0;
 }
 
-void MMAPR3000Bus::Private::sigsegv_hanlder(ucontext_t* ucontext)
+void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
 {
     auto const reg_err = ucontext->uc_mcontext.gregs[REG_ERR];
     if ((reg_err & (X86_PF_USER | X86_PF_RSVD | X86_PF_INSTR | X86_PF_PK | X86_PF_SHSTK))
@@ -236,11 +236,11 @@ void MMAPR3000Bus::Private::sigsegv_hanlder(ucontext_t* ucontext)
         if (write_access) {
             auto const value = ucontext->uc_mcontext.gregs[REG_RSI];
             if (rip == (uintptr_t)write_mem_impl<uint8_t>) {
-                sigsegv_hanlder(addr, AccessType::WRITE, AccessWidth::A8, (uint8_t)value);
+                sigsegv_handler(addr, AccessType::WRITE, AccessWidth::A8, (uint8_t)value);
             } else if (rip == (uintptr_t)write_mem_impl<uint16_t>) {
-                sigsegv_hanlder(addr, AccessType::WRITE, AccessWidth::A16, (uint16_t)value);
+                sigsegv_handler(addr, AccessType::WRITE, AccessWidth::A16, (uint16_t)value);
             } else if (rip == (uintptr_t)write_mem_impl<uint32_t>) {
-                sigsegv_hanlder(addr, AccessType::WRITE, AccessWidth::A32, (uint32_t)value);
+                sigsegv_handler(addr, AccessType::WRITE, AccessWidth::A32, (uint32_t)value);
             } else {
                 // Fault happened at an unknown instruction. Restore the default handler and return.
                 uninstall_handler(SIGSEGV);
@@ -249,11 +249,11 @@ void MMAPR3000Bus::Private::sigsegv_hanlder(ucontext_t* ucontext)
         } else {
             auto& return_value = ucontext->uc_mcontext.gregs[REG_RAX];
             if (rip == (uintptr_t)read_mem_impl<uint8_t>) {
-                return_value = sigsegv_hanlder(addr, AccessType::READ, AccessWidth::A8);
+                return_value = sigsegv_handler(addr, AccessType::READ, AccessWidth::A8);
             } else if (rip == (uintptr_t)read_mem_impl<uint16_t>) {
-                return_value = sigsegv_hanlder(addr, AccessType::READ, AccessWidth::A16);
+                return_value = sigsegv_handler(addr, AccessType::READ, AccessWidth::A16);
             } else if (rip == (uintptr_t)read_mem_impl<uint32_t>) {
-                return_value = sigsegv_hanlder(addr, AccessType::READ, AccessWidth::A32);
+                return_value = sigsegv_handler(addr, AccessType::READ, AccessWidth::A32);
             } else {
                 // Fault happened at an unknown instruction. Restore the default handler and return.
                 uninstall_handler(SIGSEGV);
@@ -271,7 +271,7 @@ void MMAPR3000Bus::Private::sigsegv_hanlder(ucontext_t* ucontext)
     }
 }
 
-void MMAPR3000Bus::Private::sigbus_hanlder(ucontext_t* ucontext)
+void MMAPR3000Bus::Private::sigbus_handler(ucontext_t* ucontext)
 {}
 
 MMAPR3000Bus::MMAPR3000Bus(Callback* callback)
