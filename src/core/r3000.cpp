@@ -1,6 +1,7 @@
 #include "r3000-impl.h"
 #include "mmap-r3000bus.h"
 #include "bios.h"
+#include "util/util.h"
 
 #include <fmt/format.h>
 
@@ -12,6 +13,8 @@
 #include <stdckdint.h>
 
 namespace {
+
+constexpr size_t CPU_FREQ = 33868800;
 
 struct reg_inst_t {
     uint32_t function : 6;
@@ -74,11 +77,6 @@ struct R3000Core<c>::Private {
                         : "memory");
             }
         }
-    };
-
-    struct [[nodiscard]] HWAlignmentCheckGuard {
-        explicit HWAlignmentCheckGuard() { HWAlignmentCheck::enable(); }
-        ~HWAlignmentCheckGuard() { HWAlignmentCheck::disable(); }
     };
 
     void run_instruction();
@@ -209,6 +207,17 @@ struct R3000Core<c>::Private {
         core.gpr[load_slot.rt] = load_slot.value;
     }
 
+    void branch_slot_tick()
+    {
+        if (branch_slot.count == 0) {
+            return;
+        }
+        branch_slot.count--;
+        if (branch_slot.count == 0) {
+            core.pc = branch_slot.target;
+        }
+    }
+
     void load(uint32_t rt, uint32_t value)
     {
         if (load_slot.enabled) {
@@ -222,6 +231,7 @@ struct R3000Core<c>::Private {
     branch_delay_slot branch_slot;
     MMAPR3000Bus bus;
     Bios bios;
+    size_t cycle_counter{};
     R3000Core<c>* parent;
 };
 
@@ -238,18 +248,20 @@ void R3000Core<c>::Private::set_branch_target(r3000_ptr_t target)
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_instruction()
 {
-    HWAlignmentCheckGuard align_check_guard{};
+    HWAlignmentCheck::enable();
+    ScopeGuard align_check_guard{[] { HWAlignmentCheck::disable(); }};
+    // After execution of the instruction, set R0 back to 0 in case it was written.
+    ScopeGuard reset_r0{[&] { core.gpr[GPRName::r0] = 0; }};
 
-    // Check load delay slot.
+    // Check load and branch delay slots.
     load_slot_tick();
-
-    // Check branch slot
-    if (branch_slot.count > 0 && --branch_slot.count == 0) {
-        core.pc = branch_slot.target;
-    }
+    branch_slot_tick();
 
     auto const raw_inst = read_mem<r3000_ptr_t>(core.pc);
     auto const opcode = raw_inst >> 26;
+
+    // Advance PC.
+    core.pc += sizeof(uint32_t);
 
     if (opcode == 0) {
         auto const [function, shift, rd, rt, rs, _] = std::bit_cast<reg_inst_t>(raw_inst);
@@ -262,12 +274,6 @@ void R3000Core<c>::Private::run_instruction()
         auto const [target, _] = std::bit_cast<jump_inst_t>(raw_inst);
         run_ij_inst(opcode, rs, rt, imm, target);
     }
-
-    // After execution of the instruction, set R0 back to 0 in case it was written.
-    core.gpr[GPRName::r0] = 0;
-
-    // Advance PC.
-    core.pc += sizeof(uint32_t);
 }
 
 template<R3000CoreConfig c>
@@ -456,7 +462,7 @@ void R3000Core<c>::Private::run_branch(uint32_t offset)
 {
     int32_t signed_offset = sign_extend_16(offset);
     signed_offset <<= 2;
-    set_branch_target(core.pc + sizeof(uint32_t) + signed_offset);
+    set_branch_target(core.pc + signed_offset);
 }
 
 
@@ -509,7 +515,7 @@ void R3000Core<c>::Private::run_r_jalr(uint32_t rs, uint32_t, uint32_t rd, uint3
 {
     // TODO: this instruction traps immediately when core.gpr[rs] is an invalid address, and not
     // after the delay slot is executed like other branch instructions.
-    core.gpr[rd] = core.pc + sizeof(uint32_t) * 2;
+    core.gpr[rd] = core.pc + sizeof(uint32_t);
     set_branch_target(core.gpr[rs]);
 }
 
@@ -517,7 +523,7 @@ template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_r_syscall(uint32_t, uint32_t, uint32_t, uint32_t)
 {
     // Not supported yet.
-    //throw InstructionException{};
+    // throw InstructionException{};
 }
 
 template<R3000CoreConfig c>
@@ -690,7 +696,7 @@ void R3000Core<c>::Private::run_bcond_bltz(uint32_t rs, uint32_t offset, bool li
         run_branch(offset);
     }
     if (link) {
-        core.gpr[GPRName::ra] = core.pc + sizeof(uint32_t) * 2;
+        core.gpr[GPRName::ra] = core.pc + sizeof(uint32_t);
     }
 }
 
@@ -702,24 +708,22 @@ void R3000Core<c>::Private::run_bcond_bgez(uint32_t rs, uint32_t offset, bool li
         run_branch(offset);
     }
     if (link) {
-        core.gpr[GPRName::ra] = core.pc + sizeof(uint32_t) * 2;
+        core.gpr[GPRName::ra] = core.pc + sizeof(uint32_t);
     }
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_j(uint32_t, uint32_t, uint32_t, uint32_t target)
 {
-    auto const delay_slot_addr = core.pc + sizeof(uint32_t);
-    auto const target_addr = (delay_slot_addr & 0xfc000000u) | (target << 2);
+    auto const target_addr = (core.pc & 0xfc000000u) | (target << 2);
     set_branch_target(target_addr);
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_jal(uint32_t, uint32_t, uint32_t, uint32_t target)
 {
-    core.gpr[GPRName::ra] = core.pc + sizeof(uint32_t) * 2;
-    auto const delay_slot_addr = core.pc + sizeof(uint32_t);
-    auto const target_addr = (delay_slot_addr & 0xfc000000u) | (target << 2);
+    core.gpr[GPRName::ra] = core.pc + sizeof(uint32_t);
+    auto const target_addr = (core.pc & 0xfc000000u) | (target << 2);
     set_branch_target(target_addr);
 }
 
@@ -923,8 +927,7 @@ void R3000Core<c>::Private::run_ij_bios(uint32_t, uint32_t, uint32_t imm, uint32
     HWAlignmentCheck::disable();
     bios.run_bios_fn(*parent, imm);
     HWAlignmentCheck::enable();
-    // Substract 4, we are about to add 4 again.
-    core.pc = return_pc - sizeof(r3000_ptr_t);
+    core.pc = return_pc;
 }
 
 template<R3000CoreConfig c>
