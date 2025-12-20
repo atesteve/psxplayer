@@ -1,5 +1,6 @@
 #include "mmap-r3000bus.h"
 #include "register-dispatcher.h"
+#include "util/util.h"
 
 #include <fmt/format.h>
 
@@ -233,14 +234,10 @@ Int MMAPR3000Bus::Private::sigsegv_handler(void* ptr, AccessType type, Int value
         if (mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_READ | PROT_WRITE) == -1) {
             throw_errno("mprotect");
         }
-        struct Reprotect {
-            uint8_t* mem_space;
-            ~Reprotect()
-            {
-                // Reprotect before returning.
-                mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_NONE);
-            }
-        } reprotect{mem_space};
+        ScopeGuard reprotect{[&] {
+            // Reprotect before returning.
+            mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_NONE);
+        }};
 
         if (type == AccessType::WRITE) {
             dispatcher.write_reg<Int>(*emu, reg_addr, value);

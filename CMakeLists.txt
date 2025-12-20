@@ -73,6 +73,7 @@ set(TARGET_SRC
   src/iop/iop-sysclib.cpp
   src/iop/iop-thevent.cpp
   src/iop/iop-thsemap.cpp
+  src/util/util.h
 )
 
 if(WIN32)
