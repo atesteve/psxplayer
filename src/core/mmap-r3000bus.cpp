@@ -158,7 +158,8 @@ struct MMAPR3000Bus::Private {
     // Use an initialization function instead of a constructor so that the destructor always runs.
     void init();
 
-    uint32_t sigsegv_handler(void* ptr, AccessType type, AccessWidth width, uint32_t value = 0);
+    template<std::integral Int>
+    Int sigsegv_handler(void* ptr, AccessType type, Int value = 0);
 
     void sigsegv_handler(ucontext_t* ucp);
     void sigbus_handler(ucontext_t* ucp);
@@ -216,10 +217,8 @@ void MMAPR3000Bus::Private::static_sigbus_handler(int, siginfo_t*, void* ucp)
     signal_ptr->sigbus_handler((ucontext_t*)ucp);
 }
 
-uint32_t MMAPR3000Bus::Private::sigsegv_handler(void* ptr,
-                                                AccessType type,
-                                                AccessWidth width,
-                                                uint32_t value)
+template<std::integral Int>
+Int MMAPR3000Bus::Private::sigsegv_handler(void* ptr, AccessType type, Int value)
 {
     disable_alignment_check();
     r3000_ptr_t const cpu_addr = (uint8_t*)ptr - mem_space;
@@ -244,31 +243,15 @@ uint32_t MMAPR3000Bus::Private::sigsegv_handler(void* ptr,
         } reprotect{mem_space};
 
         if (type == AccessType::WRITE) {
-            switch (width) {
-            case AccessWidth::A32:
-                dispatcher.write_reg_32(*emu, reg_addr, value, *(uint32_t*)(mem_space + reg_addr));
-                return 0;
-            case AccessWidth::A16:
-                dispatcher.write_reg_16(*emu, reg_addr, value, *(uint16_t*)(mem_space + reg_addr));
-                return 0;
-            case AccessWidth::A8:
-                dispatcher.write_reg_8(*emu, reg_addr, value, mem_space[reg_addr]);
-                return 0;
-            }
+            dispatcher.write_reg<Int>(*emu, reg_addr, value);
+            return 0;
         } else {
-            switch (width) {
-            case AccessWidth::A32:
-                return dispatcher.read_reg_32(*emu, reg_addr, *(uint32_t*)(mem_space + reg_addr));
-            case AccessWidth::A16:
-                return dispatcher.read_reg_16(*emu, reg_addr, *(uint16_t*)(mem_space + reg_addr));
-            case AccessWidth::A8:
-                return dispatcher.read_reg_8(*emu, reg_addr, mem_space[reg_addr]);
-            }
+            return dispatcher.read_reg<Int>(*emu, reg_addr);
         }
     }
 
     auto const addr = (uint8_t*)ptr - mem_space;
-    throw AddressException{(uint32_t)addr, type, width};
+    throw AddressException{(uint32_t)addr, type, int_width<Int>};
 }
 
 void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
@@ -291,11 +274,11 @@ void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
         if (write_access) {
             auto const value = ucontext->uc_mcontext.gregs[REG_RSI];
             if (rip == (uintptr_t)write_mem_impl<uint8_t>) {
-                sigsegv_handler(addr, AccessType::WRITE, AccessWidth::A8, (uint8_t)value);
+                sigsegv_handler<uint8_t>(addr, AccessType::WRITE, value);
             } else if (rip == (uintptr_t)write_mem_impl<uint16_t>) {
-                sigsegv_handler(addr, AccessType::WRITE, AccessWidth::A16, (uint16_t)value);
+                sigsegv_handler<uint16_t>(addr, AccessType::WRITE, value);
             } else if (rip == (uintptr_t)write_mem_impl<uint32_t>) {
-                sigsegv_handler(addr, AccessType::WRITE, AccessWidth::A32, (uint32_t)value);
+                sigsegv_handler<uint32_t>(addr, AccessType::WRITE, value);
             } else {
                 // Fault happened at an unknown instruction. Restore the default handler and return.
                 uninstall_handler(SIGSEGV);
@@ -304,11 +287,11 @@ void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
         } else {
             auto& return_value = ucontext->uc_mcontext.gregs[REG_RAX];
             if (rip == (uintptr_t)read_mem_impl<uint8_t>) {
-                return_value = sigsegv_handler(addr, AccessType::READ, AccessWidth::A8);
+                return_value = sigsegv_handler<uint8_t>(addr, AccessType::READ);
             } else if (rip == (uintptr_t)read_mem_impl<uint16_t>) {
-                return_value = sigsegv_handler(addr, AccessType::READ, AccessWidth::A16);
+                return_value = sigsegv_handler<uint16_t>(addr, AccessType::READ);
             } else if (rip == (uintptr_t)read_mem_impl<uint32_t>) {
-                return_value = sigsegv_handler(addr, AccessType::READ, AccessWidth::A32);
+                return_value = sigsegv_handler<uint32_t>(addr, AccessType::READ);
             } else {
                 // Fault happened at an unknown instruction. Restore the default handler and return.
                 uninstall_handler(SIGSEGV);

@@ -1,40 +1,33 @@
 #include "register-dispatcher.h"
 
-void RegisterDispatcher::write_reg_32(R3000& emu,
-                                      uint32_t addr,
-                                      uint32_t value,
-                                      uint32_t pre_image) const
+template<std::integral Int>
+Int RegisterDispatcher::read(uint32_t addr) const
 {
-    *(uint32_t*)(_mem_space + addr) = value;
+    return *(Int*)(_mem_space + addr);
 }
 
-void RegisterDispatcher::write_reg_16(R3000& emu,
-                                      uint32_t addr,
-                                      uint16_t value,
-                                      uint16_t pre_image) const
+template<std::integral Int>
+void RegisterDispatcher::write(uint32_t addr, Int value) const
 {
-    *(uint16_t*)(_mem_space + addr) = value;
+    *(Int*)(_mem_space + addr) = value;
 }
 
-void RegisterDispatcher::write_reg_8(R3000& emu,
-                                     uint32_t addr,
-                                     uint8_t value,
-                                     uint8_t pre_image) const
+template<std::integral Int>
+void RegisterDispatcher::write_reg(R3000& emu, r3000_ptr_t addr, Int value) const
 {
-    _mem_space[addr] = value;
+    write<Int>(addr, value);
 }
 
-uint32_t RegisterDispatcher::read_reg_32(R3000& emu, uint32_t addr, uint32_t pre_image) const
+template<std::integral Int>
+Int RegisterDispatcher::read_reg(R3000& emu, r3000_ptr_t addr) const
 {
-    return pre_image;
+    return read<Int>(addr);
 }
 
-uint16_t RegisterDispatcher::read_reg_16(R3000& emu, uint32_t addr, uint16_t pre_image) const
-{
-    return pre_image;
-}
+template void RegisterDispatcher::write_reg(R3000&, r3000_ptr_t, uint32_t) const;
+template void RegisterDispatcher::write_reg(R3000&, r3000_ptr_t, uint16_t) const;
+template void RegisterDispatcher::write_reg(R3000&, r3000_ptr_t, uint8_t) const;
 
-uint8_t RegisterDispatcher::read_reg_8(R3000& emu, uint32_t addr, uint8_t pre_image) const
-{
-    return pre_image;
-}
+template uint32_t RegisterDispatcher::read_reg(R3000&, r3000_ptr_t) const;
+template uint16_t RegisterDispatcher::read_reg(R3000&, r3000_ptr_t) const;
+template uint8_t RegisterDispatcher::read_reg(R3000&, r3000_ptr_t) const;
