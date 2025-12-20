@@ -225,7 +225,7 @@ Int MMAPR3000Bus::Private::sigsegv_handler(void* ptr, AccessType type, Int value
     r3000_ptr_t const cpu_addr = (uint8_t*)ptr - mem_space;
 
     if (std::ranges::any_of(PSX_IO_ADDRS, [&](r3000_ptr_t hw_base_addr) {
-            return cpu_addr >= hw_base_addr && cpu_addr < hw_base_addr + PSX_IO_SIZE;
+            return cpu_addr >= hw_base_addr && cpu_addr + sizeof(Int) <= hw_base_addr + PSX_IO_SIZE;
         })) {
         // This is an address pointing to the lower mirror.
         auto const reg_addr = 0x1f800000u | (cpu_addr & (PSX_IO_SIZE - 1));
