@@ -14,6 +14,7 @@
 #include <string_view>
 #include <array>
 #include <algorithm>
+#include <csignal>
 
 namespace {
 
@@ -29,6 +30,18 @@ constexpr auto PSX_SPAD_ADDRS = std::to_array<r3000_ptr_t>({0x1f800000, 0x9f8000
 
 constexpr uint32_t PSX_IO_SIZE = 8192;
 constexpr auto PSX_IO_ADDRS = std::to_array<r3000_ptr_t>({0x1f801000, 0x9f801000, 0xbf801000});
+
+// When debugging, since we are expecting SIGSEGV to occur during normal program execution, we
+// disable SIGSEGV with `handle SIGSEGV nostop noprint pass` or similar. Unfortunately, that means
+// that we will miss "real" SIGSEGV signals during debug. This function explicitly raises a SIGTRAP
+// so that gdb will stop. On non-debug builds, it does nothing. It would be nice to use
+// `std::breakpoint_if_debugging`, but no compiler supports it yet.
+void breakpoint()
+{
+#ifndef NDEBUG
+    std::raise(SIGTRAP);
+#endif
+}
 
 void throw_errno(std::string_view msg)
 {
@@ -166,6 +179,7 @@ struct MMAPR3000Bus::Private {
     void sigbus_handler(ucontext_t* ucp);
 
     uint8_t* mem_space = nullptr;
+    uint8_t* exec_page = nullptr;
     int ram_memfd = -1;
     int spad_memfd = -1;
     int io_memfd = -1;
@@ -183,28 +197,41 @@ void MMAPR3000Bus::Private::init()
     install_handler(SIGSEGV, "SIGSEGV", static_sigsegv_handler);
     install_handler(SIGBUS, "SIGBUS", static_sigbus_handler);
 
-    mem_space = (uint8_t*)mmap(nullptr, MEMORY_SPACE_SIZE, 0, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    mem_space =
+        (uint8_t*)mmap(nullptr, MEMORY_SPACE_SIZE, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (!mem_space) {
-        throw_errno("Can't get 4GB memory block");
+        throw_errno("Can't map 4GB memory block");
     }
 
     map_memory("psx-ram", ram_memfd, mem_space, PSX_RAM_SIZE, PSX_RAM_ADDRS);
     map_memory("psx-scratchpad", spad_memfd, mem_space, PSX_SPAD_SIZE, PSX_SPAD_ADDRS);
     map_memory("psx-io", io_memfd, mem_space, PSX_IO_SIZE, PSX_IO_ADDRS, PROT_NONE);
 
+    exec_page = (uint8_t*)mmap(
+        nullptr, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if (!exec_page) {
+        throw_errno("Can't map executable page");
+    }
+
     dispatcher.set_mem_space(mem_space);
 }
 
 MMAPR3000Bus::Private::~Private()
 {
+    uninstall_handler(SIGSEGV);
+    uninstall_handler(SIGBUS);
+
     unmap_memory(ram_memfd, mem_space, PSX_RAM_SIZE, PSX_RAM_ADDRS);
     unmap_memory(spad_memfd, mem_space, PSX_SPAD_SIZE, PSX_SPAD_ADDRS);
     unmap_memory(io_memfd, mem_space, PSX_IO_SIZE, PSX_IO_ADDRS);
+
     if (mem_space) {
         munmap(mem_space, MEMORY_SPACE_SIZE);
     }
-    uninstall_handler(SIGSEGV);
-    uninstall_handler(SIGBUS);
+    if (exec_page) {
+        munmap(exec_page, 4096);
+    }
+
     signal_ptr = nullptr;
 }
 
@@ -258,6 +285,7 @@ void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
         != X86_PF_USER) {
         // Not the kind of fault we are expecting. Restore the default handler and return to let the
         // program crash.
+        breakpoint();
         uninstall_handler(SIGSEGV);
         return;
     }
@@ -278,6 +306,7 @@ void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
                 sigsegv_handler<uint32_t>(addr, AccessType::WRITE, value);
             } else {
                 // Fault happened at an unknown instruction. Restore the default handler and return.
+                breakpoint();
                 uninstall_handler(SIGSEGV);
                 return;
             }
@@ -291,6 +320,7 @@ void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
                 return_value = sigsegv_handler<uint32_t>(addr, AccessType::READ);
             } else {
                 // Fault happened at an unknown instruction. Restore the default handler and return.
+                breakpoint();
                 uninstall_handler(SIGSEGV);
                 return;
             }
@@ -307,7 +337,41 @@ void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
 }
 
 void MMAPR3000Bus::Private::sigbus_handler(ucontext_t* ucontext)
-{}
+{
+    disable_alignment_check();
+
+    // Disable alignment check in the "calling" stack frame. We need to do this no matter what we
+    // do, either by returning and recovering, or throwing a C++ exception.
+    auto const eflags = ucontext->uc_mcontext.gregs[REG_EFL];
+    ucontext->uc_mcontext.gregs[REG_EFL] = eflags & ~0x40000;
+
+    auto const access = (ucontext->uc_mcontext.gregs[REG_ERR] & X86_PF_WRITE) ? AccessType::WRITE
+                                                                              : AccessType::READ;
+    uintptr_t const rip = ucontext->uc_mcontext.gregs[REG_RIP];
+    AccessWidth width;
+
+    if (rip == (uintptr_t)write_mem_impl<uint8_t> || rip == (uintptr_t)read_mem_impl<uint8_t>) {
+        width = AccessWidth::A8;
+    } else if (rip == (uintptr_t)write_mem_impl<uint16_t>
+               || rip == (uintptr_t)read_mem_impl<uint16_t>) {
+        width = AccessWidth::A16;
+    } else if (rip == (uintptr_t)write_mem_impl<uint32_t>
+               || rip == (uintptr_t)read_mem_impl<uint32_t>) {
+        width = AccessWidth::A32;
+    } else {
+        // TODO: If we are here, it means we got an unaligned access outside of the "expected"
+        // locations. Try to recover by returning to a copy of the faulting instruction followed by
+        // re-enabling alignment check.
+        return;
+    }
+
+    // Emulate the ret instruction so that the C++ exception propagates correctly.
+    emulate_ret(ucontext);
+    // Throw
+    void* const addr = (void*)ucontext->uc_mcontext.gregs[REG_RDI];
+    r3000_ptr_t const emu_addr = (uint8_t*)addr - mem_space;
+    throw AddressException{emu_addr, access, width};
+}
 
 MMAPR3000Bus::MMAPR3000Bus(R3000* emu)
     : _p{std::make_unique<Private>(emu)}

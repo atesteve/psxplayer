@@ -1,67 +1,49 @@
 #include "iop.h"
 #include "util.h"
 
-#include "xprintf/xprintf.h"
+#include "util/printf-glue.h"
 #include "libupse/upse-ps1-memory-manager.h"
 
-#include <type_traits>
 #include <cstdio>
 
-struct xva_list {
+namespace {
+
+struct upse_xva_list final : public xva_list {
+    explicit upse_xva_list(upse_module_instance_t* ins)
+        : ins{ins}
+    {}
+
     upse_module_instance_t* ins;
-    int param;
-};
+    int param = 1; // Initialize to 1, second parameter. The first parameter is the format string.
 
-template<typename T>
-T xva_arg_impl(xva_list& ap)
-{
-    auto const param = ap.param;
-    ap.param++;
-    if constexpr (std::is_same_v<T, double>) {
-        // Just don't implement this.
-        return {};
-    } else {
-        // Get the next parameter from either a register or the stack.
-        void* param_ptr = [&] -> uint32_t* {
-            if (param <= 3) { // Registers $a0 - $a3
-                return &ap.ins->cpustate.GPR.r[param + 4];
+    int next_param() override { return param++; }
+
+    uint32_t* gpr() override { return ins->cpustate.GPR.r; }
+
+    uint32_t* get_u32_ptr(uint32_t addr) override
+    {
+        auto* const ptr = PSXM(ins, addr);
+        return (uint32_t*)ptr;
+    }
+
+    char* get_char_ptr(uint32_t addr) override
+    {
+        auto const addr_in = addr;
+        while (true) {
+            auto* ptr = (char*)PSXM(ins, addr);
+            if (!ptr) {
+                return nullptr;
             }
-            // Parameters from the stack.
-            auto const sp = from_le(ap.ins->cpustate.GPR.n.sp);
-            auto* sp_ptr = (uint32_t*)PSXM(ap.ins, sp);
-            if (sp_ptr) {
-                return sp_ptr + param;
+            if (*ptr == 0) {
+                return (char*)PSXM(ins, addr_in);
             }
-            return nullptr;
-        }();
-
-        // Can happen if the sp is somehow corrupt.
-        if (!param_ptr) {
-            return {};
-        }
-
-        if constexpr (std::is_pointer_v<T>) {
-            // If the parameter is a pointer, we need to return the translated pointer to emulated
-            // PSX memory.
-            uint32_t ptr = from_le(*(uint32_t*)param_ptr);
-            return (T)PSXM(ap.ins, ptr);
-        } else {
-            using RetType = std::conditional_t<std::is_signed_v<T>, int32_t, uint32_t>;
-            return from_le(*(RetType*)param_ptr);
+            addr++;
         }
     }
-}
 
-// Explicit template instantiations
-template int xva_arg_impl(xva_list&);
-template long xva_arg_impl(xva_list&);
-template unsigned int xva_arg_impl(xva_list&);
-template unsigned long xva_arg_impl(xva_list&);
-template double xva_arg_impl(xva_list&);
-template int* xva_arg_impl(xva_list&);
-template char* xva_arg_impl(xva_list&);
+    uint32_t read(uint32_t addr) override { return PSXMu32(ins, addr); }
+};
 
-namespace {
 void print(const char* data, int n, void*)
 {
     for (int i = 0; i < n; ++i) {
@@ -77,10 +59,7 @@ std::optional<uint32_t> PSF2::iop_printf(upse_module_instance_t* ins)
     uint32_t ptr = from_le(ins->cpustate.GPR.n.a0);
     auto* fmt_str = (char const*)PSXM(ins, ptr);
 
-    xva_list va{
-        .ins = ins,
-        .param = 1, // Initialize to 1, second parameter. The first parameter is the format string.
-    };
+    upse_xva_list va{ins};
 
     return vxprintf(print, nullptr, fmt_str, va);
 }

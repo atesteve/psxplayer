@@ -58,6 +58,7 @@ set(TARGET_SRC
   src/core/bios-a0.cpp
   src/core/bios-b0.cpp
   src/core/bios-c0.cpp
+  src/core/bios-printf.cpp
   src/core/bios.h
   src/core/register-dispatcher.cpp
   src/core/register-dispatcher.h
@@ -74,6 +75,8 @@ set(TARGET_SRC
   src/iop/iop-thevent.cpp
   src/iop/iop-thsemap.cpp
   src/util/util.h
+  src/util/printf-glue.cpp
+  src/util/printf-glue.h
 )
 
 if(WIN32)

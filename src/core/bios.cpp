@@ -77,6 +77,7 @@ std::unordered_map<uint32_t, std::optional<uint32_t> (*)(Bios& bios, R3000& emu)
     {0xa013, bcall<&Bios::setjmp>},
     {0xa014, bcall<&Bios::longjmp>},
     {0xa039, bcall<&Bios::InitHeap>},
+    {0xa03f, bcall<&Bios::printf>},
     {0xa072, bcall<&Bios::unimplemented>},
 
     {0xb008, bcall<&Bios::openEvent>},

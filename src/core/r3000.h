@@ -113,13 +113,9 @@ public:
 
     T const* operator->() const { return _ptr; }
 
-    operator bool() const {
-        return _ptr;
-    }
+    operator bool() const { return _ptr; }
 
-    bool operator==(std::nullptr_t) const {
-        return _ptr == nullptr;
-    }
+    bool operator==(std::nullptr_t) const { return _ptr == nullptr; }
 
     T* data() { return _ptr; }
 
@@ -206,18 +202,18 @@ struct R3000 {
     virtual Core& core() = 0;
     virtual Core const& core() const = 0;
 
-    template<typename T = uint8_t>
-    EmuBuffer<T> get_buffer(uint32_t addr, uint32_t size)
+    /**
+     * Get a checked buffer of type T, at a given addr and with a given number of elements (size).
+     * The buffer boundaries are checked, and throws AddressException if it lies outside of RAM
+     * boundaries.
+     */
+    template<typename T = uint8_t, typename Self>
+    auto get_buffer(this Self&& self, uint32_t addr, uint32_t size = 1)
     {
-        auto* ptr = get_buffer_checked(addr, sizeof(T) * size);
-        return EmuBuffer<T>{reinterpret_cast<T*>(ptr), addr, size};
-    }
-
-    template<typename T = uint8_t const>
-    EmuBuffer<T> get_buffer(uint32_t addr, uint32_t size) const
-    {
-        auto* ptr = get_buffer_checked(addr, sizeof(T) * size);
-        return EmuBuffer<T>{reinterpret_cast<T*>(ptr), addr, size};
+        using RetT = std::
+            conditional_t<std::is_const_v<std::remove_reference_t<Self>>, std::add_const_t<T>, T>;
+        auto* ptr = self.get_buffer_checked(addr, sizeof(T) * size);
+        return EmuBuffer<RetT>{reinterpret_cast<RetT*>(ptr), addr, size};
     }
 
 protected:
