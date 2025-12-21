@@ -1,6 +1,7 @@
 #include "bios.h"
 
-uint32_t Bios::setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf) {
+uint32_t Bios::setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf)
+{
     auto const& regs = emu.core().gpr;
     *buf = {
         .ra = regs[GPRName::ra],
@@ -17,4 +18,22 @@ uint32_t Bios::setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf) {
         .gp = regs[GPRName::gp],
     };
     return 0;
+}
+
+uint32_t Bios::longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t ret)
+{
+    auto& regs = emu.core().gpr;
+    regs[GPRName::ra] = buf->ra;
+    regs[GPRName::sp] = buf->sp;
+    regs[GPRName::s8] = buf->s8;
+    regs[GPRName::s0] = buf->s0;
+    regs[GPRName::s1] = buf->s1;
+    regs[GPRName::s2] = buf->s2;
+    regs[GPRName::s3] = buf->s3;
+    regs[GPRName::s4] = buf->s4;
+    regs[GPRName::s5] = buf->s5;
+    regs[GPRName::s6] = buf->s6;
+    regs[GPRName::s7] = buf->s7;
+    regs[GPRName::gp] = buf->gp;
+    return ret;
 }

@@ -3,6 +3,7 @@
 #include "r3000.h"
 
 #include <cstdint>
+#include <unordered_map>
 
 struct psx_jmp_buf {
     uint32_t ra;
@@ -24,6 +25,7 @@ public:
     void run_bios_fn(R3000& emu, uint32_t group);
 
     uint32_t setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf);
+    uint32_t longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t ret);
 
     void InitHeap(R3000& emu, uint32_t base, uint32_t size);
 
@@ -32,13 +34,25 @@ public:
     void unimplemented() {}
 
     uint32_t openEvent(uint32_t clazz, uint32_t spec, uint32_t mode, uint32_t handler);
+    int32_t closeEvent(uint32_t event);
     int32_t waitEvent(uint32_t event);
+    int32_t testEvent(uint32_t event);
     int32_t enableEvent(uint32_t event);
-    void HookEntryInt(uint32_t entry_point);
+    void HookEntryInt(EmuBuffer<psx_jmp_buf> buf);
+
+    struct Event {
+        uint32_t clazz;
+        uint32_t spec;
+        uint32_t mode;
+        r3000_ptr_t handler;
+        uint32_t flags;
+    };
 
     struct State {
-        uint32_t int_entry_point{};
+        EmuBuffer<psx_jmp_buf> unhanled_irq_farjmp{};
         int irq_auto_ack[11]{};
+        std::unordered_map<uint32_t, Event> events;
+        uint32_t next_event_id = 0xf1000000;
     };
 
     State state;

@@ -75,11 +75,14 @@ std::optional<uint32_t> bcall(Bios& bios, R3000& emu)
 
 std::unordered_map<uint32_t, std::optional<uint32_t> (*)(Bios& bios, R3000& emu)> const bios_fns = {
     {0xa013, bcall<&Bios::setjmp>},
+    {0xa014, bcall<&Bios::longjmp>},
     {0xa039, bcall<&Bios::InitHeap>},
     {0xa072, bcall<&Bios::unimplemented>},
 
     {0xb008, bcall<&Bios::openEvent>},
+    {0xb008, bcall<&Bios::closeEvent>},
     {0xb00a, bcall<&Bios::waitEvent>},
+    {0xb00b, bcall<&Bios::testEvent>},
     {0xb00c, bcall<&Bios::enableEvent>},
     {0xb019, bcall<&Bios::HookEntryInt>},
     {0xb05b, bcall<&Bios::unimplemented>},

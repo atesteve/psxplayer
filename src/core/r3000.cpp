@@ -923,11 +923,10 @@ template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_ij_bios(uint32_t, uint32_t, uint32_t imm, uint32_t)
 {
     load_slot_flush();
-    auto const return_pc = core.gpr[GPRName::ra];
     HWAlignmentCheck::disable();
     bios.run_bios_fn(*parent, imm);
     HWAlignmentCheck::enable();
-    core.pc = return_pc;
+    core.pc = core.gpr[GPRName::ra];
 }
 
 template<R3000CoreConfig c>

@@ -78,11 +78,20 @@ class EmuBuffer {
 public:
     using type = T;
 
+    explicit EmuBuffer()
+        : _ptr{nullptr}
+        , _base_addr{0}
+        , _size{0}
+    {}
+
     explicit EmuBuffer(T* ptr, r3000_ptr_t base_addr, uint32_t size)
         : _ptr{ptr}
         , _base_addr{base_addr}
         , _size{size}
     {}
+
+    EmuBuffer(EmuBuffer const&) = default;
+    EmuBuffer& operator=(EmuBuffer const&) = default;
 
     T& operator[](uint32_t offset)
     {
@@ -96,20 +105,20 @@ public:
 
     T const& operator[](uint32_t offset) const { return const_cast<EmuBuffer<T>*>(this)[offset]; }
 
-    T& operator*() {
-        return *_ptr;
-    }
+    T& operator*() { return *_ptr; }
 
-    T const& operator*() const {
-        return *_ptr;
-    }
+    T const& operator*() const { return *_ptr; }
 
-    T* operator->() {
+    T* operator->() { return _ptr; }
+
+    T const* operator->() const { return _ptr; }
+
+    operator bool() const {
         return _ptr;
     }
 
-    T const* operator->() const {
-        return _ptr;
+    bool operator==(std::nullptr_t) const {
+        return _ptr == nullptr;
     }
 
     T* data() { return _ptr; }
@@ -119,9 +128,7 @@ public:
     uint32_t size() const { return _size; }
     uint32_t size_bytes() const { return _size * sizeof(T); }
 
-    r3000_ptr_t base_addr() const {
-        return _base_addr;
-    }
+    r3000_ptr_t base_addr() const { return _base_addr; }
 
 private:
     T* _ptr;
