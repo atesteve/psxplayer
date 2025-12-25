@@ -1,41 +1,41 @@
 #include "bios.h"
 
-#include "xprintf/xprintf.h"
-
 uint32_t Bios::setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf)
 {
     auto const& regs = emu.core().gpr;
     *buf = {
-        .ra = regs[GPRName::ra],
-        .sp = regs[GPRName::sp],
-        .s8 = regs[GPRName::s8],
-        .s0 = regs[GPRName::s0],
-        .s1 = regs[GPRName::s1],
-        .s2 = regs[GPRName::s2],
-        .s3 = regs[GPRName::s3],
-        .s4 = regs[GPRName::s4],
-        .s5 = regs[GPRName::s5],
-        .s6 = regs[GPRName::s6],
-        .s7 = regs[GPRName::s7],
-        .gp = regs[GPRName::gp],
+        .ra = regs.n.ra,
+        .sp = regs.n.sp,
+        .s8 = regs.n.s8,
+        .s0 = regs.n.s0,
+        .s1 = regs.n.s1,
+        .s2 = regs.n.s2,
+        .s3 = regs.n.s3,
+        .s4 = regs.n.s4,
+        .s5 = regs.n.s5,
+        .s6 = regs.n.s6,
+        .s7 = regs.n.s7,
+        .gp = regs.n.gp,
     };
-    return 1;
+    return 0;
 }
 
-uint32_t Bios::longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t ret)
+Bios::noreturn Bios::longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t ret)
 {
-    auto& regs = emu.core().gpr;
-    regs[GPRName::ra] = buf->ra;
-    regs[GPRName::sp] = buf->sp;
-    regs[GPRName::s8] = buf->s8;
-    regs[GPRName::s0] = buf->s0;
-    regs[GPRName::s1] = buf->s1;
-    regs[GPRName::s2] = buf->s2;
-    regs[GPRName::s3] = buf->s3;
-    regs[GPRName::s4] = buf->s4;
-    regs[GPRName::s5] = buf->s5;
-    regs[GPRName::s6] = buf->s6;
-    regs[GPRName::s7] = buf->s7;
-    regs[GPRName::gp] = buf->gp;
-    return ret;
+    auto& core = emu.core();
+    core.gpr.n.ra = buf->ra;
+    core.gpr.n.sp = buf->sp;
+    core.gpr.n.s8 = buf->s8;
+    core.gpr.n.s0 = buf->s0;
+    core.gpr.n.s1 = buf->s1;
+    core.gpr.n.s2 = buf->s2;
+    core.gpr.n.s3 = buf->s3;
+    core.gpr.n.s4 = buf->s4;
+    core.gpr.n.s5 = buf->s5;
+    core.gpr.n.s6 = buf->s6;
+    core.gpr.n.s7 = buf->s7;
+    core.gpr.n.gp = buf->gp;
+    core.gpr.n.v0 = ret;
+    core.pc = buf->ra;
+    return {};
 }

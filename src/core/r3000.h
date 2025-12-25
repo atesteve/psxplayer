@@ -53,25 +53,116 @@ template<> inline constexpr auto int_width<uint32_t> = AccessWidth::A32;
 
 using r3000_ptr_t = uint32_t;
 
+struct GPR {
+    uint32_t r0;
+    uint32_t at;
+    uint32_t v0;
+    uint32_t v1;
+    uint32_t a0;
+    uint32_t a1;
+    uint32_t a2;
+    uint32_t a3;
+    uint32_t t0;
+    uint32_t t1;
+    uint32_t t2;
+    uint32_t t3;
+    uint32_t t4;
+    uint32_t t5;
+    uint32_t t6;
+    uint32_t t7;
+    uint32_t s0;
+    uint32_t s1;
+    uint32_t s2;
+    uint32_t s3;
+    uint32_t s4;
+    uint32_t s5;
+    uint32_t s6;
+    uint32_t s7;
+    uint32_t t8;
+    uint32_t t9;
+    uint32_t k0;
+    uint32_t k1;
+    uint32_t gp;
+    uint32_t sp;
+    uint32_t s8;
+    uint32_t ra;
+};
+
+struct CP0R {
+    uint32_t Index;
+    uint32_t Random;
+    uint32_t EntryLo0;
+    uint32_t BPC;
+    uint32_t Context;
+    uint32_t BDA;
+    uint32_t PIDMask;
+    uint32_t DCIC;
+    uint32_t BadVAddr;
+    uint32_t BDAM;
+    uint32_t EntryHi;
+    uint32_t BPCM;
+    uint32_t Status;
+    uint32_t Cause;
+    uint32_t EPC;
+    uint32_t PRid;
+    uint32_t Config;
+    uint32_t LLAddr;
+    uint32_t WatchLO;
+    uint32_t WatchHI;
+    uint32_t XContext;
+    uint32_t ECC;
+    uint32_t CacheErr;
+    uint32_t TagLo;
+    uint32_t TagHi;
+    uint32_t ErrorEPC;
+};
+
 struct Core {
-    std::array<uint32_t, 32> gpr{};
+    union {
+        std::array<uint32_t, 32> r{};
+        GPR n;
+    } gpr{};
     uint32_t lo{};
     uint32_t hi{};
     r3000_ptr_t pc{};
 };
 
-struct AddressException {
+struct CoreException {
+    virtual ~CoreException() = default;
+};
+
+struct AddressException : public CoreException {
+    explicit AddressException() = default;
+
+    explicit AddressException(r3000_ptr_t addr)
+        : addr{addr}
+    {}
+
+    explicit AddressException(r3000_ptr_t addr, AccessType rw, AccessWidth access_width)
+        : addr{addr}
+        , rw{rw}
+        , access_width{access_width}
+    {}
+
     r3000_ptr_t addr{};
     AccessType rw{};
     AccessWidth access_width{};
 };
 
-struct OverflowException {};
+struct OverflowException : public CoreException {};
 
-struct InstructionException {
+struct InstructionException : public CoreException {
+    explicit InstructionException() = default;
+    explicit InstructionException(uint16_t opcode, uint16_t func_code)
+        : opcode{opcode}
+        , func_code{func_code}
+    {}
+
     uint16_t opcode{};
     uint16_t func_code{};
 };
+
+struct CoprocessorUnusableException : public CoreException {};
 
 template<typename T>
 class EmuBuffer {
@@ -132,40 +223,27 @@ private:
     uint32_t _size;
 };
 
-struct GPRName {
-    static constexpr size_t r0{0};
-    static constexpr size_t at{1};
-    static constexpr size_t v0{2};
-    static constexpr size_t v1{3};
-    static constexpr size_t a0{4};
-    static constexpr size_t a1{5};
-    static constexpr size_t a2{6};
-    static constexpr size_t a3{7};
-    static constexpr size_t t0{8};
-    static constexpr size_t t1{9};
-    static constexpr size_t t2{10};
-    static constexpr size_t t3{11};
-    static constexpr size_t t4{12};
-    static constexpr size_t t5{13};
-    static constexpr size_t t6{14};
-    static constexpr size_t t7{15};
-    static constexpr size_t s0{16};
-    static constexpr size_t s1{17};
-    static constexpr size_t s2{18};
-    static constexpr size_t s3{19};
-    static constexpr size_t s4{20};
-    static constexpr size_t s5{21};
-    static constexpr size_t s6{22};
-    static constexpr size_t s7{23};
-    static constexpr size_t t8{24};
-    static constexpr size_t t9{25};
-    static constexpr size_t k0{26};
-    static constexpr size_t k1{27};
-    static constexpr size_t gp{28};
-    static constexpr size_t sp{29};
-    static constexpr size_t s8{30};
-    static constexpr size_t ra{31};
+// clang-format off
+struct HWReg {
+    static constexpr size_t ISTAT = 0x1f801070;
+    static constexpr size_t IMASK = 0x1f801074;
 };
+
+struct IRQ {
+    static constexpr size_t VBLANK     = 0;
+    static constexpr size_t GPU        = 1;
+    static constexpr size_t CDROM      = 2;
+    static constexpr size_t DMA        = 3;
+    static constexpr size_t TMR0       = 4;
+    static constexpr size_t TMR1       = 5;
+    static constexpr size_t TMR2       = 6;
+    static constexpr size_t CONTROLLER = 7;
+    static constexpr size_t SIO        = 8;
+    static constexpr size_t SPU        = 9;
+    static constexpr size_t PIO        = 10;
+};
+
+// clang-format on
 
 struct R3000 {
     virtual ~R3000() = default;
@@ -215,6 +293,11 @@ struct R3000 {
         auto* ptr = self.get_buffer_checked(addr, sizeof(T) * size);
         return EmuBuffer<RetT>{reinterpret_cast<RetT*>(ptr), addr, size};
     }
+
+    virtual uint32_t& istat() = 0;
+    virtual uint32_t& imask() = 0;
+
+    virtual void return_from_exception() = 0;
 
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;

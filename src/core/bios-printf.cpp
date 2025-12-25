@@ -16,7 +16,7 @@ struct R3000_xva_list final : public xva_list {
 
     int next_param() override { return param++; }
 
-    uint32_t* gpr() override { return emu->core().gpr.data(); }
+    uint32_t* gpr() override { return emu->core().gpr.r.data(); }
 
     uint32_t* get_u32_ptr(uint32_t addr) override
     {

@@ -21,6 +21,9 @@ public:
         write_mem_impl<Int>(_mem_space + addr, value);
     }
 
+    void unprotect_hw();
+    void protect_hw();
+
     template<std::integral Int>
     static Int read_mem_impl(void* addr);
 

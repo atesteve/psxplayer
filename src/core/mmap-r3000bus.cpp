@@ -108,8 +108,8 @@ void disable_alignment_check()
 {
     asm("pushf\n"
         "andl $~0x40000, (%%rsp)\n"
-        "popf\n" ::
-            : "memory");
+        "popf\n"
+        :);
 }
 
 void emulate_ret(ucontext_t* ucontext)
@@ -178,6 +178,9 @@ struct MMAPR3000Bus::Private {
     void sigsegv_handler(ucontext_t* ucp);
     void sigbus_handler(ucontext_t* ucp);
 
+    void unprotect_hw(bool throwOnError = true);
+    void protect_hw(bool throwOnError = true);
+
     uint8_t* mem_space = nullptr;
     uint8_t* exec_page = nullptr;
     int ram_memfd = -1;
@@ -235,6 +238,21 @@ MMAPR3000Bus::Private::~Private()
     signal_ptr = nullptr;
 }
 
+void MMAPR3000Bus::Private::unprotect_hw(bool throwOnError)
+{
+    if (mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_READ | PROT_WRITE) == -1
+        && throwOnError) {
+        throw_errno("unprotect_hw");
+    }
+}
+
+void MMAPR3000Bus::Private::protect_hw(bool throwOnError)
+{
+    if (mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_NONE) == -1 && throwOnError) {
+        throw_errno("protect_hw");
+    }
+}
+
 void MMAPR3000Bus::Private::static_sigsegv_handler(int, siginfo_t*, void* ucp)
 {
     signal_ptr->sigsegv_handler((ucontext_t*)ucp);
@@ -258,12 +276,10 @@ Int MMAPR3000Bus::Private::sigsegv_handler(void* ptr, AccessType type, Int value
         auto const reg_addr = 0x1f800000u | (cpu_addr & (PSX_IO_SIZE - 1));
 
         // Open only the lower mirror. The handlers will use only that mirror.
-        if (mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_READ | PROT_WRITE) == -1) {
-            throw_errno("mprotect");
-        }
+        unprotect_hw();
         ScopeGuard reprotect{[&] {
             // Reprotect before returning.
-            mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_NONE);
+            protect_hw(false);
         }};
 
         if (type == AccessType::WRITE) {
@@ -371,6 +387,14 @@ void MMAPR3000Bus::Private::sigbus_handler(ucontext_t* ucontext)
     void* const addr = (void*)ucontext->uc_mcontext.gregs[REG_RDI];
     r3000_ptr_t const emu_addr = (uint8_t*)addr - mem_space;
     throw AddressException{emu_addr, access, width};
+}
+
+void MMAPR3000Bus::protect_hw() {
+    _p->protect_hw();
+}
+
+void MMAPR3000Bus::unprotect_hw() {
+    _p->unprotect_hw();
 }
 
 MMAPR3000Bus::MMAPR3000Bus(R3000* emu)

@@ -60,6 +60,36 @@ constexpr size_t MAX_EVENTS = 256; // Plenty
 
 } // namespace
 
+uint32_t Bios::deliverEventResumable(R3000& emu, uint32_t clazz, uint32_t spec, uint32_t start)
+{
+    bool skip = start != 0;
+    for (auto const& [event, entry] : state.events) {
+        if (skip) {
+            if (event == start) {
+                skip = false;
+            }
+            continue;
+        }
+        if (entry.clazz != clazz || entry.spec != spec || entry.flags != EVENT_FLAG_ENABLED) {
+            continue;
+        }
+        if (entry.mode == EVENT_MODE_NO_CALLBACK) {
+            entry.flags = EVENT_FLAG_PENDING;
+        } else if (entry.mode == EVENT_MODE_CALLBACK && entry.handler) {
+            auto& core = emu.core();
+            core.pc = entry.handler;
+            core.gpr.n.ra = 0xd0u;
+            return event;
+        }
+    }
+    return 0;
+}
+
+void Bios::deliverEvent(R3000& emu, uint32_t clazz, uint32_t spec)
+{
+    deliverEventResumable(emu, clazz, spec, 0);
+}
+
 uint32_t Bios::openEvent(uint32_t clazz, uint32_t spec, uint32_t mode, uint32_t handler)
 {
     if (state.events.size() >= MAX_EVENTS) {
@@ -98,7 +128,8 @@ int32_t Bios::enableEvent(uint32_t event)
     return 1;
 }
 
-int32_t Bios::testEvent(uint32_t event) {
+int32_t Bios::testEvent(uint32_t event)
+{
     auto const it = state.events.find(event);
     if (it != state.events.cend() && it->second.flags == EVENT_FLAG_PENDING) {
         it->second.flags = EVENT_FLAG_ENABLED;
@@ -110,4 +141,10 @@ int32_t Bios::testEvent(uint32_t event) {
 void Bios::HookEntryInt(EmuBuffer<psx_jmp_buf> buf)
 {
     state.unhanled_irq_farjmp = buf;
+}
+
+Bios::noreturn Bios::returnFromException(R3000& emu)
+{
+    emu.return_from_exception();
+    return {};
 }

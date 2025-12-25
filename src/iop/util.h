@@ -9,20 +9,38 @@
 
 namespace stdx {
 
+#ifdef __cpp_lib_start_lifetime_as
+
+template<typename T>
+T* start_lifetime_as(void* p) noexcept
+{
+    return std::start_lifetime_as<T>(p);
+}
+
+template<typename T>
+T const* start_lifetime_as(void const* p) noexcept
+{
+    return std::start_lifetime_as<T>(p);
+}
+
+#else
+
 // https://stackoverflow.com/questions/76445860/implementation-of-stdstart-lifetime-as
-template<class T>
+template<typename T>
     requires(std::is_trivially_copyable_v<T>)
 T* start_lifetime_as(void* p) noexcept
 {
     return std::launder(static_cast<T*>(std::memmove(p, p, sizeof(T))));
 }
 
-template<class T>
+template<typename T>
     requires(std::is_trivially_copyable_v<T>)
-T const* start_lifetime_as(const void* p) noexcept
+T const* start_lifetime_as(void const* p) noexcept
 {
     return std::launder(static_cast<T const*>(std::memmove(const_cast<void*>(p), p, sizeof(T))));
 }
+
+#endif
 
 } // namespace stdx
 

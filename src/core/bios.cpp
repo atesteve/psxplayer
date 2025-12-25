@@ -3,10 +3,12 @@
 #include <fmt/format.h>
 
 #include <unordered_map>
-#include <optional>
+#include <variant>
 #include <functional>
 
 namespace {
+
+using bios_call_result = std::variant<std::monostate, uint32_t, Bios::noreturn>;
 
 template<auto Fn, typename Signature>
 struct bcall_impl;
@@ -17,10 +19,10 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
     static uint32_t get_raw_arg(R3000 const& emu, Core const& core, size_t index)
     {
         if (index <= 3) { // Registers $a0 - $a3
-            return core.gpr[index + 4];
+            return core.gpr.r[index + 4];
         }
         // Parameters from the stack.
-        return emu.read_mem<uint32_t>(core.gpr[GPRName::sp]);
+        return emu.read_mem<uint32_t>(core.gpr.n.sp);
     }
 
     template<typename Arg, size_t Index>
@@ -37,7 +39,7 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
     }
 
     template<size_t... Ints>
-    static std::optional<uint32_t> run(Bios& bios, R3000& emu, std::index_sequence<Ints...>)
+    static bios_call_result run(Bios& bios, R3000& emu, std::index_sequence<Ints...>)
     {
         using FirstArg = std::tuple_element_t<0, std::tuple<Args...>>;
         constexpr bool sub_one = std::is_same_v<FirstArg, R3000&>;
@@ -45,35 +47,38 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
 
         if constexpr (std::is_void_v<Result>) {
             std::invoke(Fn, bios, get_argument<Args, Ints - sub_one>(emu, core)...);
-            return std::nullopt;
+            return {};
+        } else if constexpr (std::is_convertible_v<Result, uint32_t>) {
+            return (uint32_t)std::invoke(
+                Fn, bios, get_argument<Args, Ints - sub_one>(emu, core)...);
         } else {
             return std::invoke(Fn, bios, get_argument<Args, Ints - sub_one>(emu, core)...);
         }
     }
 
-    static std::optional<uint32_t> run(Bios& bios, R3000&, std::index_sequence<>)
+    static bios_call_result run(Bios& bios, R3000&, std::index_sequence<>)
     {
         if constexpr (std::is_void_v<Result>) {
             std::invoke(Fn, bios);
-            return std::nullopt;
+            return {};
         } else {
             return std::invoke(Fn, bios);
         }
     }
 
-    static std::optional<uint32_t> run(Bios& bios, R3000& emu)
+    static bios_call_result run(Bios& bios, R3000& emu)
     {
         return run(bios, emu, std::make_index_sequence<sizeof...(Args)>{});
     }
 };
 
 template<auto Fn>
-std::optional<uint32_t> bcall(Bios& bios, R3000& emu)
+bios_call_result bcall(Bios& bios, R3000& emu)
 {
     return bcall_impl<Fn, decltype(Fn)>::run(bios, emu);
 }
 
-std::unordered_map<uint32_t, std::optional<uint32_t> (*)(Bios& bios, R3000& emu)> const bios_fns = {
+std::unordered_map<uint32_t, bios_call_result (*)(Bios& bios, R3000& emu)> const bios_fns = {
     {0xa013, bcall<&Bios::setjmp>},
     {0xa014, bcall<&Bios::longjmp>},
     {0xa039, bcall<&Bios::InitHeap>},
@@ -86,6 +91,7 @@ std::unordered_map<uint32_t, std::optional<uint32_t> (*)(Bios& bios, R3000& emu)
     {0xb00b, bcall<&Bios::testEvent>},
     {0xb00c, bcall<&Bios::enableEvent>},
     {0xb019, bcall<&Bios::HookEntryInt>},
+    {0xb017, bcall<&Bios::returnFromException>},
     {0xb05b, bcall<&Bios::unimplemented>},
 
     {0xc00a, bcall<&Bios::setIrqAutoAck>},
@@ -96,7 +102,7 @@ std::unordered_map<uint32_t, std::optional<uint32_t> (*)(Bios& bios, R3000& emu)
 void Bios::run_bios_fn(R3000& emu, uint32_t group)
 {
     auto& core = emu.core();
-    auto const index = core.gpr[GPRName::t1];
+    auto const index = core.gpr.n.t1;
     auto const key = (group << 8) | index;
     auto const it = bios_fns.find(key);
     if (it == bios_fns.cend()) {
@@ -104,7 +110,12 @@ void Bios::run_bios_fn(R3000& emu, uint32_t group)
         throw std::exception{};
     }
     auto const result = it->second(*this, emu);
-    if (result) {
-        core.gpr[GPRName::v0] = *result;
+    if (holds_alternative<uint32_t>(result)) {
+        core.gpr.n.v0 = get<uint32_t>(result);
+        core.pc = core.gpr.n.ra;
+    } else if (holds_alternative<std::monostate>(result)) {
+        core.pc = core.gpr.n.ra;
+    } else {
+        // Do nothing in this case, the implementation already assigned the PC (noreturn function).
     }
 }
