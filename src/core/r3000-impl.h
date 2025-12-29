@@ -27,12 +27,15 @@ public:
     Core& core() override;
     Core const& core() const override;
 
-    uint8_t* get_buffer_checked(r3000_ptr_t addr, uint32_t size) const override;
+    uint8_t* get_buffer_checked(r3000_ptr_t addr, uint32_t size, bool ram) const override;
 
     uint32_t& istat() override;
     uint32_t& imask() override;
 
     void return_from_exception() override;
+
+    void write_dma_reg(r3000_ptr_t addr, uint32_t value) override;
+    uint32_t read_dma_reg(r3000_ptr_t addr) override;
 
 private:
     struct Private;

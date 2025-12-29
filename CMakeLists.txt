@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
+cmake_policy(SET CMP0167 NEW) # For boost
+
 set(TARGET "psxplayer")
 set(TARGET_LIBUPSE "libupse")
 set(TARGET_XPRINTF "xprintf")
@@ -62,6 +64,8 @@ set(TARGET_SRC
   src/core/bios.h
   src/core/register-dispatcher.cpp
   src/core/register-dispatcher.h
+  src/core/dma.cpp
+  src/core/dma.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
@@ -118,6 +122,9 @@ include(CPack)
 
 find_package(fmt REQUIRED)
 target_link_libraries(${TARGET} PRIVATE fmt::fmt)
+
+find_package(Boost REQUIRED COMPONENTS container)
+target_link_libraries(${TARGET} PRIVATE Boost::container)
 
 find_package(FFTW3 REQUIRED)
 if(WIN32)

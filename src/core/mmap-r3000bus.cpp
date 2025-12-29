@@ -106,9 +106,12 @@ void uninstall_handler(int signal)
 
 void disable_alignment_check()
 {
-    asm("pushf\n"
+    asm volatile(
+        "subq $128, %%rsp\n"
+        "pushf\n"
         "andl $~0x40000, (%%rsp)\n"
         "popf\n"
+        "addq $128, %%rsp\n"
         :);
 }
 
@@ -389,11 +392,13 @@ void MMAPR3000Bus::Private::sigbus_handler(ucontext_t* ucontext)
     throw AddressException{emu_addr, access, width};
 }
 
-void MMAPR3000Bus::protect_hw() {
+void MMAPR3000Bus::protect_hw()
+{
     _p->protect_hw();
 }
 
-void MMAPR3000Bus::unprotect_hw() {
+void MMAPR3000Bus::unprotect_hw()
+{
     _p->unprotect_hw();
 }
 

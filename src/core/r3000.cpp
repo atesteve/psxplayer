@@ -1,9 +1,11 @@
 #include "r3000-impl.h"
 #include "mmap-r3000bus.h"
 #include "bios.h"
+#include "dma.h"
 #include "util/util.h"
 
 #include <fmt/format.h>
+#include <boost/container/static_vector.hpp>
 
 #include <cstdint>
 #include <concepts>
@@ -106,9 +108,12 @@ struct R3000Core<c>::Private {
         static void enable()
         {
             if constexpr (c.alignment_check == AlignmentCheck::HARDWARE) {
-                asm("pushf\n"
+                asm volatile(
+                    "subq $128, %%rsp\n"
+                    "pushf\n"
                     "orl $0x40000, (%%rsp)\n"
                     "popf\n"
+                    "addq $128, %%rsp\n"
                     :);
             }
         }
@@ -116,9 +121,12 @@ struct R3000Core<c>::Private {
         static void disable()
         {
             if constexpr (c.alignment_check == AlignmentCheck::HARDWARE) {
-                asm("pushf\n"
+                asm volatile(
+                    "subq $128, %%rsp\n"
+                    "pushf\n"
                     "andl $~0x40000, (%%rsp)\n"
                     "popf\n"
+                    "addq $128, %%rsp\n"
                     :);
             }
         }
@@ -302,6 +310,7 @@ struct R3000Core<c>::Private {
     branch_delay_slot branch_slot;
     MMAPR3000Bus bus;
     Bios bios;
+    DMA dma;
     uint64_t cycle_counter{};
     R3000Core<c>* parent;
     uint64_t next_vblank{};
@@ -1181,7 +1190,11 @@ uint64_t R3000Core<c>::Private::run_ij_unk(uint32_t, uint32_t, uint32_t, uint32_
 template<R3000CoreConfig c>
 R3000Core<c>::R3000Core()
     : p{std::make_unique<R3000Core<c>::Private>(this)}
-{}
+{
+    p->bus.unprotect_hw();
+    p->dma.init(this);
+    p->bus.protect_hw();
+}
 
 template<R3000CoreConfig c>
 R3000Core<c>::~R3000Core() = default;
@@ -1248,22 +1261,31 @@ Core const& R3000Core<c>::core() const
 }
 
 template<R3000CoreConfig c>
-uint8_t* R3000Core<c>::get_buffer_checked(r3000_ptr_t addr, uint32_t size) const
+uint8_t* R3000Core<c>::get_buffer_checked(r3000_ptr_t addr, uint32_t size, bool ram) const
 {
-    // This function only allows getting a buffer for RAM, at either of its mirror locations. For
-    // this reason, the first check is that the size is no higher than 2MB.
-    if (size > 0x200000u) {
+    using boost::container::static_vector;
+
+    auto const [max_size, prefixes] = [&] -> std::tuple<uint32_t, static_vector<uint32_t, 3>> {
+        if (ram) {
+            return {0x200000u, {0x0u, 0x80000000u, 0xa0000000u}};
+        } else {
+            // For devices/scratchpad, only allow the lower mirror (0x1f800000).
+            return {0x3000u, {0x1f800000u}};
+        }
+    }();
+
+    if (size > max_size) {
         throw AddressException{addr + size};
     }
 
-    // Now, check that the base address is within any of the RAM regions.
+    // Check that the base address is within any of the regions.
     if (auto const addr_prefix = addr & 0xffe00000u;
-        !std::ranges::contains(std::array{0x0u, 0x80000000u, 0xa0000000u}, addr_prefix)) {
+        !std::ranges::contains(prefixes, addr_prefix)) {
         throw AddressException{addr};
     }
 
     // Lastly, check that addr + size lies within the limits.
-    if (auto const addr_suffix = addr & 0x1fffffu; addr_suffix + size > 0x200000u) {
+    if (auto const addr_suffix = addr & (max_size - 1); addr_suffix + size > max_size) {
         throw AddressException{addr + size};
     }
 
@@ -1286,6 +1308,18 @@ template<R3000CoreConfig c>
 void R3000Core<c>::return_from_exception()
 {
     p->run_returnFromException();
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::write_dma_reg(r3000_ptr_t addr, uint32_t value)
+{
+    p->dma.write_dma_reg(addr, value);
+}
+
+template<R3000CoreConfig c>
+uint32_t R3000Core<c>::read_dma_reg(r3000_ptr_t addr)
+{
+    return p->dma.read_dma_reg(addr);
 }
 
 // Explicit instantiation

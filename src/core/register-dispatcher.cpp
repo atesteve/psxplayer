@@ -15,49 +15,49 @@ void RegisterDispatcher::write(uint32_t addr, Int value) const
 template<std::integral Int>
 void RegisterDispatcher::write_reg(R3000& emu, r3000_ptr_t addr, Int value) const
 {
-    switch (addr) {
-    case HWReg::ISTAT: {
+    if (addr == HWReg::ISTAT) {
         if constexpr (std::is_same_v<Int, uint8_t>) {
             return;
         }
         auto& istat = emu.istat();
         istat &= value;
-        return;
-    }
-
-    case HWReg::IMASK: {
+    } else if (addr == HWReg::IMASK) {
         if constexpr (std::is_same_v<Int, uint8_t>) {
             return;
         }
         auto& imask = emu.imask();
         imask = value;
-        return;
+    } else if (addr >= HWReg::DMA_start && addr < HWReg::DMA_end) {
+        if constexpr (!std::is_same_v<Int, uint32_t>) {
+            return;
+        }
+        emu.write_dma_reg(addr, value);
+    } else {
+        write<Int>(addr, value);
     }
-    }
-
-    write<Int>(addr, value);
 }
 
 template<std::integral Int>
 Int RegisterDispatcher::read_reg(R3000& emu, r3000_ptr_t addr) const
 {
-    switch (addr) {
-    case HWReg::ISTAT: {
+    if (addr == HWReg::ISTAT) {
         if constexpr (std::is_same_v<Int, uint8_t>) {
             return 0;
         }
         return emu.istat();
-    }
-
-    case HWReg::IMASK: {
+    } else if (addr == HWReg::IMASK) {
         if constexpr (std::is_same_v<Int, uint8_t>) {
             return 0;
         }
         return emu.imask();
+    } else if (addr >= HWReg::DMA_start && addr < HWReg::DMA_end) {
+        if constexpr (!std::is_same_v<Int, uint32_t>) {
+            return 0;
+        }
+        return emu.read_dma_reg(addr);
+    } else {
+        return read<Int>(addr);
     }
-    }
-
-    return read<Int>(addr);
 }
 
 template void RegisterDispatcher::write_reg(R3000&, r3000_ptr_t, uint32_t) const;

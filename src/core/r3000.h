@@ -227,6 +227,9 @@ private:
 struct HWReg {
     static constexpr size_t ISTAT = 0x1f801070;
     static constexpr size_t IMASK = 0x1f801074;
+    static constexpr size_t DEVICE_BASE = 0x1f801000;
+    static constexpr size_t DMA_start = 0x1f801080;
+    static constexpr size_t DMA_end = 0x1f801100;
 };
 
 struct IRQ {
@@ -290,7 +293,16 @@ struct R3000 {
     {
         using RetT = std::
             conditional_t<std::is_const_v<std::remove_reference_t<Self>>, std::add_const_t<T>, T>;
-        auto* ptr = self.get_buffer_checked(addr, sizeof(T) * size);
+        auto* ptr = self.get_buffer_checked(addr, sizeof(T) * size, true);
+        return EmuBuffer<RetT>{reinterpret_cast<RetT*>(ptr), addr, size};
+    }
+
+    template<typename T = uint8_t, typename Self>
+    auto get_device_buffer(this Self&& self, uint32_t addr, uint32_t size = 1)
+    {
+        using RetT = std::
+            conditional_t<std::is_const_v<std::remove_reference_t<Self>>, std::add_const_t<T>, T>;
+        auto* ptr = self.get_buffer_checked(addr, sizeof(T) * size, false);
         return EmuBuffer<RetT>{reinterpret_cast<RetT*>(ptr), addr, size};
     }
 
@@ -298,6 +310,9 @@ struct R3000 {
     virtual uint32_t& imask() = 0;
 
     virtual void return_from_exception() = 0;
+
+    virtual void write_dma_reg(r3000_ptr_t addr, uint32_t value) = 0;
+    virtual uint32_t read_dma_reg(r3000_ptr_t addr) = 0;
 
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;
@@ -308,5 +323,5 @@ protected:
     virtual void write_mem_u16(r3000_ptr_t addr, uint16_t value) = 0;
     virtual void write_mem_u32(r3000_ptr_t addr, uint32_t value) = 0;
 
-    virtual uint8_t* get_buffer_checked(r3000_ptr_t addr, uint32_t size) const = 0;
+    virtual uint8_t* get_buffer_checked(r3000_ptr_t addr, uint32_t size, bool ram) const = 0;
 };
