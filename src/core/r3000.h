@@ -230,6 +230,8 @@ struct HWReg {
     static constexpr size_t DEVICE_BASE = 0x1f801000;
     static constexpr size_t DMA_start = 0x1f801080;
     static constexpr size_t DMA_end = 0x1f801100;
+    static constexpr size_t SPU_start = 0x1f801c00;
+    static constexpr size_t SPU_end = 0x1F802000;
 };
 
 struct IRQ {
@@ -313,6 +315,9 @@ struct R3000 {
 
     virtual void write_dma_reg(r3000_ptr_t addr, uint32_t value) = 0;
     virtual uint32_t read_dma_reg(r3000_ptr_t addr) = 0;
+
+    virtual void write_spu_reg(r3000_ptr_t addr, uint16_t value) = 0;
+    virtual uint16_t read_spu_reg(r3000_ptr_t addr) = 0;
 
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;

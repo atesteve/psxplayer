@@ -2,6 +2,7 @@
 #include "mmap-r3000bus.h"
 #include "bios.h"
 #include "dma.h"
+#include "spu/spu.h"
 #include "util/util.h"
 
 #include <fmt/format.h>
@@ -311,6 +312,7 @@ struct R3000Core<c>::Private {
     MMAPR3000Bus bus;
     Bios bios;
     DMA dma;
+    SPU spu;
     uint64_t cycle_counter{};
     R3000Core<c>* parent;
     uint64_t next_vblank{};
@@ -1191,9 +1193,8 @@ template<R3000CoreConfig c>
 R3000Core<c>::R3000Core()
     : p{std::make_unique<R3000Core<c>::Private>(this)}
 {
-    p->bus.unprotect_hw();
     p->dma.init(this);
-    p->bus.protect_hw();
+    p->spu.init(this);
 }
 
 template<R3000CoreConfig c>
@@ -1265,12 +1266,13 @@ uint8_t* R3000Core<c>::get_buffer_checked(r3000_ptr_t addr, uint32_t size, bool 
 {
     using boost::container::static_vector;
 
-    auto const [max_size, prefixes] = [&] -> std::tuple<uint32_t, static_vector<uint32_t, 3>> {
+    auto const [max_size, base_addr, ptr, prefixes] =
+        [&] -> std::tuple<uint32_t, uint32_t, uint8_t*, static_vector<uint32_t, 3>> {
         if (ram) {
-            return {0x200000u, {0x0u, 0x80000000u, 0xa0000000u}};
+            return {0x200000u, 0, p->bus.get_mem_ptr(), {0x0u, 0x80000000u, 0xa0000000u}};
         } else {
             // For devices/scratchpad, only allow the lower mirror (0x1f800000).
-            return {0x3000u, {0x1f800000u}};
+            return {0x3000u, HWReg::DEVICE_BASE, p->bus.get_device_mem_ptr(), {0x1f800000u}};
         }
     }();
 
@@ -1289,7 +1291,7 @@ uint8_t* R3000Core<c>::get_buffer_checked(r3000_ptr_t addr, uint32_t size, bool 
         throw AddressException{addr + size};
     }
 
-    return p->bus.get_mem_ptr() + addr;
+    return ptr + (addr - base_addr);
 }
 
 template<R3000CoreConfig c>
@@ -1320,6 +1322,18 @@ template<R3000CoreConfig c>
 uint32_t R3000Core<c>::read_dma_reg(r3000_ptr_t addr)
 {
     return p->dma.read_dma_reg(addr);
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::write_spu_reg(r3000_ptr_t addr, uint16_t value)
+{
+    p->spu.write_register(addr, value);
+}
+
+template<R3000CoreConfig c>
+uint16_t R3000Core<c>::read_spu_reg(r3000_ptr_t addr)
+{
+    return p->spu.read_register(addr);
 }
 
 // Explicit instantiation

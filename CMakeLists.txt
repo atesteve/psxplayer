@@ -66,6 +66,8 @@ set(TARGET_SRC
   src/core/register-dispatcher.h
   src/core/dma.cpp
   src/core/dma.h
+  src/spu/spu.cpp
+  src/spu/spu.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp

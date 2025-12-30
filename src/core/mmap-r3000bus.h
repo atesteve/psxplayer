@@ -21,9 +21,6 @@ public:
         write_mem_impl<Int>(_mem_space + addr, value);
     }
 
-    void unprotect_hw();
-    void protect_hw();
-
     template<std::integral Int>
     static Int read_mem_impl(void* addr);
 
@@ -33,6 +30,8 @@ public:
     uint8_t* get_mem_ptr() {
         return _mem_space;
     }
+
+    uint8_t* get_device_mem_ptr();
 
 private:
     struct Private;

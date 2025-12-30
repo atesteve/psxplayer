@@ -37,6 +37,9 @@ public:
     void write_dma_reg(r3000_ptr_t addr, uint32_t value) override;
     uint32_t read_dma_reg(r3000_ptr_t addr) override;
 
+    void write_spu_reg(r3000_ptr_t addr, uint16_t value) override;
+    uint16_t read_spu_reg(r3000_ptr_t addr) override;
+
 private:
     struct Private;
     std::unique_ptr<Private> p;

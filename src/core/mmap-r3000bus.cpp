@@ -15,6 +15,7 @@
 #include <array>
 #include <algorithm>
 #include <csignal>
+#include <vector>
 
 namespace {
 
@@ -186,6 +187,7 @@ struct MMAPR3000Bus::Private {
 
     uint8_t* mem_space = nullptr;
     uint8_t* exec_page = nullptr;
+    std::vector<uint8_t> device_mem;
     int ram_memfd = -1;
     int spad_memfd = -1;
     int io_memfd = -1;
@@ -211,7 +213,9 @@ void MMAPR3000Bus::Private::init()
 
     map_memory("psx-ram", ram_memfd, mem_space, PSX_RAM_SIZE, PSX_RAM_ADDRS);
     map_memory("psx-scratchpad", spad_memfd, mem_space, PSX_SPAD_SIZE, PSX_SPAD_ADDRS);
-    map_memory("psx-io", io_memfd, mem_space, PSX_IO_SIZE, PSX_IO_ADDRS, PROT_NONE);
+    // Keep device memory outside the address space, with read and write permissions. This way,
+    // there is no need to call mprotect. The memory can be just an std::vector;
+    device_mem.resize(PSX_IO_SIZE);
 
     exec_page = (uint8_t*)mmap(
         nullptr, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -219,7 +223,7 @@ void MMAPR3000Bus::Private::init()
         throw_errno("Can't map executable page");
     }
 
-    dispatcher.set_mem_space(mem_space);
+    dispatcher.set_mem_space(device_mem.data());
 }
 
 MMAPR3000Bus::Private::~Private()
@@ -239,21 +243,6 @@ MMAPR3000Bus::Private::~Private()
     }
 
     signal_ptr = nullptr;
-}
-
-void MMAPR3000Bus::Private::unprotect_hw(bool throwOnError)
-{
-    if (mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_READ | PROT_WRITE) == -1
-        && throwOnError) {
-        throw_errno("unprotect_hw");
-    }
-}
-
-void MMAPR3000Bus::Private::protect_hw(bool throwOnError)
-{
-    if (mprotect(mem_space + PSX_IO_ADDRS[0], PSX_IO_SIZE, PROT_NONE) == -1 && throwOnError) {
-        throw_errno("protect_hw");
-    }
 }
 
 void MMAPR3000Bus::Private::static_sigsegv_handler(int, siginfo_t*, void* ucp)
@@ -277,13 +266,6 @@ Int MMAPR3000Bus::Private::sigsegv_handler(void* ptr, AccessType type, Int value
         })) {
         // This is an address pointing to the lower mirror.
         auto const reg_addr = 0x1f800000u | (cpu_addr & (PSX_IO_SIZE - 1));
-
-        // Open only the lower mirror. The handlers will use only that mirror.
-        unprotect_hw();
-        ScopeGuard reprotect{[&] {
-            // Reprotect before returning.
-            protect_hw(false);
-        }};
 
         if (type == AccessType::WRITE) {
             dispatcher.write_reg<Int>(*emu, reg_addr, value);
@@ -392,14 +374,9 @@ void MMAPR3000Bus::Private::sigbus_handler(ucontext_t* ucontext)
     throw AddressException{emu_addr, access, width};
 }
 
-void MMAPR3000Bus::protect_hw()
+uint8_t* MMAPR3000Bus::get_device_mem_ptr()
 {
-    _p->protect_hw();
-}
-
-void MMAPR3000Bus::unprotect_hw()
-{
-    _p->unprotect_hw();
+    return _p->device_mem.data();
 }
 
 MMAPR3000Bus::MMAPR3000Bus(R3000* emu)

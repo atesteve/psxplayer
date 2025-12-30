@@ -3,13 +3,13 @@
 template<std::integral Int>
 Int RegisterDispatcher::read(uint32_t addr) const
 {
-    return *(Int*)(_mem_space + addr);
+    return *(Int*)(_mem_space + (addr - HWReg::DEVICE_BASE));
 }
 
 template<std::integral Int>
 void RegisterDispatcher::write(uint32_t addr, Int value) const
 {
-    *(Int*)(_mem_space + addr) = value;
+    *(Int*)(_mem_space + (addr - HWReg::DEVICE_BASE)) = value;
 }
 
 template<std::integral Int>
@@ -32,6 +32,11 @@ void RegisterDispatcher::write_reg(R3000& emu, r3000_ptr_t addr, Int value) cons
             return;
         }
         emu.write_dma_reg(addr, value);
+    } else if (addr >= HWReg::SPU_start && addr < HWReg::SPU_end) {
+        if constexpr (!std::is_same_v<Int, uint16_t>) {
+            return;
+        }
+        emu.write_spu_reg(addr, value);
     } else {
         write<Int>(addr, value);
     }
@@ -55,7 +60,12 @@ Int RegisterDispatcher::read_reg(R3000& emu, r3000_ptr_t addr) const
             return 0;
         }
         return emu.read_dma_reg(addr);
-    } else {
+    } else if (addr >= HWReg::SPU_start && addr < HWReg::SPU_end) {
+        if constexpr (!std::is_same_v<Int, uint16_t>) {
+            return 0;
+        }
+        return emu.read_spu_reg(addr);
+    }else {
         return read<Int>(addr);
     }
 }
