@@ -2,4 +2,7 @@
 
 void Bios::InitHeap(R3000& emu, uint32_t base, uint32_t size)
 {
+    std::ignore = emu;
+    std::ignore = base;
+    std::ignore = size;
 }

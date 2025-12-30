@@ -116,6 +116,7 @@ int32_t Bios::closeEvent(uint32_t event)
 
 int32_t Bios::waitEvent(uint32_t event)
 {
+    std::ignore = event;
     return 1;
 }
 

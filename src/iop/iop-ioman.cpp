@@ -139,11 +139,15 @@ std::optional<uint32_t> PSF2::iop_AddDrv(upse_module_instance_t* ins)
     auto* const name = (char*)PSXM(ins, from_le(table->name));
     auto* const desc = (char*)PSXM(ins, from_le(table->desc));
     auto* const ops = (iop_device_ops_t*)PSXM(ins, from_le(table->ops));
+    std::ignore = name;
+    std::ignore = desc;
+    std::ignore = ops;
     return 0;
 }
 
 std::optional<uint32_t> PSF2::iop_DelDrv(upse_module_instance_t* ins)
 {
     auto* const name = (char*)PSXM(ins, from_le(ins->cpustate.GPR.n.a0));
+    std::ignore = name;
     return 0;
 }
