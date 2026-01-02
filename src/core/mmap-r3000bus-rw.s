@@ -8,6 +8,7 @@
 .section .text
 
 // unsigned char MMAPR3000Bus::read_mem_impl<unsigned char>(void*)
+.align 16
 _ZN12MMAPR3000Bus13read_mem_implIhEET_Pv:
     movzbl (%rdi), %eax
     ret
@@ -23,6 +24,7 @@ _ZN12MMAPR3000Bus13read_mem_implIjEET_Pv:
     ret
 
 // void MMAPR3000Bus::write_mem_impl<unsigned char>(void*, unsigned char)
+.align 16
 _ZN12MMAPR3000Bus14write_mem_implIhEEvPvT_:
     mov    %sil, (%rdi)
     ret

@@ -1,142 +1,262 @@
 #include "dma.h"
 
+#include <fmt/format.h>
+
 namespace {
 // clang-format off
 
-constexpr r3000_ptr_t MADR = 0x1f801000;
-constexpr r3000_ptr_t BCR  = 0x1f801004;
-constexpr r3000_ptr_t CHCR = 0x1f801008;
 constexpr r3000_ptr_t DPCR = 0x1f8010f0;
 constexpr r3000_ptr_t DICR = 0x1f8010f4;
 
-struct dpcr_t {
-    uint32_t DMA0Pri : 3 = 1;
-    uint32_t DMA0En  : 1 = 0;
-    uint32_t DMA1Pri : 3 = 2;
-    uint32_t DMA1En  : 1 = 0;
-    uint32_t DMA2Pri : 3 = 3;
-    uint32_t DMA2En  : 1 = 0;
-    uint32_t DMA3Pri : 3 = 4;
-    uint32_t DMA3En  : 1 = 0;
-    uint32_t DMA4Pri : 3 = 5;
-    uint32_t DMA4En  : 1 = 0;
-    uint32_t DMA5Pri : 3 = 6;
-    uint32_t DMA5En  : 1 = 0;
-    uint32_t DMA6Pri : 3 = 7;
-    uint32_t DMA6En  : 1 = 0;
-    uint32_t CPUPri  : 3 = 0;
-    uint32_t _       : 1 = 0;
+constexpr size_t N_CHANNELS = 7;
+
+enum : uint32_t {
+    SYNC_MODE_BURST = 0,
+    SYNC_MODE_SLICE,
+    SYNC_MODE_LINKED_LIST,
 };
 
-struct dicr_t {
-    uint32_t intr_mode        : 7 = 0;
-    uint32_t _                : 8 = 0;
-    uint32_t bus_error        : 1 = 0;
-    uint32_t intr_mask        : 7 = 0;
-    uint32_t intr_en          : 1 = 0;
-    uint32_t intr_flag        : 7 = 0;
-    uint32_t intr_master_flag : 1 = 0;
+union bcr_t {
+    uint32_t raw;
+    struct {
+        uint32_t bs : 16;
+        uint32_t ba : 16;
+    } fields;
 };
 
-struct chcr_t {
-    uint32_t dir         : 1 = 0;
-    uint32_t incr        : 1 = 0;
-    uint32_t _           : 6 = 0;
-    uint32_t mod         : 1 = 0;
-    uint32_t sync_mode   : 2 = 0;
-    uint32_t _           : 5 = 0;
-    uint32_t chop_dma    : 3 = 0;
-    uint32_t _           : 1 = 0;
-    uint32_t chop_cpu    : 3 = 0;
-    uint32_t _           : 1 = 0;
-    uint32_t tr          : 1 = 0;
-    uint32_t _           : 3 = 0;
-    uint32_t force_start : 1 = 0;
-    uint32_t pause       : 1 = 0;
-    uint32_t bus_snoop   : 1 = 0;
-    uint32_t _           : 1 = 0;
+union dpcr_t {
+    uint32_t raw = 0x07654321u;
+    struct {
+        uint32_t DMA0Pri : 3;
+        uint32_t DMA0En  : 1;
+        uint32_t DMA1Pri : 3;
+        uint32_t DMA1En  : 1;
+        uint32_t DMA2Pri : 3;
+        uint32_t DMA2En  : 1;
+        uint32_t DMA3Pri : 3;
+        uint32_t DMA3En  : 1;
+        uint32_t DMA4Pri : 3;
+        uint32_t DMA4En  : 1;
+        uint32_t DMA5Pri : 3;
+        uint32_t DMA5En  : 1;
+        uint32_t DMA6Pri : 3;
+        uint32_t DMA6En  : 1;
+        uint32_t CPUPri  : 3;
+        uint32_t _       : 1;
+    } fields;
 };
 
-static_assert(sizeof(dpcr_t) == sizeof(uint32_t));
-static_assert(sizeof(dicr_t) == sizeof(uint32_t));
-static_assert(sizeof(chcr_t) == sizeof(uint32_t));
+union dicr_t {
+    uint32_t raw;
+    struct {
+        uint32_t intr_mode        : 7;
+        uint32_t _                : 8;
+        uint32_t bus_error        : 1;
+        uint32_t intr_mask        : 7;
+        uint32_t intr_en          : 1;
+        uint32_t intr_flag        : 7;
+        uint32_t intr_master_flag : 1;
+    } fields;
+};
+
+union chcr_t {
+    uint32_t raw;
+    struct {
+        uint32_t dir         : 1;
+        uint32_t incr        : 1;
+        uint32_t _           : 6;
+        uint32_t mod         : 1;
+        uint32_t sync_mode   : 2;
+        uint32_t _           : 5;
+        uint32_t chop_dma    : 3;
+        uint32_t _           : 1;
+        uint32_t chop_cpu    : 3;
+        uint32_t _           : 1;
+        uint32_t start       : 1;
+        uint32_t _           : 3;
+        uint32_t force_start : 1;
+        uint32_t pause       : 1;
+        uint32_t bus_snoop   : 1;
+        uint32_t _           : 1;
+    } fields;
+};
+
+static_assert(sizeof(bcr_t::fields) == sizeof(uint32_t));
+static_assert(sizeof(chcr_t::fields) == sizeof(uint32_t));
+static_assert(sizeof(dpcr_t::fields) == sizeof(uint32_t));
+static_assert(sizeof(dicr_t::fields) == sizeof(uint32_t));
+
+struct dma_channel_t {
+    uint32_t madr;
+    bcr_t bcr;
+    chcr_t chcr;
+    uint32_t _;
+};
+
+static_assert(sizeof(dma_channel_t) == 0x10);
+
+struct dma_regs_t {
+    dma_channel_t channel[N_CHANNELS];
+    dpcr_t dpcr;
+    dicr_t dicr;
+    uint32_t _[2];
+};
+
+static_assert(sizeof(dma_regs_t) == 0x80);
 
 // clang-format on
 
-uint32_t dma_n(r3000_ptr_t addr)
+std::pair<uint32_t, uint32_t> dma_channel_reg(r3000_ptr_t addr)
 {
     auto const n = (addr >> 4) & 0xff;
     if (n < 8 || n > 0xe) {
-        return -1;
+        return {-1, -1};
     }
-    return n - 8;
+    return {n - 8, (addr & 0xf) >> 2};
 }
 
 } // namespace
 
 struct DMA::Private {
-    template<std::integral Int = uint32_t>
-    void write_reg(uint32_t addr, Int value)
-    {
-        *(Int*)(&device_memory[addr - HWReg::DEVICE_BASE]) = value;
-    }
-
-    template<std::integral Int = uint32_t>
-    Int read_reg(uint32_t addr)
-    {
-        return *(Int*)(&device_memory[addr - HWReg::DEVICE_BASE]);
-    }
-
     void init(R3000* emu);
 
     void write_dma_reg(r3000_ptr_t addr, uint32_t value);
     uint32_t read_dma_reg(r3000_ptr_t addr);
 
+    std::pair<uint32_t, uint32_t> get_dpcr_fields(uint32_t ch);
+    void attempt_transfer(uint32_t channel);
+
+    void update_dicr();
+
     R3000* emu;
-    EmuBuffer<uint8_t> device_memory;
+    EmuBuffer<dma_regs_t> reg;
     EmuBuffer<uint8_t> ram;
+    bool device_dma_request[N_CHANNELS]{};
 };
 
 void DMA::Private::init(R3000* emu)
 {
     this->emu = emu;
-    device_memory = emu->get_device_buffer(HWReg::DEVICE_BASE, 0x2000);
+    reg = emu->get_device_buffer<dma_regs_t>(HWReg::DMA_start, 1);
     ram = emu->get_buffer(0, 0x200000);
+    reg->dpcr = dpcr_t{};
+}
 
-    write_reg(DPCR, std::bit_cast<uint32_t>(dpcr_t{}));
+std::pair<uint32_t, uint32_t> DMA::Private::get_dpcr_fields(uint32_t ch)
+{
+    // clang-format off
+    switch (ch) {
+        case 0: return {(uint32_t)reg->dpcr.fields.DMA0Pri, (uint32_t)reg->dpcr.fields.DMA0En };
+        case 1: return {(uint32_t)reg->dpcr.fields.DMA1Pri, (uint32_t)reg->dpcr.fields.DMA1En };
+        case 2: return {(uint32_t)reg->dpcr.fields.DMA2Pri, (uint32_t)reg->dpcr.fields.DMA2En };
+        case 3: return {(uint32_t)reg->dpcr.fields.DMA3Pri, (uint32_t)reg->dpcr.fields.DMA3En };
+        case 4: return {(uint32_t)reg->dpcr.fields.DMA4Pri, (uint32_t)reg->dpcr.fields.DMA4En };
+        case 5: return {(uint32_t)reg->dpcr.fields.DMA5Pri, (uint32_t)reg->dpcr.fields.DMA5En };
+        case 6: return {(uint32_t)reg->dpcr.fields.DMA6Pri, (uint32_t)reg->dpcr.fields.DMA6En };
+        default: return {};
+    }
+    // clang-format on
+}
+
+void DMA::Private::update_dicr()
+{
+    auto& fields = reg->dicr.fields;
+    fields.intr_master_flag =
+        fields.bus_error || (fields.intr_en && fields.intr_flag && fields.intr_mask);
+}
+
+void DMA::Private::attempt_transfer(uint32_t ch)
+{
+    auto& channel = reg->channel[ch];
+    auto const [priority, enabled] = get_dpcr_fields(ch);
+    if (!enabled) {
+        return;
+    }
+    if (!channel.chcr.fields.start) {
+        return;
+    }
+    if (!device_dma_request[ch]) {
+        return;
+    }
+
+    bool const copy_to_device = channel.chcr.fields.dir;
+    channel.chcr.fields.force_start = 0;
+
+    switch (ch) {
+    case 4: {
+        switch (channel.chcr.fields.sync_mode) {
+        case SYNC_MODE_BURST:
+            break;
+
+        case SYNC_MODE_SLICE: {
+            if (channel.chcr.fields.incr) {
+                // Don't support backwards transfers, at least for now.
+                break;
+            }
+            auto [block_words, n_blocks] = channel.bcr.fields;
+            auto address = channel.madr;
+            uint64_t cycles = 0;
+            while (n_blocks) {
+                if (copy_to_device) {
+                    cycles += emu->spu_dma_write(address, block_words * sizeof(uint32_t));
+                } else {
+                    cycles += emu->spu_dma_read(address, block_words * sizeof(uint32_t));
+                }
+                address += block_words * sizeof(uint32_t);
+                n_blocks--;
+            }
+            (void)cycles;
+            reg->dicr.fields.intr_flag |= reg->dicr.fields.intr_mask & (1 << 4);
+            update_dicr();
+            break;
+        }
+
+        case SYNC_MODE_LINKED_LIST:
+            break;
+
+        default:; // Reserved - do nothing
+        }
+        break;
+    }
+    default:; // Only SPU transfers are implemented.
+    }
 }
 
 void DMA::Private::write_dma_reg(r3000_ptr_t addr, uint32_t value)
 {
     if (addr == DPCR) {
-        write_reg(addr, value);
+        reg->dpcr.raw = value;
         return;
     }
 
     if (addr == DICR) {
-        auto const bits = std::bit_cast<dicr_t>(value);
-        auto current_dicr = std::bit_cast<dicr_t>(read_reg(addr));
-        current_dicr.intr_mode = bits.intr_mode;
-        current_dicr.bus_error = bits.bus_error;
-        current_dicr.intr_mask = bits.intr_mask;
-        current_dicr.intr_en = bits.intr_en;
-        current_dicr.intr_flag &= ~bits.intr_mask;
-        write_reg(addr, std::bit_cast<uint32_t>(current_dicr));
+        dicr_t const input{value};
+        auto& current_dicr = reg->dicr.fields;
+        current_dicr.intr_mode = input.fields.intr_mode;
+        current_dicr.bus_error = input.fields.bus_error;
+        current_dicr.intr_mask = input.fields.intr_mask;
+        current_dicr.intr_en = input.fields.intr_en;
+        current_dicr.intr_flag &= ~input.fields.intr_mask;
+        update_dicr();
     }
 
-    auto const dma = dma_n(addr);
-    if (dma > 0xff) {
+    auto const [channel, n] = dma_channel_reg(addr);
+    // We only support DMA to SPU.
+    if (channel != 4) {
         return;
     }
 
-    switch (addr & 0xfffff00f) {
-    case MADR:
+    switch (n) {
+    case 0:
         // The top 8 bits and bottom 2 bits are always zero.
-        write_reg(addr, value & 0x00fffffcu);
+        reg->channel[channel].madr = value & 0x00fffffcu;
         break;
-    case BCR:
+    case 1:
+        reg->channel[channel].bcr.raw = value;
         break;
-    case CHCR:
+    case 2:
+        reg->channel[channel].chcr.raw = value;
+        attempt_transfer(channel);
         break;
     default:; // Do nothing.
     }
@@ -145,28 +265,26 @@ void DMA::Private::write_dma_reg(r3000_ptr_t addr, uint32_t value)
 uint32_t DMA::Private::read_dma_reg(r3000_ptr_t addr)
 {
     if (addr == DPCR) {
-        return read_reg(addr);
+        return reg->dpcr.raw;
     }
 
     if (addr == DICR) {
-        auto bits = std::bit_cast<dicr_t>(read_reg(addr));
-        bits.intr_master_flag =
-            bits.bus_error || (bits.intr_en && bits.intr_flag && bits.intr_mask);
-        return std::bit_cast<uint32_t>(bits);
+        return reg->dicr.raw;
     }
 
-    auto const dma = dma_n(addr);
-    if (dma > 0xff) {
+    auto const [channel, n] = dma_channel_reg(addr);
+    // We only support DMA to SPU.
+    if (channel != 4) {
         return 0;
     }
 
-    switch (addr & 0xfffff00f) {
-    case MADR:
-        return read_reg(addr);
-    case BCR:
-        return read_reg(addr);
-    case CHCR:
-        return read_reg(addr);
+    switch (n) {
+    case 0:
+        return reg->channel[channel].madr;
+    case 1:
+        return reg->channel[channel].bcr.raw;
+    case 2:
+        return reg->channel[channel].chcr.raw;
     default:; // Do nothing.
     }
 
@@ -181,6 +299,19 @@ void DMA::write_dma_reg(r3000_ptr_t addr, uint32_t value)
 uint32_t DMA::read_dma_reg(r3000_ptr_t addr)
 {
     return _p->read_dma_reg(addr);
+}
+
+void DMA::request_transfer(uint32_t channel, bool request)
+{
+    _p->device_dma_request[channel] = request;
+    if (request) {
+        _p->attempt_transfer(channel);
+    }
+}
+
+bool DMA::get_master_irq_flag()
+{
+    return _p->reg->dicr.fields.intr_master_flag;
 }
 
 void DMA::init(R3000* emu)

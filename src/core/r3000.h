@@ -319,6 +319,11 @@ struct R3000 {
     virtual void write_spu_reg(r3000_ptr_t addr, uint16_t value) = 0;
     virtual uint16_t read_spu_reg(r3000_ptr_t addr) = 0;
 
+    virtual void request_dma_transfer(uint32_t channel, bool request) = 0;
+
+    virtual uint64_t spu_dma_write(r3000_ptr_t addr, uint32_t nbytes) = 0;
+    virtual uint64_t spu_dma_read(r3000_ptr_t addr, uint32_t nbytes) = 0;
+
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;
     virtual uint16_t read_mem_u16(r3000_ptr_t addr) const = 0;

@@ -58,14 +58,66 @@ struct SPU::Private {
     void write_register(r3000_ptr_t addr, uint16_t value);
     uint16_t read_register(r3000_ptr_t addr);
 
+    void write_ram(size_t addr, uint16_t value)
+    {
+        ram[addr / sizeof(uint16_t)] = value;
+    }
+
+    uint16_t read_ram(size_t addr)
+    {
+        return ram[addr / sizeof(uint16_t)];
+    }
+
+    uint64_t dma_write(r3000_ptr_t addr, uint32_t nbytes);
+    uint64_t dma_read(r3000_ptr_t addr, uint32_t nbytes);
+
+    void update_status();
+
+    R3000* emu;
     EmuBuffer<spu_regs_t> reg;
+    struct State {
+        uint32_t transfer_addr{};
+    } state{};
+    EmuBuffer<uint16_t> system_ram;
+    alignas(uint32_t) std::array<uint16_t, SPU_RAM_SIZE / 2> ram;
 };
 
-SPU::SPU()
-    : _p{std::make_unique<Private>()}
-{}
+uint64_t SPU::Private::dma_write(r3000_ptr_t addr, uint32_t nbytes)
+{
+    addr /= sizeof(uint16_t);
+    for (auto i = 0u; i < nbytes; i += sizeof(uint16_t)) {
+        write_ram(state.transfer_addr, system_ram[addr]);
+        addr += sizeof(uint16_t);
+        state.transfer_addr = (state.transfer_addr + sizeof(uint16_t)) % SPU_RAM_SIZE;
+    }
+    return nbytes;
+}
 
-SPU::~SPU() = default;
+uint64_t SPU::Private::dma_read(r3000_ptr_t addr, uint32_t nbytes)
+{
+    addr /= sizeof(uint16_t);
+    for (auto i = 0u; i < nbytes; i += sizeof(uint16_t)) {
+        system_ram[addr] = read_ram(state.transfer_addr);
+        addr += sizeof(uint16_t);
+        state.transfer_addr = (state.transfer_addr + sizeof(uint16_t)) % SPU_RAM_SIZE;
+    }
+    return nbytes;
+}
+
+void SPU::Private::update_status()
+{
+    auto& status = reg->status;
+    auto const& control = reg->control.fields;
+    status.fields.cd_audio_en = control.cd_audio_en;
+    status.fields.ext_audio_en = control.ext_audio_en;
+    status.fields.cd_audio_reverb = control.cd_audio_reverb;
+    status.fields.ext_audio_reverb = control.ext_audio_reverb;
+    status.fields.transfer_mode = control.transfer_mode;
+    status.fields.irq9_flag = 0;
+    status.fields.dma_req = control.transfer_mode >= 2;
+    status.fields.dma_write_req = control.transfer_mode == 2;
+    status.fields.dma_read_req = control.transfer_mode == 3;
+}
 
 #define start_reg_handling() if (false) {
 #define handle_reg(field_name, ...)                                                        \
@@ -89,24 +141,24 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
         auto& v = voice[voice_n];
         // clang-format off
         switch (index) {
-            case 0: v.vol_left.bits        = value;     break;
-            case 1: v.vol_right.bits       = value;     break;
-            case 2: v.adpcm_sample_rate    = value;     break;
-            case 3: v.adpcm_start_addr     = value;     break;
-            case 4: write_32bit_reg(&v.adsr, value, 0); break;
-            case 5: write_32bit_reg(&v.adsr, value, 2); break;
-            case 6: v.adsr_vol             = value;     break;
-            case 7: v.adsr_repeat_addr     = value;     break;
+            case 0: v.vol_left.raw             = value;     break;
+            case 1: v.vol_right.raw            = value;     break;
+            case 2: v.adpcm_sample_rate        = value;     break;
+            case 3: v.adpcm_start_addr.raw     = value;     break;
+            case 4: write_32bit_reg(&v.adsr.raw, value, 0); break;
+            case 5: write_32bit_reg(&v.adsr.raw, value, 2); break;
+            case 6: v.adsr_vol                 = value;     break;
+            case 7: v.adsr_repeat_addr.raw     = value;     break;
         }
         // clang-format on
     }
     handle_reg(vol_left, 0x1f801d80)
     {
-        vol_left.bits = value;
+        vol_left.raw = value;
     }
     handle_reg(vol_right, 0x1f801d82)
     {
-        vol_right.bits = value;
+        vol_right.raw = value;
     }
     handle_reg(reverb_vol_left, 0x1f801d84)
     {
@@ -138,23 +190,27 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     }
     handle_reg(reberv_base_addr, 0x1f801da2)
     {
-        reberv_base_addr = value;
+        reberv_base_addr.raw = value;
     }
     handle_reg(irq_addr, 0x1f801da4)
     {
-        irq_addr = value;
+        irq_addr.raw = value;
     }
     handle_reg(transfer_addr, 0x1f801da6)
     {
-        transfer_addr = value;
+        transfer_addr.raw = value;
+        state.transfer_addr = transfer_addr.get();
     }
     handle_reg(transfer_data, 0x1f801da8)
     {
-        transfer_data = value;
+        write_ram(state.transfer_addr, value);
+        state.transfer_addr = (state.transfer_addr + sizeof(uint16_t)) % SPU_RAM_SIZE;
     }
     handle_reg(control, 0x1f801daa)
     {
-        control = value;
+        control.raw = value;
+        update_status();
+        emu->request_dma_transfer(4, reg->status.fields.dma_req);
     }
     handle_reg(transfer_control, 0x1f801dac)
     {
@@ -202,24 +258,24 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
         auto& v = voice[voice_n];
         // clang-format off
         switch (index) {
-            case 0: return v.vol_left.bits;
-            case 1: return v.vol_right.bits;
+            case 0: return v.vol_left.raw;
+            case 1: return v.vol_right.raw;
             case 2: return v.adpcm_sample_rate;
-            case 3: return v.adpcm_start_addr;
-            case 4: return read_32bit_reg(v.adsr, 0);
-            case 5: return read_32bit_reg(v.adsr, 2);
+            case 3: return v.adpcm_start_addr.raw;
+            case 4: return read_32bit_reg(v.adsr.raw, 0);
+            case 5: return read_32bit_reg(v.adsr.raw, 2);
             case 6: return v.adsr_vol;
-            case 7: return v.adsr_repeat_addr;
+            case 7: return v.adsr_repeat_addr.raw;
         }
         // clang-format on
     }
     handle_reg(vol_left, 0x1f801d80)
     {
-        return vol_left.bits;
+        return vol_left.raw;
     }
     handle_reg(vol_right, 0x1f801d82)
     {
-        return vol_right.bits;
+        return vol_right.raw;
     }
     handle_reg(reverb_vol_left, 0x1f801d84)
     {
@@ -251,23 +307,24 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     }
     handle_reg(reberv_base_addr, 0x1f801da2)
     {
-        return reberv_base_addr;
+        return reberv_base_addr.raw;
     }
     handle_reg(irq_addr, 0x1f801da4)
     {
-        return irq_addr;
+        return irq_addr.raw;
     }
     handle_reg(transfer_addr, 0x1f801da6)
     {
-        return transfer_addr;
+        return transfer_addr.raw;
     }
     handle_reg(transfer_data, 0x1f801da8)
     {
-        return transfer_data;
+        // There is no way to read data "manually", this register always reads as 0xffff.
+        return 0xffffu;
     }
     handle_reg(control, 0x1f801daa)
     {
-        return control;
+        return control.raw;
     }
     handle_reg(transfer_control, 0x1f801dac)
     {
@@ -275,7 +332,7 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     }
     handle_reg(status, 0x1f801dae)
     {
-        return status;
+        return status.raw;
     }
     handle_reg(cd_audio_left, 0x1f801db0)
     {
@@ -325,7 +382,25 @@ uint16_t SPU::read_register(r3000_ptr_t addr)
     return _p->read_register(addr);
 }
 
+uint64_t SPU::dma_write(r3000_ptr_t addr, uint32_t nbytes)
+{
+    return _p->dma_write(addr, nbytes);
+}
+
+uint64_t SPU::dma_read(r3000_ptr_t addr, uint32_t nbytes)
+{
+    return _p->dma_read(addr, nbytes);
+}
+
 void SPU::init(R3000* emu)
 {
+    _p->emu = emu;
     _p->reg = emu->get_device_buffer<spu_regs_t>(SPU_BASE);
+    _p->system_ram = emu->get_buffer<uint16_t>(0, 0x100000);
 }
+
+SPU::SPU()
+    : _p{std::make_unique<Private>()}
+{}
+
+SPU::~SPU() = default;

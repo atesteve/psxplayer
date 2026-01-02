@@ -40,6 +40,11 @@ public:
     void write_spu_reg(r3000_ptr_t addr, uint16_t value) override;
     uint16_t read_spu_reg(r3000_ptr_t addr) override;
 
+    void request_dma_transfer(uint32_t channel, bool request) override;
+
+    uint64_t spu_dma_write(r3000_ptr_t addr, uint32_t nbytes) override;
+    uint64_t spu_dma_read(r3000_ptr_t addr, uint32_t nbytes) override;
+
 private:
     struct Private;
     std::unique_ptr<Private> p;

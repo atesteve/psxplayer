@@ -369,6 +369,10 @@ void R3000Core<c>::Private::run_instruction()
         next_vblank += CPU_FREQ / 60;
         cp0.istat |= (1 << IRQ::VBLANK);
     }
+
+    if (dma.get_master_irq_flag()) {
+        cp0.istat |= (1 << IRQ::DMA);
+    }
 }
 
 template<R3000CoreConfig c>
@@ -1334,6 +1338,24 @@ template<R3000CoreConfig c>
 uint16_t R3000Core<c>::read_spu_reg(r3000_ptr_t addr)
 {
     return p->spu.read_register(addr);
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::request_dma_transfer(uint32_t channel, bool request)
+{
+    return p->dma.request_transfer(channel, request);
+}
+
+template<R3000CoreConfig c>
+uint64_t R3000Core<c>::spu_dma_write(r3000_ptr_t addr, uint32_t nbytes)
+{
+    return p->spu.dma_write(addr, nbytes);
+}
+
+template<R3000CoreConfig c>
+uint64_t R3000Core<c>::spu_dma_read(r3000_ptr_t addr, uint32_t nbytes)
+{
+    return p->spu.dma_read(addr, nbytes);
 }
 
 // Explicit instantiation

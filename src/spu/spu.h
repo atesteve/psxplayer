@@ -14,6 +14,9 @@ public:
 
     void write_register(r3000_ptr_t addr, uint16_t value);
     uint16_t read_register(r3000_ptr_t addr);
+
+    uint64_t dma_write(r3000_ptr_t addr, uint32_t nbytes);
+    uint64_t dma_read(r3000_ptr_t addr, uint32_t nbytes);
 private:
     struct Private;
     std::unique_ptr<Private> _p;
