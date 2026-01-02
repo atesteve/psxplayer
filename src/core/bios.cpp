@@ -85,8 +85,9 @@ std::unordered_map<uint32_t, bios_call_result (*)(Bios& bios, R3000& emu)> const
     {0xa03f, bcall<&Bios::printf>},
     {0xa072, bcall<&Bios::unimplemented>},
 
+    {0xb007, bcall<&Bios::deliverEvent>},
     {0xb008, bcall<&Bios::openEvent>},
-    {0xb008, bcall<&Bios::closeEvent>},
+    {0xb009, bcall<&Bios::closeEvent>},
     {0xb00a, bcall<&Bios::waitEvent>},
     {0xb00b, bcall<&Bios::testEvent>},
     {0xb00c, bcall<&Bios::enableEvent>},
