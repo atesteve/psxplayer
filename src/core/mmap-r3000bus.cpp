@@ -92,7 +92,7 @@ void install_handler(int signal,
 {
     struct sigaction sa{};
     sa.sa_sigaction = handler;
-    sa.sa_flags = SA_SIGINFO;
+    sa.sa_flags = SA_SIGINFO | SA_NODEFER;
     if (sigaction(signal, &sa, nullptr) == -1) {
         throw_errno(fmt::format("Failed to register signal handler for {}", signal_name));
     }
@@ -139,6 +139,42 @@ void emulate_ret(ucontext_t* ucontext)
     auto* const rsp_ptr = (uintptr_t const*)ucontext->uc_mcontext.gregs[REG_RSP];
     ucontext->uc_mcontext.gregs[REG_RIP] = *rsp_ptr;
     ucontext->uc_mcontext.gregs[REG_RSP] += sizeof(void*);
+}
+
+[[noreturn, maybe_unused]]
+void user_return_from_signal_handler(ucontext_t* ucontext)
+{
+    // Returns from the signal handler directly, without calling the syscall sigreturn. This code
+    // assumes the following:
+    //  - The signal handler was configured with SA_NODEFER, i.e., the signal is not masked during
+    //    the execution of the signal handler. Otherwise, it would be necessary to return via
+    //    sigreturn to restore the original configuration.
+    //  - The instruction following the return address is a "ret" instruction. This is always true
+    //    if the signal was raised in read_mem_impl<...> or write_mem_impl<...>.
+    //  - Only integer GP registers are restored. FP and vector registers are not restored, since we
+    //    know that we are returning from a function and those are not preserved across function
+    //    calls. Some integer registers are also not restored for the same reason.
+    auto* gregs = &ucontext->uc_mcontext.gregs[REG_R12];
+    asm volatile(
+        "mov %[gregs], %%rsp\n"
+        "pop %%r12\n"
+        "pop %%r13\n"
+        "pop %%r14\n"
+        "pop %%r15\n"
+        // rdi, rsi and rdx are not preserved across function calls, but it's probably faster to pop
+        // them instead of skipping them. rax is the return register, so we need to restore it.
+        "pop %%rdi\n"
+        "pop %%rsi\n"
+        "pop %%rbp\n"
+        "pop %%rbx\n"
+        "pop %%rdx\n"
+        "pop %%rax\n"
+        "addq $24, %%rsp\n"
+        "popf\n"
+        "subq $24, %%rsp\n"
+        "pop %%rsp\n"
+        "ret\n" ::[gregs] "r"(gregs));
+    std::unreachable();
 }
 
 consteval int BIT(int n)
@@ -326,7 +362,11 @@ void MMAPR3000Bus::Private::sigsegv_handler(ucontext_t* ucontext)
                 return;
             }
         }
-        emulate_ret(ucontext);
+        if constexpr (false) {
+            emulate_ret(ucontext);
+        } else {
+            user_return_from_signal_handler(ucontext);
+        }
     } catch (...) {
         // Disable alignment check before rethrowing. The C++ runtime generally doesn't respect
         // alignment.
