@@ -1,5 +1,6 @@
 #include "spu.h"
 #include "spu_registers.h"
+#include "core/dma.h"
 
 #include <cstddef>
 
@@ -74,6 +75,7 @@ struct SPU::Private {
     void update_status();
 
     R3000* emu;
+    DMA* dma;
     EmuBuffer<spu_regs_t> reg;
     struct State {
         uint32_t transfer_addr{};
@@ -210,7 +212,7 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     {
         control.raw = value;
         update_status();
-        emu->request_dma_transfer(4, reg->status.fields.dma_req);
+        dma->request_transfer(4, reg->status.fields.dma_req);
     }
     handle_reg(transfer_control, 0x1f801dac)
     {
@@ -372,12 +374,12 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     return 0;
 }
 
-void SPU::write_register(r3000_ptr_t addr, uint16_t value)
+void SPU::write_reg(r3000_ptr_t addr, uint16_t value)
 {
     _p->write_register(addr, value);
 }
 
-uint16_t SPU::read_register(r3000_ptr_t addr)
+uint16_t SPU::read_reg(r3000_ptr_t addr)
 {
     return _p->read_register(addr);
 }
@@ -395,6 +397,7 @@ uint64_t SPU::dma_read(r3000_ptr_t addr, uint32_t nbytes)
 void SPU::init(R3000* emu)
 {
     _p->emu = emu;
+    _p->dma = emu->get_dma();
     _p->reg = emu->get_device_buffer<spu_regs_t>(SPU_BASE);
     _p->system_ram = emu->get_buffer<uint16_t>(0, 0x100000);
 }

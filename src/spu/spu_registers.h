@@ -11,7 +11,7 @@ union vol_reg_t {
     struct {
         uint16_t sweep_step  : 2;
         uint16_t sweep_shift : 5;
-        uint16_t _           : 5;
+        uint16_t             : 5;
         uint16_t sweep_phase : 1;
         uint16_t sweep_dir   : 1;
         uint16_t sweep_mode  : 1;
@@ -54,7 +54,7 @@ union status_reg_t {
         uint16_t dma_read_req     : 1;
         uint16_t transfer_busy    : 1;
         uint16_t capture_phase    : 1;
-        uint16_t _                : 4;
+        uint16_t                  : 4;
     } fields;
 };
 
@@ -72,7 +72,7 @@ union adsr_reg_t {
         uint32_t release_mode  : 1;
         uint32_t sustain_step  : 2;
         uint32_t sustain_shift : 5;
-        uint32_t _             : 1;
+        uint32_t               : 1;
         uint32_t sustain_dir   : 1;
         uint32_t sustain_mode  : 1;
     } fields;
@@ -150,7 +150,7 @@ struct spu_regs_t {
     uint32_t voice_pitch_mod_en;
     uint32_t voice_noise_mode;
     uint32_t voice_reberv_on;
-    uint16_t _[3]; // Unused
+    uint16_t _unused1[3];
     spu_compressed_addr_t reberv_base_addr;
     spu_compressed_addr_t irq_addr;
     spu_compressed_addr_t transfer_addr;
@@ -162,7 +162,7 @@ struct spu_regs_t {
     uint16_t cd_audio_right;
     uint16_t ext_vol_left;
     uint16_t ext_vol_right;
-    uint16_t _[4]; // Unused
+    uint16_t _unused2[4];
     reverb_config_t reverb_config;
     voice_current_vol_t voice_current_vol[N_VOICES];
 };

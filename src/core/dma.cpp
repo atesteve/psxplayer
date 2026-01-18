@@ -1,4 +1,6 @@
 #include "dma.h"
+#include "spu/spu.h"
+#include "events.h"
 
 #include <fmt/format.h>
 
@@ -42,7 +44,7 @@ union dpcr_t {
         uint32_t DMA6Pri : 3;
         uint32_t DMA6En  : 1;
         uint32_t CPUPri  : 3;
-        uint32_t _       : 1;
+        uint32_t         : 1;
     } fields;
 };
 
@@ -50,7 +52,7 @@ union dicr_t {
     uint32_t raw;
     struct {
         uint32_t intr_mode        : 7;
-        uint32_t _                : 8;
+        uint32_t                  : 8;
         uint32_t bus_error        : 1;
         uint32_t intr_mask        : 7;
         uint32_t intr_en          : 1;
@@ -64,20 +66,20 @@ union chcr_t {
     struct {
         uint32_t dir         : 1;
         uint32_t incr        : 1;
-        uint32_t _           : 6;
+        uint32_t             : 6;
         uint32_t mod         : 1;
         uint32_t sync_mode   : 2;
-        uint32_t _           : 5;
+        uint32_t             : 5;
         uint32_t chop_dma    : 3;
-        uint32_t _           : 1;
+        uint32_t             : 1;
         uint32_t chop_cpu    : 3;
-        uint32_t _           : 1;
+        uint32_t             : 1;
         uint32_t start       : 1;
-        uint32_t _           : 3;
+        uint32_t             : 3;
         uint32_t force_start : 1;
         uint32_t pause       : 1;
         uint32_t bus_snoop   : 1;
-        uint32_t _           : 1;
+        uint32_t             : 1;
     } fields;
 };
 
@@ -90,7 +92,7 @@ struct dma_channel_t {
     uint32_t madr;
     bcr_t bcr;
     chcr_t chcr;
-    uint32_t _;
+    uint32_t : 32;
 };
 
 static_assert(sizeof(dma_channel_t) == 0x10);
@@ -99,7 +101,7 @@ struct dma_regs_t {
     dma_channel_t channel[N_CHANNELS];
     dpcr_t dpcr;
     dicr_t dicr;
-    uint32_t _[2];
+    uint32_t _unused[2];
 };
 
 static_assert(sizeof(dma_regs_t) == 0x80);
@@ -120,8 +122,8 @@ std::pair<uint32_t, uint32_t> dma_channel_reg(r3000_ptr_t addr)
 struct DMA::Private {
     void init(R3000* emu);
 
-    void write_dma_reg(r3000_ptr_t addr, uint32_t value);
-    uint32_t read_dma_reg(r3000_ptr_t addr);
+    void write_reg(r3000_ptr_t addr, uint32_t value);
+    uint32_t read_reg(r3000_ptr_t addr);
 
     std::pair<uint32_t, uint32_t> get_dpcr_fields(uint32_t ch);
     void attempt_transfer(uint32_t channel);
@@ -129,6 +131,8 @@ struct DMA::Private {
     void update_dicr();
 
     R3000* emu;
+    SPU* spu;
+    Timing* timing;
     EmuBuffer<dma_regs_t> reg;
     EmuBuffer<uint8_t> ram;
     bool device_dma_request[N_CHANNELS]{};
@@ -137,6 +141,8 @@ struct DMA::Private {
 void DMA::Private::init(R3000* emu)
 {
     this->emu = emu;
+    spu = emu->get_spu();
+    timing = emu->get_timing();
     reg = emu->get_device_buffer<dma_regs_t>(HWReg::DMA_start, 1);
     ram = emu->get_buffer(0, 0x200000);
     reg->dpcr = dpcr_t{};
@@ -198,14 +204,14 @@ void DMA::Private::attempt_transfer(uint32_t ch)
             uint64_t cycles = 0;
             while (n_blocks) {
                 if (copy_to_device) {
-                    cycles += emu->spu_dma_write(address, block_words * sizeof(uint32_t));
+                    cycles += spu->dma_write(address, block_words * sizeof(uint32_t));
                 } else {
-                    cycles += emu->spu_dma_read(address, block_words * sizeof(uint32_t));
+                    cycles += spu->dma_read(address, block_words * sizeof(uint32_t));
                 }
                 address += block_words * sizeof(uint32_t);
                 n_blocks--;
             }
-            (void)cycles;
+            timing->advance_clock(cycles);
             reg->dicr.fields.intr_flag |= reg->dicr.fields.intr_mask & (1 << 4);
             update_dicr();
             break;
@@ -222,7 +228,7 @@ void DMA::Private::attempt_transfer(uint32_t ch)
     }
 }
 
-void DMA::Private::write_dma_reg(r3000_ptr_t addr, uint32_t value)
+void DMA::Private::write_reg(r3000_ptr_t addr, uint32_t value)
 {
     if (addr == DPCR) {
         reg->dpcr.raw = value;
@@ -262,7 +268,7 @@ void DMA::Private::write_dma_reg(r3000_ptr_t addr, uint32_t value)
     }
 }
 
-uint32_t DMA::Private::read_dma_reg(r3000_ptr_t addr)
+uint32_t DMA::Private::read_reg(r3000_ptr_t addr)
 {
     if (addr == DPCR) {
         return reg->dpcr.raw;
@@ -291,14 +297,14 @@ uint32_t DMA::Private::read_dma_reg(r3000_ptr_t addr)
     return 0;
 }
 
-void DMA::write_dma_reg(r3000_ptr_t addr, uint32_t value)
+void DMA::write_reg(r3000_ptr_t addr, uint32_t value)
 {
-    _p->write_dma_reg(addr, value);
+    _p->write_reg(addr, value);
 }
 
-uint32_t DMA::read_dma_reg(r3000_ptr_t addr)
+uint32_t DMA::read_reg(r3000_ptr_t addr)
 {
-    return _p->read_dma_reg(addr);
+    return _p->read_reg(addr);
 }
 
 void DMA::request_transfer(uint32_t channel, bool request)

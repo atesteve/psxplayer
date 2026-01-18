@@ -203,14 +203,10 @@ struct MMAPR3000Bus::Private {
     static void static_sigbus_handler(int, siginfo_t*, void*);
     static inline MMAPR3000Bus::Private* signal_ptr;
 
-    explicit Private(R3000* emu)
-        : emu{emu}
-    {}
-
     ~Private();
 
     // Use an initialization function instead of a constructor so that the destructor always runs.
-    void init();
+    void init(R3000* emu);
 
     template<std::integral Int>
     Int sigsegv_handler(void* ptr, AccessType type, Int value = 0);
@@ -231,8 +227,10 @@ struct MMAPR3000Bus::Private {
     RegisterDispatcher dispatcher;
 };
 
-void MMAPR3000Bus::Private::init()
+void MMAPR3000Bus::Private::init(R3000* emu)
 {
+    this->emu = emu;
+
     if (signal_ptr) {
         throw std::runtime_error{"The signal handler is already installed!"};
     }
@@ -304,10 +302,10 @@ Int MMAPR3000Bus::Private::sigsegv_handler(void* ptr, AccessType type, Int value
         auto const reg_addr = 0x1f800000u | (cpu_addr & (PSX_IO_SIZE - 1));
 
         if (type == AccessType::WRITE) {
-            dispatcher.write_reg<Int>(*emu, reg_addr, value);
+            dispatcher.write_reg<Int>(reg_addr, value);
             return 0;
         } else {
-            return dispatcher.read_reg<Int>(*emu, reg_addr);
+            return dispatcher.read_reg<Int>(reg_addr);
         }
     }
 
@@ -419,11 +417,14 @@ uint8_t* MMAPR3000Bus::get_device_mem_ptr()
     return _p->device_mem.data();
 }
 
-MMAPR3000Bus::MMAPR3000Bus(R3000* emu)
-    : _p{std::make_unique<Private>(emu)}
+void MMAPR3000Bus::init(R3000* emu)
 {
-    _p->init();
+    _p->init(emu);
     _mem_space = _p->mem_space;
+    _p->dispatcher.init(emu);
 }
 
+MMAPR3000Bus::MMAPR3000Bus()
+    : _p{std::make_unique<Private>()}
+{}
 MMAPR3000Bus::~MMAPR3000Bus() = default;

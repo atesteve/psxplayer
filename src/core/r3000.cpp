@@ -3,7 +3,9 @@
 #include "bios.h"
 #include "dma.h"
 #include "spu/spu.h"
+#include "timer/timer.h"
 #include "util/util.h"
+#include "events.h"
 
 #include <fmt/format.h>
 #include <boost/container/static_vector.hpp>
@@ -19,8 +21,6 @@
 #include <vector>
 
 namespace {
-
-constexpr size_t CPU_FREQ = 33868800;
 
 // clang-format off
 struct reg_inst_t {
@@ -51,7 +51,7 @@ struct sr_t {
     uint32_t KUp     : 1 = 0;
     uint32_t IEo     : 1 = 0;
     uint32_t KUo     : 1 = 0;
-    uint32_t _       : 2 = 0;
+    uint32_t         : 2;
     uint32_t IntMask : 8 = 0;
     uint32_t IsC     : 1 = 0;
     uint32_t SwC     : 1 = 0;
@@ -60,9 +60,9 @@ struct sr_t {
     uint32_t PE      : 1 = 0;
     uint32_t TS      : 1 = 0;
     uint32_t BEV     : 1 = 0;
-    uint32_t _       : 2 = 0;
+    uint32_t         : 2;
     uint32_t RE      : 1 = 0;
-    uint32_t _       : 2 = 0;
+    uint32_t         : 2;
     uint32_t CU0     : 1 = 0;
     uint32_t CU1     : 1 = 0;
     uint32_t CU2     : 1 = 0;
@@ -70,13 +70,13 @@ struct sr_t {
 };
 
 struct cause_t {
-    uint32_t _       : 2  = 0;
+    uint32_t         : 2;
     uint32_t ExcCode : 5  = 0;
-    uint32_t _       : 1  = 0;
+    uint32_t         : 1;
     uint32_t IP      : 8  = 0;
-    uint32_t _       : 12 = 0;
+    uint32_t         : 12;
     uint32_t CE      : 2  = 0;
-    uint32_t _       : 1  = 0;
+    uint32_t         : 1;
     uint32_t BD      : 1  = 0;
 };
 
@@ -98,11 +98,9 @@ uint32_t sign_extend_16(uint32_t x)
 template<R3000CoreConfig c>
 struct R3000Core<c>::Private {
     explicit Private(R3000Core<c>* parent)
-        : bus{parent}
-        , parent{parent}
+        : parent{parent}
     {
         load_slot.enabled = 0;
-        next_vblank = CPU_FREQ / 60;
     }
 
     struct HWAlignmentCheck {
@@ -313,9 +311,9 @@ struct R3000Core<c>::Private {
     Bios bios;
     DMA dma;
     SPU spu;
-    uint64_t cycle_counter{};
+    TimerHandler timers;
+    Timing timing;
     R3000Core<c>* parent;
-    uint64_t next_vblank{};
     std::stack<ExceptionFrame, std::vector<ExceptionFrame>> exception_frame_stack;
 };
 
@@ -343,8 +341,14 @@ void R3000Core<c>::Private::run_instruction()
 
     if (auto const sr = get_sr(); (cp0.imask & cp0.istat) && sr.IEc && (sr.IntMask & 4)) {
         auto const cycles = run_exception(0);
-        cycle_counter += cycles;
+        timing.advance_clock(cycles);
         return;
+    }
+
+    static bool done_printed = false;
+    if (core.pc == 0x801b81c8 && !done_printed) {
+        fmt::println("Done!");
+        done_printed = true;
     }
 
     auto const raw_inst = read_mem<r3000_ptr_t>(core.pc);
@@ -353,22 +357,22 @@ void R3000Core<c>::Private::run_instruction()
     // Advance PC.
     core.pc += sizeof(uint32_t);
 
-    if (opcode == 0) {
-        auto const [function, shift, rd, rt, rs, _] = std::bit_cast<reg_inst_t>(raw_inst);
-        cycle_counter += run_r_inst(function, rs, rt, rd, shift);
-    } else if (opcode == 1) {
-        auto const [offset, function, rs, _] = std::bit_cast<imm_inst_t>(raw_inst);
-        cycle_counter += run_bcond_inst(function, rs, offset);
-    } else {
-        auto const [imm, rt, rs, _] = std::bit_cast<imm_inst_t>(raw_inst);
-        auto const [target, _] = std::bit_cast<jump_inst_t>(raw_inst);
-        cycle_counter += run_ij_inst(opcode, rs, rt, imm, target);
-    }
+    uint64_t const cycles = [&] {
+        if (opcode == 0) {
+            auto const [function, shift, rd, rt, rs, _] = std::bit_cast<reg_inst_t>(raw_inst);
+            return run_r_inst(function, rs, rt, rd, shift);
+        } else if (opcode == 1) {
+            auto const [offset, function, rs, _] = std::bit_cast<imm_inst_t>(raw_inst);
+            return run_bcond_inst(function, rs, offset);
+        } else {
+            auto const [imm, rt, rs, _] = std::bit_cast<imm_inst_t>(raw_inst);
+            auto const [target, _] = std::bit_cast<jump_inst_t>(raw_inst);
+            return run_ij_inst(opcode, rs, rt, imm, target);
+        }
+    }();
 
-    if (cycle_counter >= next_vblank) {
-        next_vblank += CPU_FREQ / 60;
-        cp0.istat |= (1 << IRQ::VBLANK);
-    }
+    timing.advance_clock(cycles);
+    timing.run_events();
 
     if (dma.get_master_irq_flag()) {
         cp0.istat |= (1 << IRQ::DMA);
@@ -1195,10 +1199,12 @@ uint64_t R3000Core<c>::Private::run_ij_unk(uint32_t, uint32_t, uint32_t, uint32_
 
 template<R3000CoreConfig c>
 R3000Core<c>::R3000Core()
-    : p{std::make_unique<R3000Core<c>::Private>(this)}
+    : p{std::make_unique<Private>(this)}
 {
+    p->bus.init(this);
     p->dma.init(this);
     p->spu.init(this);
+    p->timers.init(this);
 }
 
 template<R3000CoreConfig c>
@@ -1317,51 +1323,36 @@ void R3000Core<c>::return_from_exception()
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::write_dma_reg(r3000_ptr_t addr, uint32_t value)
+Bios* R3000Core<c>::get_bios()
 {
-    p->dma.write_dma_reg(addr, value);
+    return &p->bios;
 }
 
 template<R3000CoreConfig c>
-uint32_t R3000Core<c>::read_dma_reg(r3000_ptr_t addr)
+DMA* R3000Core<c>::get_dma()
 {
-    return p->dma.read_dma_reg(addr);
+    return &p->dma;
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::write_spu_reg(r3000_ptr_t addr, uint16_t value)
+SPU* R3000Core<c>::get_spu()
 {
-    p->spu.write_register(addr, value);
+    return &p->spu;
 }
 
 template<R3000CoreConfig c>
-uint16_t R3000Core<c>::read_spu_reg(r3000_ptr_t addr)
+TimerHandler* R3000Core<c>::get_timers()
 {
-    return p->spu.read_register(addr);
+    return &p->timers;
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::request_dma_transfer(uint32_t channel, bool request)
+Timing* R3000Core<c>::get_timing()
 {
-    return p->dma.request_transfer(channel, request);
+    return &p->timing;
 }
-
-template<R3000CoreConfig c>
-uint64_t R3000Core<c>::spu_dma_write(r3000_ptr_t addr, uint32_t nbytes)
-{
-    return p->spu.dma_write(addr, nbytes);
-}
-
-template<R3000CoreConfig c>
-uint64_t R3000Core<c>::spu_dma_read(r3000_ptr_t addr, uint32_t nbytes)
-{
-    return p->spu.dma_read(addr, nbytes);
-}
-
-// Explicit instantiation
-template class R3000Core<{FaultCheck::HARDWARE, AlignmentCheck::HARDWARE}>;
 
 std::unique_ptr<R3000> R3000::build()
 {
-    return std::make_unique<R3000Core<{FaultCheck::HARDWARE, AlignmentCheck::HARDWARE}>>();
+    return std::make_unique<R3000Core<{FaultCheck::HARDWARE, AlignmentCheck::NO_CHECK}>>();
 }

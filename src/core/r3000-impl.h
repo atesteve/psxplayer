@@ -34,16 +34,11 @@ public:
 
     void return_from_exception() override;
 
-    void write_dma_reg(r3000_ptr_t addr, uint32_t value) override;
-    uint32_t read_dma_reg(r3000_ptr_t addr) override;
-
-    void write_spu_reg(r3000_ptr_t addr, uint16_t value) override;
-    uint16_t read_spu_reg(r3000_ptr_t addr) override;
-
-    void request_dma_transfer(uint32_t channel, bool request) override;
-
-    uint64_t spu_dma_write(r3000_ptr_t addr, uint32_t nbytes) override;
-    uint64_t spu_dma_read(r3000_ptr_t addr, uint32_t nbytes) override;
+    Bios* get_bios() override;
+    DMA* get_dma() override;
+    SPU* get_spu() override;
+    TimerHandler* get_timers() override;
+    Timing* get_timing() override;
 
 private:
     struct Private;

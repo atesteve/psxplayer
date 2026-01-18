@@ -66,8 +66,12 @@ set(TARGET_SRC
   src/core/register-dispatcher.h
   src/core/dma.cpp
   src/core/dma.h
+  src/core/events.cpp
+  src/core/events.h
   src/spu/spu.cpp
   src/spu/spu.h
+  src/timer/timer.cpp
+  src/timer/timer.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
@@ -148,6 +152,7 @@ target_link_libraries(${TARGET_LIBUPSE} PRIVATE ZLIB::ZLIB)
 
 set_target_properties(${TARGET} PROPERTIES
     CXX_STANDARD 26
+    INTERPROCEDURAL_OPTIMIZATION TRUE
 )
 
 if(WIN32)

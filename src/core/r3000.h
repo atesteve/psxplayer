@@ -227,11 +227,14 @@ private:
 struct HWReg {
     static constexpr size_t ISTAT = 0x1f801070;
     static constexpr size_t IMASK = 0x1f801074;
+    static constexpr size_t SPU_DELAY = 0x1f801014;
     static constexpr size_t DEVICE_BASE = 0x1f801000;
     static constexpr size_t DMA_start = 0x1f801080;
     static constexpr size_t DMA_end = 0x1f801100;
     static constexpr size_t SPU_start = 0x1f801c00;
     static constexpr size_t SPU_end = 0x1F802000;
+    static constexpr size_t Timers_start = 0x1f801100;
+    static constexpr size_t Timers_end = 0x1f801130;
 };
 
 struct IRQ {
@@ -249,6 +252,13 @@ struct IRQ {
 };
 
 // clang-format on
+
+// Forward declarations.
+class Bios;
+class DMA;
+class SPU;
+class TimerHandler;
+class Timing;
 
 struct R3000 {
     virtual ~R3000() = default;
@@ -313,16 +323,11 @@ struct R3000 {
 
     virtual void return_from_exception() = 0;
 
-    virtual void write_dma_reg(r3000_ptr_t addr, uint32_t value) = 0;
-    virtual uint32_t read_dma_reg(r3000_ptr_t addr) = 0;
-
-    virtual void write_spu_reg(r3000_ptr_t addr, uint16_t value) = 0;
-    virtual uint16_t read_spu_reg(r3000_ptr_t addr) = 0;
-
-    virtual void request_dma_transfer(uint32_t channel, bool request) = 0;
-
-    virtual uint64_t spu_dma_write(r3000_ptr_t addr, uint32_t nbytes) = 0;
-    virtual uint64_t spu_dma_read(r3000_ptr_t addr, uint32_t nbytes) = 0;
+    virtual Bios* get_bios() = 0;
+    virtual DMA* get_dma() = 0;
+    virtual SPU* get_spu() = 0;
+    virtual TimerHandler* get_timers() = 0;
+    virtual Timing* get_timing() = 0;
 
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;
