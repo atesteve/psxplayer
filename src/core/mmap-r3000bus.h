@@ -11,8 +11,10 @@
 
 class MMAPR3000Bus {
 public:
-    explicit MMAPR3000Bus(R3000* emu);
+    explicit MMAPR3000Bus();
     ~MMAPR3000Bus();
+
+    void init(R3000* emu);
 
     template<std::integral Int>
     Int read_mem(uint32_t addr) {
