@@ -3,6 +3,7 @@
 
 #include "upse.h"
 #include "adpcm.h"
+#include "core/r3000.h"
 
 #include "libupse/upse-spu-internal.h"
 #include <fmt/format.h>
@@ -270,6 +271,24 @@ void UpseModule::load_file(QString const& file_name)
         set_state(State::Unloaded);
         emit supported_channels(0);
         return;
+    }
+
+    auto core = R3000::build();
+    auto ram_buffer = core->get_buffer(0, sizeof(_mod->instance.psxM));
+    memcpy(ram_buffer.data(), _mod->instance.psxM, ram_buffer.size());
+    core->set_regs(_mod->instance.cpustate.GPR.n.sp, _mod->instance.cpustate.pc);
+    *(uint32_t*)&ram_buffer[0xa0] = 0xfc0000a0;
+    *(uint32_t*)&ram_buffer[0xb0] = 0xfc0000b0;
+    *(uint32_t*)&ram_buffer[0xc0] = 0xfc0000c0;
+    *(uint32_t*)&ram_buffer[0xd0] = 0xfc0000d0;
+
+    try {
+        while (true) {
+            core->run();
+        }
+    } catch (CoreException const& e) {
+        ;
+    } catch (std::exception const& e) {
     }
 
     _channel_mapper =
