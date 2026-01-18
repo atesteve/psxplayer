@@ -8,5 +8,4 @@ Additionally, it has the capability of "de-scramble" music voices in some games 
 individual voices in dedicated hardware channels. So far, it only has suport to de-scramble some
 squaresoft games.
 
-The player is based on the emulator [libupse](https://github.com/kode54/libupse), with some minor
-modifications to accomodate for the features I wanted.
+This is a branch where I'm implementing a new emulator from scratch just as an experiment.
