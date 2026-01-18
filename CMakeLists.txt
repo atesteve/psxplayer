@@ -50,6 +50,28 @@ set(TARGET_SRC
   src/channel-mapper/square-mapper.h
   src/channel-mapper/square-retro-mapper.cpp
   src/channel-mapper/square-retro-mapper.h
+  src/core/r3000.cpp
+  src/core/r3000.h
+  src/core/mmap-r3000bus.cpp
+  src/core/mmap-r3000bus.h
+  src/core/mmap-r3000bus-rw.s
+  src/core/bios.cpp
+  src/core/bios-alloc.cpp
+  src/core/bios-a0.cpp
+  src/core/bios-b0.cpp
+  src/core/bios-c0.cpp
+  src/core/bios-printf.cpp
+  src/core/bios.h
+  src/core/register-dispatcher.cpp
+  src/core/register-dispatcher.h
+  src/core/dma.cpp
+  src/core/dma.h
+  src/core/events.cpp
+  src/core/events.h
+  src/spu/spu.cpp
+  src/spu/spu.h
+  src/timer/timer.cpp
+  src/timer/timer.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
@@ -119,6 +141,9 @@ endif()
 
 find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
 target_link_libraries(${TARGET} PRIVATE SDL3::SDL3)
+
+find_package(ZYDIS REQUIRED)
+target_link_libraries(${TARGET} PRIVATE Zydis::Zydis)
 
 target_link_libraries(${TARGET} PRIVATE Qt6::Widgets)
 
