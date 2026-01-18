@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Aitor Esteve Alvarado
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "r3000-impl.h"
 #include "mmap-r3000bus.h"
 #include "bios.h"

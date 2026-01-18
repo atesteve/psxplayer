@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Aitor Esteve Alvarado
+// SPDX-License-Identifier: GPL-3.0-only
+
 #include "bios.h"
 
 uint32_t Bios::setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf)

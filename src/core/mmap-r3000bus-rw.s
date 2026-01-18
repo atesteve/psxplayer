@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Aitor Esteve Alvarado
+// SPDX-License-Identifier: GPL-3.0-only
+
 .globl _ZN12MMAPR3000Bus13read_mem_implIhEET_Pv
 .globl _ZN12MMAPR3000Bus13read_mem_implItEET_Pv
 .globl _ZN12MMAPR3000Bus13read_mem_implIjEET_Pv
