@@ -72,7 +72,7 @@ std::pair<double, double> decode_adpcm_block(std::span<uint8_t const> ram,
     }
 
     auto [a, b] = prev_samples;
-    auto const* block = stdx::start_lifetime_as<ADPCM_block const>(&ram[addr]);
+    auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
 
     for (auto const& [i, data] : std::ranges::enumerate_view{block->data}) {
         auto const process_sample = [&](int32_t sample) {
@@ -109,7 +109,7 @@ std::pair<double, double> prime_adpcm(std::span<uint8_t const> ram,
 
     while (addr != bounds.loop_addr && addr < ram.size()) {
         ret = decode_adpcm_block(ram, addr, ret, {});
-        auto const* block = stdx::start_lifetime_as<ADPCM_block const>(&ram[addr]);
+        auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
         if (block->loop_end && block->loop_repeat) {
             addr = loop_addr;
         } else {
@@ -298,7 +298,7 @@ SampleBounds get_sample_bounds(std::span<uint8_t const> ram, uint32_t addr, uint
     bool jump_taken = false;
 
     while (addr <= ram.size() - 16) {
-        auto const* block = stdx::start_lifetime_as<ADPCM_block const>(&ram[addr]);
+        auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
 
         if (block->loop_start) {
             loop_addr = addr;
