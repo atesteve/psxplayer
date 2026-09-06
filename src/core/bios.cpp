@@ -41,25 +41,24 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
         }
     }
 
-    template<size_t... Ints>
-    static bios_call_result run(Bios& bios, R3000& emu, std::index_sequence<Ints...>)
+    static bios_call_result run(Bios& bios, R3000& emu) requires (sizeof...(Args) != 0)
     {
-        using FirstArg = std::tuple_element_t<0, std::tuple<Args...>>;
-        constexpr bool sub_one = std::is_same_v<FirstArg, R3000&>;
+        constexpr auto [...index] = std::make_index_sequence<sizeof...(Args)>{};
+        constexpr bool sub_one = std::is_same_v<Args...[0], R3000&>;
         auto const& core = emu.core();
 
         if constexpr (std::is_void_v<Result>) {
-            std::invoke(Fn, bios, get_argument<Args, Ints - sub_one>(emu, core)...);
+            std::invoke(Fn, bios, get_argument<Args, index - sub_one>(emu, core)...);
             return {};
         } else if constexpr (std::is_convertible_v<Result, uint32_t>) {
             return (uint32_t)std::invoke(
-                Fn, bios, get_argument<Args, Ints - sub_one>(emu, core)...);
+                Fn, bios, get_argument<Args, index - sub_one>(emu, core)...);
         } else {
-            return std::invoke(Fn, bios, get_argument<Args, Ints - sub_one>(emu, core)...);
+            return std::invoke(Fn, bios, get_argument<Args, index - sub_one>(emu, core)...);
         }
     }
 
-    static bios_call_result run(Bios& bios, R3000&, std::index_sequence<>)
+    static bios_call_result run(Bios& bios, R3000&) requires (sizeof...(Args) == 0)
     {
         if constexpr (std::is_void_v<Result>) {
             std::invoke(Fn, bios);
@@ -67,11 +66,6 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
         } else {
             return std::invoke(Fn, bios);
         }
-    }
-
-    static bios_call_result run(Bios& bios, R3000& emu)
-    {
-        return run(bios, emu, std::make_index_sequence<sizeof...(Args)>{});
     }
 };
 
