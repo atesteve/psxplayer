@@ -191,8 +191,12 @@ public:
     {
         if (offset >= _size) {
             r3000_ptr_t const offset_bytes = offset * sizeof(T);
-            throw AddressException{
-                _base_addr + offset_bytes, AccessType::READ, int_width<std::remove_cv_t<T>>};
+            if constexpr (std::is_integral_v<std::remove_cv_t<T>>) {
+                throw AddressException{
+                    _base_addr + offset_bytes, AccessType::READ, int_width<std::remove_cv_t<T>>};
+            } else {
+                throw AddressException{_base_addr + offset_bytes};
+            }
         }
         return _ptr[offset];
     }

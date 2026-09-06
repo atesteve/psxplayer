@@ -72,6 +72,7 @@ set(TARGET_SRC
   src/spu/spu.h
   src/timer/timer.cpp
   src/timer/timer.h
+  src/timer/timer_registers.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
@@ -152,7 +153,7 @@ target_link_libraries(${TARGET_LIBUPSE} PRIVATE ZLIB::ZLIB)
 
 set_target_properties(${TARGET} PROPERTIES
     CXX_STANDARD 26
-    INTERPROCEDURAL_OPTIMIZATION TRUE
+    #INTERPROCEDURAL_OPTIMIZATION TRUE
 )
 
 if(WIN32)
