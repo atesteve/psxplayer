@@ -44,24 +44,25 @@ void reorder_heap_head(std::vector<EventTime>& v)
 
 struct Timing::Private {
     Timing::Handler schedule(Event event);
+    bool cancel(Timing::Handler handler);
     void run_events();
 
     uint64_t clk{};
-    std::underlying_type_t<Timing::Handler> next_handler{};
+    std::underlying_type_t<Timing::Handler> next_handler{1};
     std::unordered_map<Timing::Handler, Timing::Event> events;
     std::vector<EventTime> event_heap;
 };
 
 Timing::Handler Timing::Private::schedule(Event event)
 {
-    if (event.phase == Event::UNINITIALIZED) {
-        event.phase = event.period;
+    if (event.first_shot == Event::UNINITIALIZED) {
+        event.first_shot = event.period;
     }
     auto const handler = Timing::Handler{next_handler++};
     auto const [it, _] = events.emplace(handler, std::move(event));
     push_heap(event_heap,
               {
-                  .clk_time = clk + it->second.phase,
+                  .clk_time = clk + it->second.first_shot,
                   .handler = handler,
               });
     return handler;
@@ -74,8 +75,10 @@ void Timing::Private::run_events()
         auto& event_time = event_heap.front();
         auto const it = events.find(event_time.handler);
         auto& [_, event] = *it;
-        event.callback();
-        if (event.type == Event::Type::ONE_SHOT) {
+        if (!event.cancelled) {
+            event.callback(event, current_clk);
+        }
+        if (event.type == Event::Type::ONE_SHOT || event.cancelled) {
             pop_heap(event_heap);
             events.erase(it);
             continue;
@@ -85,9 +88,35 @@ void Timing::Private::run_events()
     }
 }
 
+bool Timing::Private::cancel(Timing::Handler handler)
+{
+    if (handler == Timing::Handler::UNINITIALIZED) {
+        return false;
+    }
+    if (event_heap.empty()) {
+        return false;
+    }
+    if (event_heap.front().handler == handler) {
+        pop_heap(event_heap);
+        events.erase(handler);
+        return true;
+    }
+    if (auto const it = events.find(handler); it != events.cend()) {
+        const bool was_cancelled = it->second.cancelled;
+        it->second.cancelled = true;
+        return !was_cancelled;
+    }
+    return false;
+}
+
 Timing::Handler Timing::schedule(Event event)
 {
     return _p->schedule(std::move(event));
+}
+
+bool Timing::cancel(Handler handler)
+{
+    return _p->cancel(handler);
 }
 
 void Timing::advance_clock(uint64_t cycles)
@@ -105,7 +134,7 @@ void Timing::run_events()
     _p->run_events();
 }
 
-void Timing::init(R3000* emu)
+void Timing::init(R3000*)
 {}
 
 Timing::Timing()

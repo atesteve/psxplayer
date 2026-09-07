@@ -348,12 +348,6 @@ void R3000Core<c>::Private::run_instruction()
         return;
     }
 
-    static bool done_printed = false;
-    if (core.pc == 0x801b81c8 && !done_printed) {
-        fmt::println("Done!");
-        done_printed = true;
-    }
-
     auto const raw_inst = read_mem<r3000_ptr_t>(core.pc);
     auto const opcode = raw_inst >> 26;
 
@@ -430,6 +424,8 @@ uint64_t R3000Core<c>::Private::run_exception(uint32_t code)
         if (ret != 0) {
             frame.event_resume_id = ret;
             return total_cycles;
+        } else {
+            cp0.istat &= ~(1u << bit);
         }
         total_cycles += 20;
     }

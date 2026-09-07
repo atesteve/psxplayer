@@ -23,11 +23,14 @@ public:
         std::string name;
         Type type;
         uint64_t period = UNINITIALIZED;
-        uint64_t phase = UNINITIALIZED;
-        std::move_only_function<void()> callback;
+        uint64_t first_shot = UNINITIALIZED;
+        std::move_only_function<void(Event&,uint64_t)> callback;
+        bool cancelled = false;
     };
 
-    enum class Handler : uint64_t {};
+    enum class Handler : uint64_t {
+        UNINITIALIZED,
+    };
 
     explicit Timing();
     ~Timing();
@@ -38,6 +41,7 @@ public:
     uint64_t get_clock() const;
     void run_events();
     Handler schedule(Event event);
+    bool cancel(Handler handler);
 
 private:
     struct Private;
