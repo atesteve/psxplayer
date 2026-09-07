@@ -81,6 +81,7 @@ std::unordered_map<uint32_t, bios_call_result (*)(Bios& bios, R3000& emu)> const
     {0xa039, bcall<&Bios::InitHeap>},
     {0xa03f, bcall<&Bios::printf>},
     {0xa072, bcall<&Bios::unimplemented>},
+    {0xa09f, bcall<&Bios::unimplemented>}, // SetMemSize
 
     {0xb007, bcall<&Bios::deliverEvent>},
     {0xb008, bcall<&Bios::openEvent>},
@@ -88,6 +89,7 @@ std::unordered_map<uint32_t, bios_call_result (*)(Bios& bios, R3000& emu)> const
     {0xb00a, bcall<&Bios::waitEvent>},
     {0xb00b, bcall<&Bios::testEvent>},
     {0xb00c, bcall<&Bios::enableEvent>},
+    {0xb00d, bcall<&Bios::disableEvent>},
     {0xb019, bcall<&Bios::HookEntryInt>},
     {0xb017, bcall<&Bios::returnFromException>},
     {0xb05b, bcall<&Bios::unimplemented>},

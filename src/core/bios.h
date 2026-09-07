@@ -46,6 +46,7 @@ public:
     int32_t waitEvent(uint32_t event);
     int32_t testEvent(uint32_t event);
     int32_t enableEvent(uint32_t event);
+    int32_t disableEvent(uint32_t event);
     void HookEntryInt(EmuBuffer<psx_jmp_buf> buf);
     noreturn returnFromException(R3000& emu);
 

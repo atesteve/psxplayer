@@ -132,6 +132,15 @@ int32_t Bios::enableEvent(uint32_t event)
     return 1;
 }
 
+int32_t Bios::disableEvent(uint32_t event)
+{
+    auto const it = state.events.find(event);
+    if (it != state.events.cend()) {
+        it->second.flags = EVENT_FLAG_DISABLED;
+    }
+    return 1;
+}
+
 int32_t Bios::testEvent(uint32_t event)
 {
     auto const it = state.events.find(event);
