@@ -264,15 +264,19 @@ struct R3000Core<c>::Private {
         core.gpr.r[load_slot.rt] = load_slot.value;
     }
 
-    void branch_slot_tick()
+    bool branch_slot_tick()
     {
         if (branch_slot.count == 0) {
-            return;
+            return false;
         }
         branch_slot.count--;
+        bool idle_jump = false;
         if (branch_slot.count == 0) {
+            // An idle jump is a jump to itself.
+            idle_jump = branch_slot.target == core.pc - 8;
             core.pc = branch_slot.target;
         }
+        return idle_jump;
     }
 
     void load(uint32_t rt, uint32_t value)
@@ -340,7 +344,10 @@ void R3000Core<c>::Private::run_instruction()
 
     // Check load and branch delay slots.
     load_slot_tick();
-    branch_slot_tick();
+    if (branch_slot_tick()) {
+        // Idle jump. Fast forward.
+        timing.fast_forward();
+    }
 
     if (auto const sr = get_sr(); (cp0.imask & cp0.istat) && sr.IEc && (sr.IntMask & 4)) {
         auto const cycles = run_exception(0);

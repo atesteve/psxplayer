@@ -38,6 +38,7 @@ public:
     void init(R3000* emu);
 
     void advance_clock(uint64_t cycles);
+    void fast_forward();
     uint64_t get_clock() const;
     void run_events();
     Handler schedule(Event event);

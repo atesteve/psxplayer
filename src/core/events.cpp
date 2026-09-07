@@ -46,6 +46,7 @@ struct Timing::Private {
     Timing::Handler schedule(Event event);
     bool cancel(Timing::Handler handler);
     void run_events();
+    void fast_forward();
 
     uint64_t clk{};
     std::underlying_type_t<Timing::Handler> next_handler{1};
@@ -71,7 +72,7 @@ Timing::Handler Timing::Private::schedule(Event event)
 void Timing::Private::run_events()
 {
     auto const current_clk = clk;
-    while (event_heap.front().clk_time <= current_clk) {
+    while (!event_heap.empty() && event_heap.front().clk_time <= current_clk) {
         auto& event_time = event_heap.front();
         auto const it = events.find(event_time.handler);
         auto& [_, event] = *it;
@@ -109,6 +110,13 @@ bool Timing::Private::cancel(Timing::Handler handler)
     return false;
 }
 
+void Timing::Private::fast_forward() {
+    if (event_heap.empty()) {
+        return;
+    }
+    clk = event_heap.front().clk_time;
+}
+
 Timing::Handler Timing::schedule(Event event)
 {
     return _p->schedule(std::move(event));
@@ -122,6 +130,11 @@ bool Timing::cancel(Handler handler)
 void Timing::advance_clock(uint64_t cycles)
 {
     _p->clk += cycles;
+}
+
+void Timing::fast_forward()
+{
+    _p->fast_forward();
 }
 
 uint64_t Timing::get_clock() const
