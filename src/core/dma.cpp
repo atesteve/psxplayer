@@ -195,23 +195,24 @@ void DMA::Private::attempt_transfer(uint32_t ch)
     case 4: {
         switch (channel.chcr.fields.sync_mode) {
         case SYNC_MODE_BURST:
+            fmt::println("Unsupported SYNC_MODE_BURST");
             break;
 
         case SYNC_MODE_SLICE: {
             if (channel.chcr.fields.incr) {
                 // Don't support backwards transfers, at least for now.
+                fmt::println("Unsupported backward SPU transfer");
                 break;
             }
             auto [block_words, n_blocks] = channel.bcr.fields;
-            auto address = channel.madr;
             uint64_t cycles = 0;
             while (n_blocks) {
                 if (copy_to_device) {
-                    cycles += spu->dma_write(address, block_words * sizeof(uint32_t));
+                    cycles += spu->dma_write(channel.madr, block_words * sizeof(uint32_t));
                 } else {
-                    cycles += spu->dma_read(address, block_words * sizeof(uint32_t));
+                    cycles += spu->dma_read(channel.madr, block_words * sizeof(uint32_t));
                 }
-                address += block_words * sizeof(uint32_t);
+                channel.madr += block_words * sizeof(uint32_t);
                 n_blocks--;
             }
             timing->advance_clock(cycles);
@@ -221,6 +222,7 @@ void DMA::Private::attempt_transfer(uint32_t ch)
         }
 
         case SYNC_MODE_LINKED_LIST:
+            fmt::println("Unsupported SYNC_MODE_LINKED_LIST");
             break;
 
         default:; // Reserved - do nothing
@@ -313,9 +315,6 @@ uint32_t DMA::read_reg(r3000_ptr_t addr)
 void DMA::request_transfer(uint32_t channel, bool request)
 {
     _p->device_dma_request[channel] = request;
-    if (request) {
-        _p->attempt_transfer(channel);
-    }
 }
 
 bool DMA::get_master_irq_flag()

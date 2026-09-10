@@ -92,7 +92,7 @@ uint64_t SPU::Private::dma_write(r3000_ptr_t addr, uint32_t nbytes)
     addr /= sizeof(uint16_t);
     for (auto i = 0u; i < nbytes; i += sizeof(uint16_t)) {
         write_ram(state.transfer_addr, system_ram[addr]);
-        addr += sizeof(uint16_t);
+        addr++;
         state.transfer_addr = (state.transfer_addr + sizeof(uint16_t)) % SPU_RAM_SIZE;
     }
     return nbytes;
