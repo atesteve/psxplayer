@@ -118,7 +118,7 @@ void SPU::Private::update_status()
     status.fields.cd_audio_reverb = control.cd_audio_reverb;
     status.fields.ext_audio_reverb = control.ext_audio_reverb;
     status.fields.transfer_mode = control.transfer_mode;
-    status.fields.irq9_flag = 0;
+    status.fields.irq_flag = 0;
     status.fields.dma_req = control.transfer_mode >= 2;
     status.fields.dma_write_req = control.transfer_mode == 2;
     status.fields.dma_read_req = control.transfer_mode == 3;

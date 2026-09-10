@@ -32,7 +32,7 @@ union control_reg_t {
         uint16_t cd_audio_reverb  : 1;
         uint16_t ext_audio_reverb : 1;
         uint16_t transfer_mode    : 2;
-        uint16_t irq9_en          : 1;
+        uint16_t irq_en           : 1;
         uint16_t reberv_en        : 1;
         uint16_t noise_freq_step  : 2;
         uint16_t noise_freq_shift : 4;
@@ -51,7 +51,7 @@ union status_reg_t {
         uint16_t cd_audio_reverb  : 1;
         uint16_t ext_audio_reverb : 1;
         uint16_t transfer_mode    : 2;
-        uint16_t irq9_flag        : 1;
+        uint16_t irq_flag         : 1;
         uint16_t dma_req          : 1;
         uint16_t dma_write_req    : 1;
         uint16_t dma_read_req     : 1;
