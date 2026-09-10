@@ -267,6 +267,7 @@ uint32_t TimerHandler::Private::read_reg(r3000_ptr_t addr)
     start_reg_handling();
     handle_reg(counter)
     {
+        // TODO: update the correct counter value based on the system clock.
         return counter;
     }
     handle_reg(counter_mode)
