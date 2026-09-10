@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <csignal>
 #include <vector>
+#include <debugging>
 
 namespace {
 
@@ -37,13 +38,12 @@ constexpr auto PSX_IO_ADDRS = std::to_array<r3000_ptr_t>({0x1f801000, 0x9f801000
 
 // When debugging, since we are expecting SIGSEGV to occur during normal program execution, we
 // disable SIGSEGV with `handle SIGSEGV nostop noprint pass` or similar. Unfortunately, that means
-// that we will miss "real" SIGSEGV signals during debug. This function explicitly raises a SIGTRAP
-// so that gdb will stop. On non-debug builds, it does nothing. It would be nice to use
-// `std::breakpoint_if_debugging`, but no compiler supports it yet.
+// that we will miss "real" SIGSEGV signals during debug. To avoid missing them while debugging, use
+// std::breakpoint_if_debugging().
 void breakpoint()
 {
 #ifndef NDEBUG
-    std::raise(SIGTRAP);
+    std::breakpoint_if_debugging();
 #endif
 }
 
