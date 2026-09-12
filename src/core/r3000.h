@@ -167,6 +167,8 @@ struct InstructionException : public CoreException {
 
 struct CoprocessorUnusableException : public CoreException {};
 
+struct LongjmpException {};
+
 template<typename T>
 class EmuBuffer {
 public:
@@ -328,13 +330,24 @@ struct R3000 {
     virtual uint32_t& istat() = 0;
     virtual uint32_t& imask() = 0;
 
+    struct CP0Regs {
+        uint32_t sr;
+        uint32_t cause;
+        uint32_t epc;
+    };
+
+    virtual CP0Regs cp0_regs() const = 0;
+
     virtual void return_from_exception() = 0;
+    virtual void return_from_callback() = 0;
 
     virtual Bios* get_bios() = 0;
     virtual DMA* get_dma() = 0;
     virtual SPU* get_spu() = 0;
     virtual TimerHandler* get_timers() = 0;
     virtual Timing* get_timing() = 0;
+
+    virtual uint32_t soft_call(r3000_ptr_t addr) = 0;
 
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;

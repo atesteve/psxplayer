@@ -282,14 +282,7 @@ void UpseModule::load_file(QString const& file_name)
     *(uint32_t*)&ram_buffer[0xc0] = 0xfc0000c0;
     *(uint32_t*)&ram_buffer[0xd0] = 0xfc0000d0;
 
-    try {
-        while (true) {
-            core->run();
-        }
-    } catch (CoreException const& e) {
-        ;
-    } catch (std::exception const& e) {
-    }
+    core->run();
 
     _channel_mapper =
         ChannelMapper::build(&_mod->instance, _mod->metadata->game, _mod->metadata->title);

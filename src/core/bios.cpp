@@ -3,6 +3,8 @@
 
 #include "bios.h"
 
+#include "util/util.h"
+
 #include <fmt/format.h>
 
 #include <unordered_map>
@@ -41,7 +43,8 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
         }
     }
 
-    static bios_call_result run(Bios& bios, R3000& emu) requires (sizeof...(Args) != 0)
+    static bios_call_result run(Bios& bios, R3000& emu)
+        requires(sizeof...(Args) != 0)
     {
         constexpr auto [...index] = std::make_index_sequence<sizeof...(Args)>{};
         constexpr bool sub_one = std::is_same_v<Args...[0], R3000&>;
@@ -58,7 +61,8 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
         }
     }
 
-    static bios_call_result run(Bios& bios, R3000&) requires (sizeof...(Args) == 0)
+    static bios_call_result run(Bios& bios, R3000&)
+        requires(sizeof...(Args) == 0)
     {
         if constexpr (std::is_void_v<Result>) {
             std::invoke(Fn, bios);
@@ -102,20 +106,29 @@ std::unordered_map<uint32_t, bios_call_result (*)(Bios& bios, R3000& emu)> const
 void Bios::run_bios_fn(R3000& emu, uint32_t group)
 {
     auto& core = emu.core();
+
+    if (group == 0xd0u) {
+        emu.return_from_callback();
+        return;
+    }
+
     auto const index = core.gpr.n.t1;
     auto const key = (group << 8) | index;
     auto const it = bios_fns.find(key);
+
     if (it == bios_fns.cend()) {
         fmt::println("Unsupported bios call: {:x} {:x}", group, index);
         throw std::exception{};
     }
+
     auto const result = it->second(*this, emu);
-    if (holds_alternative<uint32_t>(result)) {
-        core.gpr.n.v0 = get<uint32_t>(result);
-        core.pc = core.gpr.n.ra;
-    } else if (holds_alternative<std::monostate>(result)) {
-        core.pc = core.gpr.n.ra;
-    } else {
-        // Do nothing in this case, the implementation already assigned the PC (noreturn function).
-    }
+
+    result.visit(Visitor{
+        [&](uint32_t r) {
+            core.gpr.n.v0 = r;
+            core.pc = core.gpr.n.ra;
+        },
+        [&](std::monostate) { core.pc = core.gpr.n.ra; },
+        [&](noreturn) { /* Do nothing in this case, the function already assigned the PC. */ },
+    });
 }

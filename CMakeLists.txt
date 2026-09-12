@@ -61,6 +61,7 @@ set(TARGET_SRC
   src/core/bios-b0.cpp
   src/core/bios-c0.cpp
   src/core/bios-printf.cpp
+  src/core/bios-exception-handler.cpp
   src/core/bios.h
   src/core/register-dispatcher.cpp
   src/core/register-dispatcher.h

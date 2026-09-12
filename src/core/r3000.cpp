@@ -135,7 +135,8 @@ struct R3000Core<c>::Private {
     };
 
     void run_instruction();
-    uint64_t run_exception(uint32_t code);
+    void run_exception(uint32_t code);
+    void handle_longjmp(auto&& fn, auto&& handle_longjmp_fn);
     uint64_t run_returnFromException();
 
     void set_branch_target(r3000_ptr_t target);
@@ -301,15 +302,6 @@ struct R3000Core<c>::Private {
         uint32_t imask{};
     };
 
-    struct ExceptionFrame {
-        Core core;
-        uint32_t sr;
-        uint32_t cause;
-        uint32_t epc;
-        uint32_t istat{};
-        uint32_t event_resume_id{};
-    };
-
     Core core;
     CP0 cp0;
     load_delay_slot load_slot;
@@ -321,7 +313,7 @@ struct R3000Core<c>::Private {
     TimerHandler timers;
     Timing timing;
     R3000Core<c>* parent;
-    std::stack<ExceptionFrame, std::vector<ExceptionFrame>> exception_frame_stack;
+    bool return_from_callback_flag = false;
 };
 
 template<R3000CoreConfig c>
@@ -337,8 +329,6 @@ void R3000Core<c>::Private::set_branch_target(r3000_ptr_t target)
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::run_instruction()
 {
-    HWAlignmentCheck::enable();
-    ScopeGuard align_check_guard{[] { HWAlignmentCheck::disable(); }};
     // After execution of the instruction, set R0 back to 0 in case it was written.
     ScopeGuard reset_r0{[&] { core.gpr.n.r0 = 0; }};
 
@@ -350,8 +340,7 @@ void R3000Core<c>::Private::run_instruction()
     }
 
     if (auto const sr = get_sr(); (cp0.imask & cp0.istat) && sr.IEc && (sr.IntMask & 4)) {
-        auto const cycles = run_exception(0);
-        timing.advance_clock(cycles);
+        run_exception(0);
         return;
     }
 
@@ -384,19 +373,11 @@ void R3000Core<c>::Private::run_instruction()
 }
 
 template<R3000CoreConfig c>
-uint64_t R3000Core<c>::Private::run_exception(uint32_t code)
+void R3000Core<c>::Private::run_exception(uint32_t code)
 {
     load_slot_flush();
     HWAlignmentCheck::disable();
     ScopeGuard enable_check{[] { HWAlignmentCheck::enable(); }};
-
-    exception_frame_stack.push({
-        .core = core,
-        .sr = cp0.reg.n.Status,
-        .cause = cp0.reg.n.Cause,
-        .epc = cp0.reg.n.EPC,
-    });
-    auto& frame = exception_frame_stack.top();
 
     auto sr = get_sr();
     sr.IEo = sr.IEp;
@@ -422,49 +403,29 @@ uint64_t R3000Core<c>::Private::run_exception(uint32_t code)
 
     set_cause(cause);
 
-    uint64_t total_cycles = 100;
-    frame.istat = cp0.istat;
-    while (frame.istat) {
-        auto const bit = std::countr_zero(frame.istat);
-        frame.istat &= ~(1u << bit);
-        auto const ret = bios.deliverEventResumable(*parent, 0xf0000000u | (1 << bit), 0x1000, 0);
-        if (ret != 0) {
-            frame.event_resume_id = ret;
-            return total_cycles;
-        } else {
-            cp0.istat &= ~(1u << bit);
-        }
-        total_cycles += 20;
-    }
+    handle_longjmp([&] { bios.exception_handler(*parent); }, [](auto const&) {});
+}
 
-    if (bios.state.unhanled_irq_farjmp) {
-        bios.longjmp(*parent, bios.state.unhanled_irq_farjmp, 1);
-        total_cycles += 20;
-    } else {
-        total_cycles += run_returnFromException();
+template<R3000CoreConfig c>
+void R3000Core<c>::Private::handle_longjmp(auto&& fn, auto&& handle_longjmp_fn)
+{
+    try {
+        fn();
+    } catch (LongjmpException const& e) {
+        handle_longjmp_fn(e);
     }
-
-    return total_cycles;
 }
 
 template<R3000CoreConfig c>
 uint64_t R3000Core<c>::Private::run_returnFromException()
 {
-    if (exception_frame_stack.empty()) {
-        throw CoprocessorUnusableException{};
-    }
-
-    auto const& frame = exception_frame_stack.top();
-
-    core = frame.core;
-    core.pc = cp0.reg.n.EPC;
-    cp0.reg.n.Status = frame.sr;
-    cp0.reg.n.Cause = frame.cause;
-    cp0.reg.n.EPC = frame.epc;
-
-    exception_frame_stack.pop();
-
-    return 100;
+    auto sr = get_sr();
+    sr.IEc = sr.IEp;
+    sr.KUc = sr.KUp;
+    sr.IEp = sr.IEo;
+    sr.KUp = sr.KUo;
+    set_sr(sr);
+    return 1;
 }
 
 template<R3000CoreConfig c>
@@ -1194,6 +1155,7 @@ uint64_t R3000Core<c>::Private::run_ij_bios(uint32_t, uint32_t, uint32_t imm, ui
     bios.run_bios_fn(*parent, imm);
     HWAlignmentCheck::enable();
     // Return a unified 100 cycles for the emulated HLE function call.
+    // TODO: finer grain cycle emulation.
     return 100;
 }
 
@@ -1219,7 +1181,15 @@ R3000Core<c>::~R3000Core() = default;
 template<R3000CoreConfig c>
 void R3000Core<c>::run()
 {
-    p->run_instruction();
+    try {
+        Private::HWAlignmentCheck::enable();
+        ScopeGuard align_check_guard{[] { Private::HWAlignmentCheck::disable(); }};
+        while (!p->return_from_callback_flag) {
+            p->run_instruction();
+        }
+    } catch (CoreException const& e) {
+    } catch (std::exception const& e) {
+    }
 }
 
 template<R3000CoreConfig c>
@@ -1323,9 +1293,25 @@ uint32_t& R3000Core<c>::imask()
 }
 
 template<R3000CoreConfig c>
+R3000::CP0Regs R3000Core<c>::cp0_regs() const
+{
+    return {
+        .sr = p->cp0.reg.n.Status,
+        .cause = p->cp0.reg.n.Cause,
+        .epc = p->cp0.reg.n.EPC,
+    };
+}
+
+template<R3000CoreConfig c>
 void R3000Core<c>::return_from_exception()
 {
     p->run_returnFromException();
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::return_from_callback()
+{
+    p->return_from_callback_flag = true;
 }
 
 template<R3000CoreConfig c>
@@ -1356,6 +1342,30 @@ template<R3000CoreConfig c>
 Timing* R3000Core<c>::get_timing()
 {
     return &p->timing;
+}
+
+template<R3000CoreConfig c>
+uint32_t R3000Core<c>::soft_call(r3000_ptr_t addr)
+{
+    p->return_from_callback_flag = false;
+    auto& core = p->core;
+
+    auto const return_pc = core.pc;
+    auto const return_sp = core.gpr.n.sp;
+
+    core.pc = addr;
+    core.gpr.n.ra = 0xd0u;
+
+    p->handle_longjmp([this] { run(); }, [](auto const& e) { throw e; });
+
+    core.pc = return_pc;
+    if (core.gpr.n.sp != return_sp) {
+        fmt::println(
+            "Warning: sp mismatch. Expected: {:#010x} Actual: {:#010x}", return_sp, core.gpr.n.sp);
+    }
+
+    p->return_from_callback_flag = false;
+    return core.gpr.n.v0;
 }
 
 std::unique_ptr<R3000> R3000::build()

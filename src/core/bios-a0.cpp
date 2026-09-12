@@ -40,5 +40,5 @@ Bios::noreturn Bios::longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t re
     core.gpr.n.gp = buf->gp;
     core.gpr.n.v0 = ret;
     core.pc = buf->ra;
-    return {};
+    throw LongjmpException{};
 }

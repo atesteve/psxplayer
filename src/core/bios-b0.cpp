@@ -63,34 +63,19 @@ constexpr size_t MAX_EVENTS = 256; // Plenty
 
 } // namespace
 
-uint32_t Bios::deliverEventResumable(R3000& emu, uint32_t clazz, uint32_t spec, uint32_t start)
+void Bios::deliverEvent(R3000& emu, uint32_t clazz, uint32_t spec)
 {
-    bool skip = start != 0;
     for (auto const& [event, entry] : state.events) {
-        if (skip) {
-            if (event == start) {
-                skip = false;
-            }
-            continue;
-        }
         if (entry.clazz != clazz || entry.spec != spec || entry.flags != EVENT_FLAG_ENABLED) {
             continue;
         }
         if (entry.mode == EVENT_MODE_NO_CALLBACK) {
             entry.flags = EVENT_FLAG_PENDING;
         } else if (entry.mode == EVENT_MODE_CALLBACK && entry.handler) {
-            auto& core = emu.core();
-            core.pc = entry.handler;
-            core.gpr.n.ra = 0xd0u;
-            return event;
+            emu.soft_call(entry.handler);
+            return;
         }
     }
-    return 0;
-}
-
-void Bios::deliverEvent(R3000& emu, uint32_t clazz, uint32_t spec)
-{
-    deliverEventResumable(emu, clazz, spec, 0);
 }
 
 uint32_t Bios::openEvent(uint32_t clazz, uint32_t spec, uint32_t mode, uint32_t handler)
@@ -158,6 +143,7 @@ void Bios::HookEntryInt(EmuBuffer<psx_jmp_buf> buf)
 
 Bios::noreturn Bios::returnFromException(R3000& emu)
 {
+    emu.core() = state.saved_core;
     emu.return_from_exception();
     return {};
 }

@@ -34,14 +34,18 @@ public:
 
     uint32_t& istat() override;
     uint32_t& imask() override;
+    R3000::CP0Regs cp0_regs() const override;
 
     void return_from_exception() override;
+    void return_from_callback() override;
 
     Bios* get_bios() override;
     DMA* get_dma() override;
     SPU* get_spu() override;
     TimerHandler* get_timers() override;
     Timing* get_timing() override;
+
+    uint32_t soft_call(r3000_ptr_t addr) override;
 
 private:
     struct Private;

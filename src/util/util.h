@@ -30,3 +30,6 @@ private:
 
 template<typename F>
 ScopeGuard(F&&) -> ScopeGuard<F>;
+
+template<class... Ts>
+struct Visitor : Ts... { using Ts::operator()...; };

@@ -27,6 +27,7 @@ class Bios {
 public:
     struct noreturn {};
 
+    void exception_handler(R3000& emu);
     void run_bios_fn(R3000& emu, uint32_t group);
 
     uint32_t setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf);
@@ -40,7 +41,6 @@ public:
     void unimplemented() {}
 
     void deliverEvent(R3000& emu, uint32_t clazz, uint32_t spec);
-    uint32_t deliverEventResumable(R3000& emu, uint32_t clazz, uint32_t spec, uint32_t start);
     uint32_t openEvent(uint32_t clazz, uint32_t spec, uint32_t mode, uint32_t handler);
     int32_t closeEvent(uint32_t event);
     int32_t waitEvent(uint32_t event);
@@ -63,6 +63,7 @@ public:
         int irq_auto_ack[11]{};
         std::flat_map<uint32_t, Event> events;
         uint32_t next_event_id = 0xf1000000;
+        Core saved_core{};
     };
 
     State state;
