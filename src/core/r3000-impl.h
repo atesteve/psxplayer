@@ -34,7 +34,7 @@ public:
 
     uint32_t& istat() override;
     uint32_t& imask() override;
-    R3000::CP0Regs cp0_regs() const override;
+    CP0R& cp0_regs() override;
 
     void return_from_exception() override;
     void return_from_callback() override;

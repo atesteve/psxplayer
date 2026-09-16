@@ -7,6 +7,7 @@
 #include <array>
 #include <memory>
 #include <concepts>
+#include <stacktrace>
 
 enum class FaultCheck {
     SOFTWARE,
@@ -56,6 +57,19 @@ template<> inline constexpr auto int_width<uint32_t> = AccessWidth::A32;
 
 using r3000_ptr_t = uint32_t;
 
+enum class ExceptionCode : uint32_t {
+    Interrupt = 0,
+    LoadAddressError = 4,
+    StoreAddressError = 5,
+    InstructionBusError = 6,
+    DataBusError = 7,
+    Syscall = 8,
+    Break = 9,
+    ReservedInstruction = 10,
+    CoprocessorUnusable = 11,
+    ArithmeticOverflow = 12,
+};
+
 struct GPR {
     uint32_t r0;
     uint32_t at;
@@ -91,6 +105,44 @@ struct GPR {
     uint32_t ra;
 };
 
+// clang-format off
+struct cause_t {
+    uint32_t              : 2;
+    ExceptionCode ExcCode : 5 {};
+    uint32_t              : 1;
+    uint32_t IP           : 8  = 0;
+    uint32_t              : 12;
+    uint32_t CE           : 2  = 0;
+    uint32_t              : 1;
+    uint32_t BD           : 1  = 0;
+};
+
+struct sr_t {
+    uint32_t IEc     : 1 = 0;
+    uint32_t KUc     : 1 = 0;
+    uint32_t IEp     : 1 = 0;
+    uint32_t KUp     : 1 = 0;
+    uint32_t IEo     : 1 = 0;
+    uint32_t KUo     : 1 = 0;
+    uint32_t         : 2;
+    uint32_t IntMask : 8 = 0;
+    uint32_t IsC     : 1 = 0;
+    uint32_t SwC     : 1 = 0;
+    uint32_t PZ      : 1 = 0;
+    uint32_t CM      : 1 = 0;
+    uint32_t PE      : 1 = 0;
+    uint32_t TS      : 1 = 0;
+    uint32_t BEV     : 1 = 0;
+    uint32_t         : 2;
+    uint32_t RE      : 1 = 0;
+    uint32_t         : 2;
+    uint32_t CU0     : 1 = 0;
+    uint32_t CU1     : 1 = 0;
+    uint32_t CU2     : 1 = 0;
+    uint32_t CU3     : 1 = 0;
+};
+// clang-format on
+
 struct CP0R {
     uint32_t Index;
     uint32_t Random;
@@ -104,8 +156,14 @@ struct CP0R {
     uint32_t BDAM;
     uint32_t EntryHi;
     uint32_t BPCM;
-    uint32_t Status;
-    uint32_t Cause;
+    union {
+        uint32_t raw;
+        sr_t fields;
+    } Status;
+    union {
+        uint32_t raw;
+        cause_t fields;
+    } Cause;
     uint32_t EPC;
     uint32_t PRid;
     uint32_t Config;
@@ -130,9 +188,16 @@ struct Core {
     r3000_ptr_t pc{};
 };
 
-struct CoreException {
-    virtual ~CoreException() = default;
+struct EmuException {
+    explicit EmuException()
+        : stacktrace{std::stacktrace::current()}
+    {}
+
+    virtual ~EmuException() = default;
+    std::stacktrace stacktrace;
 };
+
+struct CoreException : public EmuException {};
 
 struct AddressException : public CoreException {
     explicit AddressException() = default;
@@ -330,13 +395,7 @@ struct R3000 {
     virtual uint32_t& istat() = 0;
     virtual uint32_t& imask() = 0;
 
-    struct CP0Regs {
-        uint32_t sr;
-        uint32_t cause;
-        uint32_t epc;
-    };
-
-    virtual CP0Regs cp0_regs() const = 0;
+    virtual CP0R& cp0_regs() = 0;
 
     virtual void return_from_exception() = 0;
     virtual void return_from_callback() = 0;

@@ -47,42 +47,6 @@ struct jump_inst_t {
     uint32_t opcode : 6;
 };
 
-struct sr_t {
-    uint32_t IEc     : 1 = 0;
-    uint32_t KUc     : 1 = 0;
-    uint32_t IEp     : 1 = 0;
-    uint32_t KUp     : 1 = 0;
-    uint32_t IEo     : 1 = 0;
-    uint32_t KUo     : 1 = 0;
-    uint32_t         : 2;
-    uint32_t IntMask : 8 = 0;
-    uint32_t IsC     : 1 = 0;
-    uint32_t SwC     : 1 = 0;
-    uint32_t PZ      : 1 = 0;
-    uint32_t CM      : 1 = 0;
-    uint32_t PE      : 1 = 0;
-    uint32_t TS      : 1 = 0;
-    uint32_t BEV     : 1 = 0;
-    uint32_t         : 2;
-    uint32_t RE      : 1 = 0;
-    uint32_t         : 2;
-    uint32_t CU0     : 1 = 0;
-    uint32_t CU1     : 1 = 0;
-    uint32_t CU2     : 1 = 0;
-    uint32_t CU3     : 1 = 0;
-};
-
-struct cause_t {
-    uint32_t         : 2;
-    uint32_t ExcCode : 5  = 0;
-    uint32_t         : 1;
-    uint32_t IP      : 8  = 0;
-    uint32_t         : 12;
-    uint32_t CE      : 2  = 0;
-    uint32_t         : 1;
-    uint32_t BD      : 1  = 0;
-};
-
 // clang-format on
 
 static_assert(sizeof(reg_inst_t) == sizeof(uint32_t));
@@ -134,8 +98,9 @@ struct R3000Core<c>::Private {
         }
     };
 
+    void run(bool letLongjmpThrough);
     void run_instruction();
-    void run_exception(uint32_t code);
+    void run_exception(ExceptionCode code);
     void handle_longjmp(auto&& fn, auto&& handle_longjmp_fn);
     uint64_t run_returnFromException();
 
@@ -288,11 +253,6 @@ struct R3000Core<c>::Private {
         load_slot = {rt, value};
     }
 
-    sr_t get_sr() const { return std::bit_cast<sr_t>(cp0.reg.n.Status); }
-    void set_sr(sr_t sr) { cp0.reg.n.Status = std::bit_cast<uint32_t>(sr); }
-    cause_t get_cause() const { return std::bit_cast<cause_t>(cp0.reg.n.Cause); }
-    void set_cause(cause_t cause) { cp0.reg.n.Cause = std::bit_cast<uint32_t>(cause); }
-
     struct CP0 {
         union {
             std::array<uint32_t, 32> r{};
@@ -339,8 +299,9 @@ void R3000Core<c>::Private::run_instruction()
         timing.fast_forward();
     }
 
-    if (auto const sr = get_sr(); (cp0.imask & cp0.istat) && sr.IEc && (sr.IntMask & 4)) {
-        run_exception(0);
+    if (auto const sr = cp0.reg.n.Status.fields;
+        (cp0.imask & cp0.istat) && sr.IEc && (sr.IntMask & 4)) {
+        run_exception(ExceptionCode::Interrupt);
         return;
     }
 
@@ -373,24 +334,23 @@ void R3000Core<c>::Private::run_instruction()
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::run_exception(uint32_t code)
+void R3000Core<c>::Private::run_exception(ExceptionCode code)
 {
     load_slot_flush();
     HWAlignmentCheck::disable();
     ScopeGuard enable_check{[] { HWAlignmentCheck::enable(); }};
 
-    auto sr = get_sr();
+    auto& sr = cp0.reg.n.Status.fields;
     sr.IEo = sr.IEp;
     sr.KUo = sr.KUp;
     sr.IEp = sr.IEc;
     sr.KUp = sr.KUc;
     sr.IEc = 0;
     sr.KUc = 1;
-    set_sr(sr);
 
     cause_t cause{
         .ExcCode = code,
-        .IP = code == 0 ? 4u : 0u,
+        .IP = code == ExceptionCode::Interrupt ? 4u : 0u,
     };
 
     cp0.reg.n.EPC = core.pc;
@@ -401,7 +361,7 @@ void R3000Core<c>::Private::run_exception(uint32_t code)
         cause.BD = 1;
     }
 
-    set_cause(cause);
+    cp0.reg.n.Cause.fields = cause;
 
     handle_longjmp([&] { bios.exception_handler(*parent); }, [](auto const&) {});
 }
@@ -419,12 +379,11 @@ void R3000Core<c>::Private::handle_longjmp(auto&& fn, auto&& handle_longjmp_fn)
 template<R3000CoreConfig c>
 uint64_t R3000Core<c>::Private::run_returnFromException()
 {
-    auto sr = get_sr();
+    auto& sr = cp0.reg.n.Status.fields;
     sr.IEc = sr.IEp;
     sr.KUc = sr.KUp;
     sr.IEp = sr.IEo;
     sr.KUp = sr.KUo;
-    set_sr(sr);
     return 1;
 }
 
@@ -534,74 +493,74 @@ uint64_t R3000Core<c>::Private::run_ij_inst(uint32_t opcode,
 {
     try {
         // clang-format off
-    switch (opcode) {
-        case 0x00: return run_ij_unk  (rs, rt, imm, target);
-        case 0x01: return run_ij_unk  (rs, rt, imm, target);
-        case 0x02: return run_ij_j    (rs, rt, imm, target);
-        case 0x03: return run_ij_jal  (rs, rt, imm, target);
-        case 0x04: return run_ij_beq  (rs, rt, imm, target);
-        case 0x05: return run_ij_bne  (rs, rt, imm, target);
-        case 0x06: return run_ij_blez (rs, rt, imm, target);
-        case 0x07: return run_ij_bgtz (rs, rt, imm, target);
-        case 0x08: return run_ij_addi (rs, rt, imm, target);
-        case 0x09: return run_ij_addiu(rs, rt, imm, target);
-        case 0x0a: return run_ij_slti (rs, rt, imm, target);
-        case 0x0b: return run_ij_sltiu(rs, rt, imm, target);
-        case 0x0c: return run_ij_andi (rs, rt, imm, target);
-        case 0x0d: return run_ij_ori  (rs, rt, imm, target);
-        case 0x0e: return run_ij_xori (rs, rt, imm, target);
-        case 0x0f: return run_ij_lui  (rs, rt, imm, target);
-        case 0x10: return run_ij_unk  (rs, rt, imm, target);
-        case 0x11: return run_ij_unk  (rs, rt, imm, target);
-        case 0x12: return run_ij_unk  (rs, rt, imm, target);
-        case 0x13: return run_ij_unk  (rs, rt, imm, target);
-        case 0x14: return run_ij_unk  (rs, rt, imm, target);
-        case 0x15: return run_ij_unk  (rs, rt, imm, target);
-        case 0x16: return run_ij_unk  (rs, rt, imm, target);
-        case 0x17: return run_ij_unk  (rs, rt, imm, target);
-        case 0x18: return run_ij_unk  (rs, rt, imm, target);
-        case 0x19: return run_ij_unk  (rs, rt, imm, target);
-        case 0x1a: return run_ij_unk  (rs, rt, imm, target);
-        case 0x1b: return run_ij_unk  (rs, rt, imm, target);
-        case 0x1c: return run_ij_unk  (rs, rt, imm, target);
-        case 0x1d: return run_ij_unk  (rs, rt, imm, target);
-        case 0x1e: return run_ij_unk  (rs, rt, imm, target);
-        case 0x1f: return run_ij_unk  (rs, rt, imm, target);
-        case 0x20: return run_ij_lb   (rs, rt, imm, target);
-        case 0x21: return run_ij_lh   (rs, rt, imm, target);
-        case 0x22: return run_ij_lwl  (rs, rt, imm, target);
-        case 0x23: return run_ij_lw   (rs, rt, imm, target);
-        case 0x24: return run_ij_lbu  (rs, rt, imm, target);
-        case 0x25: return run_ij_lhu  (rs, rt, imm, target);
-        case 0x26: return run_ij_lwr  (rs, rt, imm, target);
-        case 0x27: return run_ij_unk  (rs, rt, imm, target);
-        case 0x28: return run_ij_sb   (rs, rt, imm, target);
-        case 0x29: return run_ij_sh   (rs, rt, imm, target);
-        case 0x2a: return run_ij_swl  (rs, rt, imm, target);
-        case 0x2b: return run_ij_sw   (rs, rt, imm, target);
-        case 0x2c: return run_ij_unk  (rs, rt, imm, target);
-        case 0x2d: return run_ij_unk  (rs, rt, imm, target);
-        case 0x2e: return run_ij_swr  (rs, rt, imm, target);
-        case 0x2f: return run_ij_unk  (rs, rt, imm, target);
-        case 0x30: return run_ij_unk  (rs, rt, imm, target);
-        case 0x31: return run_ij_unk  (rs, rt, imm, target);
-        case 0x32: return run_ij_unk  (rs, rt, imm, target);
-        case 0x33: return run_ij_unk  (rs, rt, imm, target);
-        case 0x34: return run_ij_unk  (rs, rt, imm, target);
-        case 0x35: return run_ij_unk  (rs, rt, imm, target);
-        case 0x36: return run_ij_unk  (rs, rt, imm, target);
-        case 0x37: return run_ij_unk  (rs, rt, imm, target);
-        case 0x38: return run_ij_unk  (rs, rt, imm, target);
-        case 0x39: return run_ij_unk  (rs, rt, imm, target);
-        case 0x3a: return run_ij_unk  (rs, rt, imm, target);
-        case 0x3b: return run_ij_unk  (rs, rt, imm, target);
-        case 0x3c: return run_ij_unk  (rs, rt, imm, target);
-        case 0x3d: return run_ij_unk  (rs, rt, imm, target);
-        case 0x3e: return run_ij_unk  (rs, rt, imm, target);
-        case 0x3f: return run_ij_bios (rs, rt, imm, target);
-        // `opcode` is 6 bit wide, so it's impossible to receive anything higher than 0x3f (63).
-        default: std::unreachable();
-    };
+        switch (opcode) {
+            case 0x00: return run_ij_unk  (rs, rt, imm, target);
+            case 0x01: return run_ij_unk  (rs, rt, imm, target);
+            case 0x02: return run_ij_j    (rs, rt, imm, target);
+            case 0x03: return run_ij_jal  (rs, rt, imm, target);
+            case 0x04: return run_ij_beq  (rs, rt, imm, target);
+            case 0x05: return run_ij_bne  (rs, rt, imm, target);
+            case 0x06: return run_ij_blez (rs, rt, imm, target);
+            case 0x07: return run_ij_bgtz (rs, rt, imm, target);
+            case 0x08: return run_ij_addi (rs, rt, imm, target);
+            case 0x09: return run_ij_addiu(rs, rt, imm, target);
+            case 0x0a: return run_ij_slti (rs, rt, imm, target);
+            case 0x0b: return run_ij_sltiu(rs, rt, imm, target);
+            case 0x0c: return run_ij_andi (rs, rt, imm, target);
+            case 0x0d: return run_ij_ori  (rs, rt, imm, target);
+            case 0x0e: return run_ij_xori (rs, rt, imm, target);
+            case 0x0f: return run_ij_lui  (rs, rt, imm, target);
+            case 0x10: return run_ij_unk  (rs, rt, imm, target);
+            case 0x11: return run_ij_unk  (rs, rt, imm, target);
+            case 0x12: return run_ij_unk  (rs, rt, imm, target);
+            case 0x13: return run_ij_unk  (rs, rt, imm, target);
+            case 0x14: return run_ij_unk  (rs, rt, imm, target);
+            case 0x15: return run_ij_unk  (rs, rt, imm, target);
+            case 0x16: return run_ij_unk  (rs, rt, imm, target);
+            case 0x17: return run_ij_unk  (rs, rt, imm, target);
+            case 0x18: return run_ij_unk  (rs, rt, imm, target);
+            case 0x19: return run_ij_unk  (rs, rt, imm, target);
+            case 0x1a: return run_ij_unk  (rs, rt, imm, target);
+            case 0x1b: return run_ij_unk  (rs, rt, imm, target);
+            case 0x1c: return run_ij_unk  (rs, rt, imm, target);
+            case 0x1d: return run_ij_unk  (rs, rt, imm, target);
+            case 0x1e: return run_ij_unk  (rs, rt, imm, target);
+            case 0x1f: return run_ij_unk  (rs, rt, imm, target);
+            case 0x20: return run_ij_lb   (rs, rt, imm, target);
+            case 0x21: return run_ij_lh   (rs, rt, imm, target);
+            case 0x22: return run_ij_lwl  (rs, rt, imm, target);
+            case 0x23: return run_ij_lw   (rs, rt, imm, target);
+            case 0x24: return run_ij_lbu  (rs, rt, imm, target);
+            case 0x25: return run_ij_lhu  (rs, rt, imm, target);
+            case 0x26: return run_ij_lwr  (rs, rt, imm, target);
+            case 0x27: return run_ij_unk  (rs, rt, imm, target);
+            case 0x28: return run_ij_sb   (rs, rt, imm, target);
+            case 0x29: return run_ij_sh   (rs, rt, imm, target);
+            case 0x2a: return run_ij_swl  (rs, rt, imm, target);
+            case 0x2b: return run_ij_sw   (rs, rt, imm, target);
+            case 0x2c: return run_ij_unk  (rs, rt, imm, target);
+            case 0x2d: return run_ij_unk  (rs, rt, imm, target);
+            case 0x2e: return run_ij_swr  (rs, rt, imm, target);
+            case 0x2f: return run_ij_unk  (rs, rt, imm, target);
+            case 0x30: return run_ij_unk  (rs, rt, imm, target);
+            case 0x31: return run_ij_unk  (rs, rt, imm, target);
+            case 0x32: return run_ij_unk  (rs, rt, imm, target);
+            case 0x33: return run_ij_unk  (rs, rt, imm, target);
+            case 0x34: return run_ij_unk  (rs, rt, imm, target);
+            case 0x35: return run_ij_unk  (rs, rt, imm, target);
+            case 0x36: return run_ij_unk  (rs, rt, imm, target);
+            case 0x37: return run_ij_unk  (rs, rt, imm, target);
+            case 0x38: return run_ij_unk  (rs, rt, imm, target);
+            case 0x39: return run_ij_unk  (rs, rt, imm, target);
+            case 0x3a: return run_ij_unk  (rs, rt, imm, target);
+            case 0x3b: return run_ij_unk  (rs, rt, imm, target);
+            case 0x3c: return run_ij_unk  (rs, rt, imm, target);
+            case 0x3d: return run_ij_unk  (rs, rt, imm, target);
+            case 0x3e: return run_ij_unk  (rs, rt, imm, target);
+            case 0x3f: return run_ij_bios (rs, rt, imm, target);
+            // `opcode` is 6 bit wide, so it's impossible to receive anything higher than 0x3f (63).
+            default: std::unreachable();
+        };
         // clang-format on
     } catch (InstructionException& e) {
         e.opcode = opcode;
@@ -682,29 +641,7 @@ uint64_t R3000Core<c>::Private::run_r_jalr(uint32_t rs, uint32_t, uint32_t rd, u
 template<R3000CoreConfig c>
 uint64_t R3000Core<c>::Private::run_r_syscall(uint32_t, uint32_t, uint32_t, uint32_t)
 {
-    load_slot_flush();
-    auto const flags = std::bit_cast<uint32_t>(sr_t{
-        // It should be IEp, not IEc, but we are not emulating the transition to interrupt and thus
-        // the IEc/KUc/IEp/KUp flags are not shifted.
-        .IEc = 1,
-        .IntMask = 4,
-    });
-    switch (core.gpr.n.a0) {
-    case 0: // Do nothing.
-        break;
-    case 1: // enterCriticalSection
-        core.gpr.n.v0 = (cp0.reg.n.Status & flags) == flags;
-        cp0.reg.n.Status &= ~flags;
-        break;
-    case 2: // leaveCriticalSection
-        cp0.reg.n.Status |= flags;
-        break;
-    case 3: // unimplemented
-        core.gpr.n.v0 = 1;
-        break;
-    default: // deliverEvent - unimplemented
-        break;
-    }
+    run_exception(ExceptionCode::Syscall);
     return 100;
 }
 
@@ -1173,6 +1110,7 @@ R3000Core<c>::R3000Core()
     p->dma.init(this);
     p->spu.init(this);
     p->timers.init(this);
+    p->bios.init_exception_handlers();
 }
 
 template<R3000CoreConfig c>
@@ -1181,14 +1119,21 @@ R3000Core<c>::~R3000Core() = default;
 template<R3000CoreConfig c>
 void R3000Core<c>::run()
 {
-    try {
-        Private::HWAlignmentCheck::enable();
-        ScopeGuard align_check_guard{[] { Private::HWAlignmentCheck::disable(); }};
-        while (!p->return_from_callback_flag) {
-            p->run_instruction();
-        }
-    } catch (CoreException const& e) {
-    } catch (std::exception const& e) {
+    p->run(false);
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::Private::run(bool letLongjmpThrough)
+{
+    Private::HWAlignmentCheck::enable();
+    ScopeGuard align_check_guard{[] { Private::HWAlignmentCheck::disable(); }};
+    while (!return_from_callback_flag) {
+        handle_longjmp([this] { run_instruction(); },
+                       [&](auto const&) {
+                           if (letLongjmpThrough) {
+                               throw;
+                           }
+                       });
     }
 }
 
@@ -1293,13 +1238,9 @@ uint32_t& R3000Core<c>::imask()
 }
 
 template<R3000CoreConfig c>
-R3000::CP0Regs R3000Core<c>::cp0_regs() const
+CP0R& R3000Core<c>::cp0_regs()
 {
-    return {
-        .sr = p->cp0.reg.n.Status,
-        .cause = p->cp0.reg.n.Cause,
-        .epc = p->cp0.reg.n.EPC,
-    };
+    return p->cp0.reg.n;
 }
 
 template<R3000CoreConfig c>
@@ -1356,7 +1297,7 @@ uint32_t R3000Core<c>::soft_call(r3000_ptr_t addr)
     core.pc = addr;
     core.gpr.n.ra = 0xd0u;
 
-    p->handle_longjmp([this] { run(); }, [](auto const& e) { throw e; });
+    p->run(true);
 
     core.pc = return_pc;
     if (core.gpr.n.sp != return_sp) {

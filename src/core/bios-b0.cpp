@@ -138,12 +138,13 @@ int32_t Bios::testEvent(uint32_t event)
 
 void Bios::HookEntryInt(EmuBuffer<psx_jmp_buf> buf)
 {
-    state.unhanled_irq_farjmp = buf;
+    state.unhandled_irq_farjmp = buf;
 }
 
 Bios::noreturn Bios::returnFromException(R3000& emu)
 {
-    emu.core() = state.saved_core;
+    emu.core() = state.saved_state.core;
+    emu.cp0_regs().Status.fields = state.saved_state.sr;
     emu.return_from_exception();
-    return {};
+    throw LongjmpException{};
 }

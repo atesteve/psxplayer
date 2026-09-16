@@ -27,7 +27,6 @@ class Bios {
 public:
     struct noreturn {};
 
-    void exception_handler(R3000& emu);
     void run_bios_fn(R3000& emu, uint32_t group);
 
     uint32_t setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf);
@@ -50,6 +49,14 @@ public:
     void HookEntryInt(EmuBuffer<psx_jmp_buf> buf);
     noreturn returnFromException(R3000& emu);
 
+    void exception_handler(R3000& emu);
+    void init_exception_handlers();
+
+    uint32_t syscall_verifier(R3000& emu);
+    uint32_t timer_verifier(R3000& emu, int timer);
+    void timer_handler(R3000& emu, int timer);
+    uint32_t irq_verifier(R3000& emu);
+
     struct Event {
         uint32_t clazz;
         uint32_t spec;
@@ -58,12 +65,21 @@ public:
         uint32_t flags;
     };
 
+    struct IRQHandler {
+        std::function<int32_t(R3000& emu)> verifier{};
+        std::function<void(R3000& emu, int32_t)> handler{};
+    };
+
     struct State {
-        EmuBuffer<psx_jmp_buf> unhanled_irq_farjmp{};
+        EmuBuffer<psx_jmp_buf> unhandled_irq_farjmp{};
         int irq_auto_ack[11]{};
         std::flat_map<uint32_t, Event> events;
         uint32_t next_event_id = 0xf1000000;
-        Core saved_core{};
+        struct {
+            Core core{};
+            sr_t sr{};
+        } saved_state{};
+        std::array<std::vector<IRQHandler>, 4> irq_handlers;
     };
 
     State state;
