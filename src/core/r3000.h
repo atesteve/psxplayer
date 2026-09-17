@@ -309,6 +309,7 @@ struct HWReg {
     static constexpr size_t SPU_end = 0x1F802000;
     static constexpr size_t Timers_start = 0x1f801100;
     static constexpr size_t Timers_end = 0x1f801130;
+    static constexpr size_t GPU_STATUS = 0x1f801814;
 };
 
 struct IRQ {

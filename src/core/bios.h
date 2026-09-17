@@ -53,8 +53,8 @@ public:
     void init_exception_handlers();
 
     uint32_t syscall_verifier(R3000& emu);
-    uint32_t timer_verifier(R3000& emu, int timer);
-    void timer_handler(R3000& emu, int timer);
+    uint32_t timer_verifier(R3000& emu, uint32_t timer);
+    void timer_handler(R3000& emu, uint32_t timer);
     uint32_t irq_verifier(R3000& emu);
 
     struct Event {

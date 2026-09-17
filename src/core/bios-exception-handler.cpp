@@ -5,6 +5,19 @@
 
 #include "core/events.h"
 
+#include <array>
+
+namespace {
+
+constexpr std::array TIMER_IRQ_MASK{
+    1u << IRQ::TMR0,
+    1u << IRQ::TMR1,
+    1u << IRQ::TMR2,
+    1u << IRQ::VBLANK,
+};
+
+}
+
 void Bios::exception_handler(R3000& emu)
 {
     auto const& cp0 = emu.cp0_regs();
@@ -47,9 +60,9 @@ void Bios::init_exception_handlers()
         .verifier = [this](R3000& emu) { return syscall_verifier(emu); },
     });
 
-    for (int timer = 0; timer < 4; timer++) {
+    for (auto timer = 0u; timer < 4; timer++) {
         state.irq_handlers[1].emplace_back(IRQHandler{
-            .verifier = [this](R3000& emu) { return timer_verifier(emu, 0); },
+            .verifier = [this, timer](R3000& emu) { return timer_verifier(emu, timer); },
             .handler = [this, timer](R3000& emu, uint32_t) { return timer_handler(emu, timer); },
         });
     }
@@ -100,13 +113,23 @@ uint32_t Bios::syscall_verifier(R3000& emu)
     return 0;
 }
 
-uint32_t Bios::timer_verifier(R3000& emu, int timer)
+uint32_t Bios::timer_verifier(R3000& emu, uint32_t timer)
 {
-    return 0;
+    auto const irq_mask = TIMER_IRQ_MASK[timer];
+    if ((emu.imask() & irq_mask) == 0 || (emu.istat() & irq_mask) == 0) {
+        return 0;
+    }
+    deliverEvent(emu, 0xf2000000u | timer, 2);
+    return 1;
 }
 
-void Bios::timer_handler(R3000& emu, int timer)
-{}
+void Bios::timer_handler(R3000& emu, uint32_t timer)
+{
+    // TODO: check timersAutoAck
+    auto const irq_mask = TIMER_IRQ_MASK[timer];
+    emu.istat() &= ~irq_mask;
+    returnFromException(emu);
+}
 
 uint32_t Bios::irq_verifier(R3000& emu)
 {
@@ -115,11 +138,14 @@ uint32_t Bios::irq_verifier(R3000& emu)
     auto* const timing = emu.get_timing();
 
     while (istat) {
-        auto const bit = std::countr_zero(istat);
-        istat &= ~(1u << bit);
+        unsigned const bit = std::countr_zero(istat);
         timing->advance_clock(total_cycles + 20);
         total_cycles = 0;
         deliverEvent(emu, 0xf0000000u | (1 << bit), 0x1000);
+        istat &= ~(1u << bit);
+        if (bit < std::size(state.irq_auto_ack) && state.irq_auto_ack[bit]) {
+            emu.istat() &= ~(1u << bit);
+        }
     }
 
     return 0;

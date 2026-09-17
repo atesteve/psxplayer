@@ -109,6 +109,9 @@ Int RegisterDispatcher::read_reg(r3000_ptr_t addr) const
     } else if (addr == HWReg::SPU_DELAY) {
         // Just read it, do nothing.
         return fix_32bit_read<Int>(&RegisterDispatcher::read<uint32_t>, this, addr);
+    } else if (addr == HWReg::GPU_STATUS) {
+        // Return this magic value as "initialized"
+        return (Int)0x14802000u;
     } else {
         fmt::println("Read from unknown reg: {:#010x} = {:#010x}", addr, read<Int>(addr));
         return read<Int>(addr);
