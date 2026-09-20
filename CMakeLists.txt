@@ -86,6 +86,9 @@ set(TARGET_SRC
   src/iop/iop-sysclib.cpp
   src/iop/iop-thevent.cpp
   src/iop/iop-thsemap.cpp
+  src/parse-bin/parse-bin.h
+  src/psf/psf.cpp
+  src/psf/psf.h
   src/util/util.h
   src/util/printf-glue.cpp
   src/util/printf-glue.h
@@ -99,7 +102,7 @@ else()
   add_compile_options(-g3)
   add_link_options(-g3)
   qt6_add_executable(${TARGET} ${TARGET_SRC})
-  target_compile_options(${TARGET} PRIVATE -Wall -Wextra -pedantic)
+  target_compile_options(${TARGET} PRIVATE -Wall -Wextra -pedantic -freflection)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_link_libraries(${TARGET} PRIVATE stdc++exp)
   endif()
@@ -154,6 +157,7 @@ target_link_libraries(${TARGET} PRIVATE Qt6::Widgets)
 
 find_package(ZLIB REQUIRED)
 target_link_libraries(${TARGET_LIBUPSE} PRIVATE ZLIB::ZLIB)
+target_link_libraries(${TARGET} PRIVATE ZLIB::ZLIB)
 
 set_target_properties(${TARGET} PROPERTIES
     CXX_STANDARD 26

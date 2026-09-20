@@ -4,6 +4,7 @@
 #include "upse.h"
 #include "adpcm.h"
 #include "core/r3000.h"
+#include "psf/psf.h"
 
 #include "libupse/upse-spu-internal.h"
 #include <fmt/format.h>
@@ -259,6 +260,7 @@ void UpseModule::load_file(QString const& file_name)
 {
     _audio.stop();
 
+    load_psf(file_name.toStdString());
     _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs, &_control));
 
     _snapshots.clear();
