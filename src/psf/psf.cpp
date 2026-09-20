@@ -9,15 +9,14 @@
 #include <zlib.h>
 
 #include <fstream>
-#include <vector>
-#include <string>
-#include <unordered_map>
 #include <algorithm>
 
 namespace {
 
 constexpr size_t MAX_SIZE = 4 * 1024 * 1024; // 4MB
 constexpr size_t MAX_UNCOMPRESSED_SIZE = 2033664;
+constexpr size_t PSX_RAM_SIZE = 2 * 1024 * 1024; // 2MB;
+constexpr size_t PSX_EXE_HEADER_SIZE = 0x800;
 
 // clang-format doesn't know about annotations yet, so exclude these for now.
 // clang-format off
@@ -51,34 +50,52 @@ struct TagHeader {
 };
 
 // clang-format on
-} // namespace
 
-void load_psf(std::filesystem::path path)
+std::expected<PSF, std::string> load_psf_lib(std::filesystem::path path,
+                                             std::string lib_name,
+                                             std::vector<uint8_t>& psx_ram,
+                                             int recursion_level);
+
+void copy_payload(PSXExeHeader const& exe_header,
+                  std::basic_string<uint8_t> const& payload,
+                  std::vector<uint8_t>& psx_ram)
 {
+    // Copy the text section to the PSX RAM. Use (PSX_RAM_SIZE - 1) to mask off the top bits of
+    // the destination address.
+    std::copy_n(payload.begin() + PSX_EXE_HEADER_SIZE,
+                exe_header.text_size,
+                psx_ram.begin() + (exe_header.text_addr & (PSX_RAM_SIZE - 1)));
+}
+
+std::expected<PSF, std::string> load_psf_internal(std::filesystem::path path,
+                                                  std::vector<uint8_t>& psx_ram,
+                                                  int recursion_level)
+{
+    if (recursion_level >= 4) {
+        return std::unexpected{"Too many recursive libraries"};
+    }
+
     std::fstream f{};
     f.open(path, std::ios::in | std::ios::binary);
 
     if (!f) {
-        fmt::println("Can't open the file: {}", path.string());
-        return;
+        return std::unexpected{fmt::format("Can't open the file: {}", path.string())};
     }
 
     auto const header = parse<PSFHeader>(f);
 
     if (!header || header->magic != "PSF") {
-        fmt::println("Not a PSF file: {}", path.string());
-        return;
+        return std::unexpected{fmt::format("Not a PSF file: {}", path.string())};
     }
 
     // Only version 1 PSF files are supported.
     if (header->version != 1) {
-        fmt::println("Unsupported PSF version {}: {}", header->version, path.string());
-        return;
+        return std::unexpected{
+            fmt::format("Unsupported PSF version {}: {}", header->version, path.string())};
     }
 
     if (header->reserved_size > MAX_SIZE || header->payload_size > MAX_SIZE) {
-        fmt::println("PSF sections are too big: {}", path.string());
-        return;
+        return std::unexpected{fmt::format("PSF sections are too big: {}", path.string())};
     }
 
     // Skip reserved area.
@@ -89,75 +106,126 @@ void load_psf(std::filesystem::path path)
     f.read(reinterpret_cast<char*>(buffer.data()), header->payload_size);
 
     if (f.gcount() != header->payload_size) {
-        fmt::println("PSF is truncated: {}", path.string());
-        return;
+        return std::unexpected{fmt::format("PSF is truncated: {}", path.string())};
     }
 
     auto const computed_crc = crc32(0, buffer.data(), buffer.size());
 
     if (header->payload_crc != computed_crc) {
-        fmt::println("CRC mismatch (expected: {:#010x}, actual: {:#010x}): {}",
-                     header->payload_crc,
-                     computed_crc,
-                     path.string());
-        return;
+        return std::unexpected{
+            fmt::format("CRC mismatch (expected: {:#010x}, actual: {:#010x}): {}",
+                        header->payload_crc,
+                        computed_crc,
+                        path.string())};
     }
 
-    {
-        std::basic_string<uint8_t> payload;
-        payload.resize(MAX_UNCOMPRESSED_SIZE);
-        unsigned long destLen = payload.size();
-        auto const result = uncompress(payload.data(), &destLen, buffer.data(), buffer.size());
+    // The module to return.
+    PSF psf{};
+    std::basic_string<uint8_t> payload;
+    payload.resize(MAX_UNCOMPRESSED_SIZE);
 
-        if (result != Z_OK) {
-            fmt::println("Could not decompress payload: {}", path.string());
-            return;
-        }
+    unsigned long destLen = payload.size();
+    auto const result = uncompress(payload.data(), &destLen, buffer.data(), buffer.size());
 
-        payload.resize(destLen);
+    if (result != Z_OK) {
+        return std::unexpected{fmt::format("Could not decompress payload: {}", path.string())};
+    }
 
-        std::basic_istringstream iss{payload};
-        auto const exe_header = parse<PSXExeHeader>(iss);
+    payload.resize(destLen);
 
-        if (!exe_header || exe_header->magic != "PS-X EXE") {
-            fmt::println("Invalid PSX EXE format: {}", path.string());
-            return;
-        }
+    std::basic_istringstream iss{payload};
+    auto const exe_header = parse<PSXExeHeader>(iss);
 
-        auto const tag_header = parse<TagHeader>(f);
+    if (!exe_header || exe_header->magic != "PS-X EXE") {
+        return std::unexpected{fmt::format("Invalid PSX EXE format: {}", path.string())};
+    }
 
-        if (!tag_header || tag_header->magic != "[TAG]") {
-            fmt::println("There is no tag section: {}", path.string());
-            return;
+    if (payload.size() < exe_header->text_size + PSX_EXE_HEADER_SIZE) {
+        return std::unexpected{
+            fmt::format("Text size is larger than the payload: {}", path.string())};
+    }
+
+    psf.entry_point = exe_header->entry_point;
+    psf.sp = exe_header->sp;
+
+    auto const tag_header = parse<TagHeader>(f);
+
+    if (!tag_header || tag_header->magic != "[TAG]") {
+        // There are no tags, so just copy the payload and return.
+        copy_payload(*exe_header, payload, psx_ram);
+        return psf;
+    }
+
+    std::string line;
+    auto& tags = psf.tags;
+
+    // PSF specifies that anything less or equal to 0x20 (i.e. ' ') is considered "whitespace".
+    auto const is_whitespace = [](uint8_t c) { return c <= ' '; };
+
+    while (get_tok(f, line, '\n')) {
+        std::istringstream line_iss{line};
+        std::string key, value;
+        get_tok(line_iss, key, '=', is_whitespace);
+        get_tok(line_iss, value, '=', is_whitespace);
+        auto& entry = tags[std::move(key)];
+        if (entry.empty()) {
+            entry = std::move(value);
+        } else {
+            entry += value;
         }
     }
 
-    {
-        std::string line;
-        std::unordered_map<std::string, std::string> tags;
+    // Load "_lib" if any.
+    if (auto const it = tags.find("_lib"); it != tags.end()) {
+        auto ret = load_psf_lib(path, it->second, psx_ram, recursion_level + 1);
+        if (!ret) {
+            return ret;
+        }
+        // _lib is loaded "on top" of the minipsf, so we need to use its entry point and SP.
+        psf.entry_point = ret->entry_point;
+        psf.sp = ret->sp;
+    }
 
-        // PSF specifies that anything less or equal to 0x20 (i.e. ' ') is considered "whitespace".
-        auto const is_whitespace = [](uint8_t c) { return c <= ' '; };
+    // After _lib has been loaded, but before _libN, copy the payload onto the PSX ram.
+    copy_payload(*exe_header, payload, psx_ram);
 
-        while (get_tok(f, line, '\n')) {
-            std::istringstream line_iss{line};
-            std::string key, value;
-            get_tok(line_iss, key, '=', is_whitespace);
-            get_tok(line_iss, value, '=', is_whitespace);
-            auto& entry = tags[std::move(key)];
-            if (entry.empty()) {
-                entry = std::move(value);
-            } else {
-                entry += value;
+    // Now load "_libN" libraries.
+    for (auto i = 2u; i < 10; i++) {
+        if (auto const it = tags.find(fmt::format("_lib{}", i)); it != tags.end()) {
+            auto ret = load_psf_lib(path, it->second, psx_ram, recursion_level + 1);
+            if (!ret) {
+                return ret;
             }
-        }
-
-        if (auto const it = tags.find("_lib"); it != tags.end()) {
-            auto& lib = it->second;
-            std::ranges::replace(lib, '\\', '/');
-            auto folder = path;
-            folder.remove_filename();
-            load_psf(folder / lib);
+        } else {
+            break;
         }
     }
+
+    return psf;
+}
+
+std::expected<PSF, std::string> load_psf_lib(std::filesystem::path path,
+                                             std::string lib_name,
+                                             std::vector<uint8_t>& psx_ram,
+                                             int recursion_level)
+{
+    std::ranges::replace(lib_name, '\\', '/');
+    path.remove_filename();
+    return load_psf_internal(path / lib_name, psx_ram, recursion_level);
+}
+
+} // namespace
+
+std::expected<PSF, std::string> load_psf(std::filesystem::path path)
+{
+    std::vector<uint8_t> psx_ram;
+    psx_ram.resize(PSX_RAM_SIZE);
+
+    auto ret = load_psf_internal(std::move(path), psx_ram, 0);
+
+    if (ret) {
+        ret->psx_ram = std::move(psx_ram);
+    }
+
+    return ret;
 }
