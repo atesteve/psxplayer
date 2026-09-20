@@ -51,11 +51,6 @@ struct TagHeader {
 
 // clang-format on
 
-std::expected<PSF, std::string> load_psf_lib(std::filesystem::path path,
-                                             std::string lib_name,
-                                             std::vector<uint8_t>& psx_ram,
-                                             int recursion_level);
-
 void copy_payload(PSXExeHeader const& exe_header,
                   std::basic_string<uint8_t> const& payload,
                   std::vector<uint8_t>& psx_ram)
@@ -159,6 +154,12 @@ std::expected<PSF, std::string> load_psf_internal(std::filesystem::path path,
     std::string line;
     auto& tags = psf.tags;
 
+    auto const load_psf_lib = [&](std::string lib_name) {
+        std::ranges::replace(lib_name, '\\', '/');
+        path.remove_filename();
+        return load_psf_internal(path / lib_name, psx_ram, recursion_level + 1);
+    };
+
     // PSF specifies that anything less or equal to 0x20 (i.e. ' ') is considered "whitespace".
     auto const is_whitespace = [](uint8_t c) { return c <= ' '; };
 
@@ -177,7 +178,7 @@ std::expected<PSF, std::string> load_psf_internal(std::filesystem::path path,
 
     // Load "_lib" if any.
     if (auto const it = tags.find("_lib"); it != tags.end()) {
-        auto ret = load_psf_lib(path, it->second, psx_ram, recursion_level + 1);
+        auto ret = load_psf_lib(it->second);
         if (!ret) {
             return ret;
         }
@@ -192,7 +193,7 @@ std::expected<PSF, std::string> load_psf_internal(std::filesystem::path path,
     // Now load "_libN" libraries.
     for (auto i = 2u; i < 10; i++) {
         if (auto const it = tags.find(fmt::format("_lib{}", i)); it != tags.end()) {
-            auto ret = load_psf_lib(path, it->second, psx_ram, recursion_level + 1);
+            auto ret = load_psf_lib(it->second);
             if (!ret) {
                 return ret;
             }
@@ -202,16 +203,6 @@ std::expected<PSF, std::string> load_psf_internal(std::filesystem::path path,
     }
 
     return psf;
-}
-
-std::expected<PSF, std::string> load_psf_lib(std::filesystem::path path,
-                                             std::string lib_name,
-                                             std::vector<uint8_t>& psx_ram,
-                                             int recursion_level)
-{
-    std::ranges::replace(lib_name, '\\', '/');
-    path.remove_filename();
-    return load_psf_internal(path / lib_name, psx_ram, recursion_level);
 }
 
 } // namespace
