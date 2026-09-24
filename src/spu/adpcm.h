@@ -1,0 +1,81 @@
+// SPDX-FileCopyrightText: 2026 Aitor Esteve Alvarado
+// SPDX-License-Identifier: GPL-3.0-only
+
+#pragma once
+
+#include <cstdint>
+#include <span>
+#include <optional>
+#include <memory>
+#include <mutex>
+#include <string_view>
+
+struct fftw_deleter {
+    static void operator()(void* p) noexcept;
+};
+
+template<typename T>
+class FFTW3Holder {
+    using fftw_ptr = std::unique_ptr<T[], fftw_deleter>;
+
+public:
+    explicit FFTW3Holder(size_t size);
+
+    T& operator[](size_t i) { return _fftw.get()[i]; }
+    T const& operator[](size_t i) const { return _fftw.get()[i]; }
+
+    auto begin(this auto&& self) { return &self[0]; }
+    T const* cbegin() const { return begin(); }
+
+    auto end(this auto&& self) { return &self[0] + self._size; }
+    T const* cend() const { return end(); }
+
+    auto data(this auto&& self) { return self.begin(); }
+
+    size_t size() const { return _size; }
+
+private:
+    fftw_ptr _fftw;
+    size_t _size;
+};
+
+using Sample = FFTW3Holder<double>;
+
+struct SampleBounds {
+    uint32_t start_addr;
+    uint32_t loop_addr;
+    uint32_t end_addr;
+    uint32_t max_addr;
+};
+
+struct ADPCMBlockHeader {
+    uint8_t shift : 4;
+    uint8_t filter : 4;
+    uint8_t loop_end : 1;
+    uint8_t loop_repeat : 1;
+    uint8_t loop_start : 1;
+    uint8_t : 5;
+};
+
+static_assert(sizeof(ADPCMBlockHeader) == 2);
+
+SampleBounds get_sample_bounds(std::span<uint8_t const> ram, uint32_t addr, uint32_t loop_addr);
+
+ADPCMBlockHeader decode_adpcm_block(std::span<uint16_t const> ram,
+                                    uint32_t addr,
+                                    std::pair<int16_t, int16_t> prev_samples,
+                                    std::span<int16_t> out);
+
+// std::optional<Sample> decode_adpcm_sample(std::span<uint16_t const> ram,
+//                                           uint32_t addr,
+//                                           uint32_t loop_addr,
+//                                           std::optional<SampleBounds> bounds = std::nullopt,
+//                                           int repeats = 1,
+//                                           Sample* out = nullptr);
+
+// double find_sample_freq(std::span<uint8_t const> ram,
+//                         uint32_t addr,
+//                         uint32_t loop_addr,
+//                         SampleBounds const& bounds,
+//                         std::mutex& mutex,
+//                         std::string_view name);

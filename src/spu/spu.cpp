@@ -3,6 +3,7 @@
 
 #include "spu.h"
 #include "spu_registers.h"
+#include "adpcm.h"
 #include "core/dma.h"
 
 #include <cstddef>
@@ -70,9 +71,32 @@ constexpr uint64_t get_sample_cycle(uint64_t clock_cycle)
 
 } // namespace
 
+struct SampleBuffer {
+    size_t pos{};
+    std::array<int16_t, 28> samples{};
+
+    void reset()
+    {
+        pos = samples.size();
+        std::ranges::fill(samples, 0);
+    }
+
+    bool empty() { return pos >= samples.size(); }
+
+    auto last_samples() const
+    {
+        return std::make_pair(samples[samples.size() - 2], samples[samples.size() - 1]);
+    }
+
+    auto pop() { return samples[pos++]; }
+};
+
 struct VoiceState {
     std::array<uint64_t, 2> key_on_cycle{};
     std::array<uint64_t, 2> key_off_cycle{};
+    SampleBuffer sample_buffer{};
+    spu_compressed_addr_t sample_p{};
+    bool on{};
 };
 
 struct SPU::Private {
@@ -90,7 +114,7 @@ struct SPU::Private {
     void update_key_on_off(uint32_t effective_value, auto member);
 
     void tick(uint64_t clock_cycle);
-    void tick_voice(size_t v, uint64_t sample_cycle);
+    std::pair<int16_t, int16_t> tick_voice(size_t v, uint64_t sample_cycle);
 
     R3000* emu;
     DMA* dma;
@@ -148,6 +172,10 @@ void SPU::Private::update_status()
 
 void SPU::Private::update_key_on_off(uint32_t effective_value, auto member)
 {
+    if (!reg->control.fields.enable) {
+        return;
+    }
+
     uint32_t bit;
     auto const sample_cycle = get_sample_cycle(timing->get_clock());
     while ((bit = std::countr_zero(effective_value)) != 32) {
@@ -155,10 +183,11 @@ void SPU::Private::update_key_on_off(uint32_t effective_value, auto member)
         if (bit >= state.voice.size()) {
             break;
         }
-        for (auto& entry : state.voice[bit].*member) {
-            if (entry == 0) {
-                entry = sample_cycle;
-            }
+        auto& arr = state.voice[bit].*member;
+        if (auto const it = std::ranges::find(arr, 0); it != arr.end()) {
+            *it = sample_cycle;
+        } else {
+            arr.back() = sample_cycle;
         }
     }
 }
@@ -422,6 +451,7 @@ void SPU::Private::tick(uint64_t const clock_cycle)
 {
     uint64_t const sample_cycle = get_sample_cycle(clock_cycle);
     uint64_t const samples_to_generate = sample_cycle - last_sample_cycle;
+    uint64_t const current_sample_cycle = last_sample_cycle;
     last_sample_cycle = sample_cycle;
 
     if (!reg->control.fields.enable) {
@@ -429,26 +459,65 @@ void SPU::Private::tick(uint64_t const clock_cycle)
     }
 
     for (auto i = 0u; i < samples_to_generate; i++) {
+        std::pair<int32_t, int32_t> sum{};
         for (auto v = 0u; v < N_VOICES; v++) {
-            tick_voice(v, sample_cycle + i);
+            auto const sample = tick_voice(v, current_sample_cycle + i);
+            sum.first += sample.first;
+            sum.second += sample.second;
         }
-    }
-
-    if (out.size() >= out_p + 2) {
-        out[out_p] = 0;
-        out[out_p + 1] = 0;
-        out_p += 2;
+        if (out.size() >= out_p + 2) {
+            out[out_p] = sum.first / 24;
+            out[out_p + 1] = sum.second / 24;
+            out_p += 2;
+        }
     }
 }
 
-void SPU::Private::tick_voice(size_t const v, uint64_t sample_cycle)
+std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sample_cycle)
 {
     auto& voice_regs = reg->voice[v];
     auto& voice_state = state.voice[v];
 
-    (void)voice_regs;
-    (void)voice_state;
-    (void)sample_cycle;
+    if (auto const it = std::ranges::find(voice_state.key_on_cycle, sample_cycle);
+        it != voice_state.key_on_cycle.end()) {
+        *it = 0;
+        voice_state.sample_buffer.reset();
+        voice_state.sample_p = voice_regs.adpcm_start_addr;
+        voice_state.on = true;
+    }
+
+    if (auto const it = std::ranges::find(voice_state.key_off_cycle, sample_cycle);
+        it != voice_state.key_off_cycle.end()) {
+        *it = 0;
+        voice_state.on = false;
+    }
+
+    if (!voice_state.on) {
+        return {0, 0};
+    }
+
+    if (voice_state.sample_buffer.empty()) {
+        auto const header = decode_adpcm_block(ram,
+                                               voice_state.sample_p.get(),
+                                               voice_state.sample_buffer.last_samples(),
+                                               voice_state.sample_buffer.samples);
+        voice_state.sample_buffer.pos = 0;
+        if (header.loop_start) {
+            voice_regs.adpcm_repeat_addr = voice_state.sample_p;
+        }
+        if (header.loop_end) {
+            voice_state.sample_p = voice_regs.adpcm_repeat_addr;
+            if (!header.loop_repeat) {
+                voice_state.on = false;
+                return {0, 0};
+            }
+        } else {
+            voice_state.sample_p.raw++;
+        }
+    }
+
+    auto const sample = voice_state.sample_buffer.pop();
+    return {sample, sample};
 }
 
 void SPU::write_reg(r3000_ptr_t addr, uint16_t value)

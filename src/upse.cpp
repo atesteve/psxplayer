@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "upse.h"
-#include "adpcm.h"
 #include "psf/psf.h"
 
 #include <fmt/format.h>
@@ -78,7 +77,7 @@ void UpseModule::run()
 
     std::vector<int16_t> buf;
     size_t n;
-    buf.resize(2500);
+    buf.resize(4096);
 
     while (!_shutdown) {
         if (_state == State::Seeking) {

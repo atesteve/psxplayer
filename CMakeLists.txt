@@ -40,8 +40,6 @@ set(TARGET_SRC
   src/kcollapsiblegroupbox.h
   src/sound-meter-bar.cpp
   src/sound-meter-bar.h
-  src/adpcm.cpp
-  src/adpcm.h
   src/square-button.h
   src/channel-mapper/channel-mapper.cpp
   src/channel-mapper/channel-mapper.h
@@ -69,6 +67,8 @@ set(TARGET_SRC
   src/core/dma.h
   src/core/events.cpp
   src/core/events.h
+  src/spu/adpcm.cpp
+  src/spu/adpcm.h
   src/spu/spu.cpp
   src/spu/spu.h
   src/timer/timer.cpp

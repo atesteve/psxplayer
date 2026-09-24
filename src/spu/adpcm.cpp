@@ -30,12 +30,7 @@ using fftw_plan_ptr = std::unique_ptr<std::remove_pointer_t<fftw_plan>, fftw_pla
 // Technically, bitfield layout is implementation-defined, so it shouldn't be relied upon. However,
 // gcc, clang and msvc all implement the same layout, so I'm keeping this.
 struct ADPCM_block {
-    uint8_t shift : 4;
-    uint8_t filter : 4;
-    uint8_t loop_end : 1;
-    uint8_t loop_repeat : 1;
-    uint8_t loop_start : 1;
-    uint8_t : 5;
+    ADPCMBlockHeader header;
     struct Data {
         int8_t lo_sample : 4;
         int8_t hi_sample : 4;
@@ -45,80 +40,7 @@ struct ADPCM_block {
 static_assert(sizeof(ADPCM_block) == 16);
 static_assert(alignof(ADPCM_block) == 1);
 
-constexpr auto SAMPLES_PER_BLOCK = sizeof(ADPCM_block::data) * 2;
-
-int32_t adpcm_filter(uint8_t filter, int32_t sample, int32_t a, int32_t b)
-{
-    // clang-format off
-    switch (filter) {
-        case 0: return sample;
-        case 1: return sample + (60  * a          + 32) / 64;
-        case 2: return sample + (115 * a - 52 * b + 32) / 64;
-        case 3: return sample + (98  * a - 55 * b + 32) / 64;
-        case 4: return sample + (122 * a - 60 * b + 32) / 64;
-        // Invalid, just return the raw sample.
-        default: return sample;
-    }
-    // clang-format on
-}
-
-std::pair<double, double> decode_adpcm_block(std::span<uint8_t const> ram,
-                                             uint32_t addr,
-                                             std::pair<double, double> prev_samples,
-                                             std::span<double> out)
-{
-    if (addr > ram.size() - 16) {
-        return {0, 0};
-    }
-
-    auto [a, b] = prev_samples;
-    auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
-
-    for (auto const& [i, data] : std::ranges::enumerate_view{block->data}) {
-        auto const process_sample = [&](int32_t sample) {
-            auto const shifted = sample << (12 - block->shift);
-            int32_t const ai32 = a * 32767;
-            int32_t const bi32 = b * 32767;
-
-            auto const ret = adpcm_filter(block->filter, shifted, ai32, bi32);
-            auto const ret_double = std::clamp<int32_t>(ret, -32767, 32767) / 32767.0;
-
-            b = std::exchange(a, ret_double);
-
-            return ret_double;
-        };
-
-        auto const s1 = process_sample(data.lo_sample);
-        auto const s2 = process_sample(data.hi_sample);
-
-        if (!out.empty()) {
-            out[i * 2] = s1;
-            out[i * 2 + 1] = s2;
-        }
-    }
-
-    return {a, b};
-}
-
-std::pair<double, double> prime_adpcm(std::span<uint8_t const> ram,
-                                      uint32_t addr,
-                                      uint32_t loop_addr,
-                                      SampleBounds const& bounds)
-{
-    std::pair<double, double> ret{0, 0};
-
-    while (addr != bounds.loop_addr && addr < ram.size()) {
-        ret = decode_adpcm_block(ram, addr, ret, {});
-        auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
-        if (block->loop_end && block->loop_repeat) {
-            addr = loop_addr;
-        } else {
-            addr += sizeof(ADPCM_block);
-        }
-    }
-
-    return ret;
-}
+// constexpr auto SAMPLES_PER_BLOCK = sizeof(ADPCM_block::data) * 2;
 
 double quinn_second_estimator(fftw_complex const& x0_in,
                               fftw_complex const& x1_in,
@@ -193,6 +115,7 @@ void plot(FFTW3Holder<fftw_complex> const& fft,
     t.detach();
 }
 
+[[maybe_unused]]
 double find_peak_freq(FFTW3Holder<fftw_complex> const& fft, [[maybe_unused]] std::string_view name)
 {
     static constexpr double MAX_FREQ = 22050;
@@ -272,7 +195,79 @@ double find_peak_freq(FFTW3Holder<fftw_complex> const& fft, [[maybe_unused]] std
     return freq;
 }
 
+// std::pair<double, double> prime_adpcm(std::span<uint8_t const> ram,
+//                                       uint32_t addr,
+//                                       uint32_t loop_addr,
+//                                       SampleBounds const& bounds)
+// {
+//     std::pair<double, double> ret{0, 0};
+
+//     while (addr != bounds.loop_addr && addr < ram.size()) {
+//         ret = decode_adpcm_block(ram, addr, ret, {});
+//         auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
+//         if (block->loop_end && block->loop_repeat) {
+//             addr = loop_addr;
+//         } else {
+//             addr += sizeof(ADPCM_block);
+//         }
+//     }
+
+//     return ret;
+// }
+
+int32_t adpcm_filter(uint8_t filter, int32_t sample, int32_t a, int32_t b)
+{
+    // clang-format off
+    switch (filter) {
+        case 0: return sample;
+        case 1: return sample + (60  * a          + 32) / 64;
+        case 2: return sample + (115 * a - 52 * b + 32) / 64;
+        case 3: return sample + (98  * a - 55 * b + 32) / 64;
+        case 4: return sample + (122 * a - 60 * b + 32) / 64;
+        // Invalid, just return the raw sample.
+        default: return sample;
+    }
+    // clang-format on
+}
+
 } // namespace
+
+ADPCMBlockHeader decode_adpcm_block(std::span<uint16_t const> ram,
+                                    uint32_t addr,
+                                    std::pair<int16_t, int16_t> prev_samples,
+                                    std::span<int16_t> out)
+{
+    if (addr + sizeof(ADPCM_block) / 2 > ram.size()) {
+        return {};
+    }
+
+    auto [a, b] = prev_samples;
+    auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
+
+    for (auto const& [i, data] : std::ranges::enumerate_view{block->data}) {
+        auto const process_sample = [&](int32_t sample) -> int16_t {
+            auto const shifted = sample << (12 - block->header.shift);
+            int32_t const ai32 = a;
+            int32_t const bi32 = b;
+
+            auto ret = adpcm_filter(block->header.filter, shifted, ai32, bi32);
+            ret = std::clamp<int32_t>(
+                ret, std::numeric_limits<int16_t>::min(), std::numeric_limits<int16_t>::max());
+            b = std::exchange(a, ret);
+            return ret;
+        };
+
+        auto const s1 = process_sample(data.lo_sample);
+        auto const s2 = process_sample(data.hi_sample);
+
+        out[i * 2] = s1;
+        out[i * 2 + 1] = s2;
+    }
+
+    return block->header;
+}
+
+/*
 
 void fftw_deleter::operator()(void* p) noexcept
 {
@@ -401,3 +396,5 @@ double find_sample_freq(std::span<uint8_t const> ram,
 
     return find_peak_freq(fft, name);
 }
+
+*/
