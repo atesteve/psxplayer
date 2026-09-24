@@ -10,12 +10,15 @@
 
 inline constexpr size_t CPU_FREQ = 33868800;
 
+struct R3000;
+
 class Timing {
 public:
     struct Event {
         enum class Type {
             ONE_SHOT,
             PERIODIC,
+            PERIODIC_NON_STRICT,
         };
 
         static constexpr uint64_t UNINITIALIZED = -1;

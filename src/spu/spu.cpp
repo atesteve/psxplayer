@@ -8,6 +8,9 @@
 #include <cstddef>
 
 namespace {
+
+constexpr uint64_t SAMPLE_RATE_CYCLES = 384;
+
 constexpr size_t spu_offset(r3000_ptr_t addr, ...)
 {
     return addr - SPU_BASE;
@@ -38,12 +41,16 @@ constexpr auto get_first(auto first, ...)
     return first;
 }
 
-void write_32bit_reg(uint32_t* reg, uint16_t value, r3000_ptr_t offset)
+uint32_t write_32bit_reg(uint32_t* reg, uint16_t value, r3000_ptr_t offset)
 {
     if (offset == 0) {
-        *reg = (*reg & 0xffff0000) | value;
+        uint32_t const effective_value = value;
+        *reg = (*reg & 0xffff0000) | effective_value;
+        return effective_value;
     } else {
-        *reg = (*reg & 0x0000ffff) | (uint32_t(value) << 16);
+        uint32_t const effective_value = uint32_t(value) << 16;
+        *reg = (*reg & 0x0000ffff) | effective_value;
+        return effective_value;
     }
 }
 
@@ -56,34 +63,47 @@ uint16_t read_32bit_reg(uint32_t const& reg, r3000_ptr_t offset)
     }
 }
 
+constexpr uint64_t get_sample_cycle(uint64_t clock_cycle)
+{
+    return clock_cycle / SAMPLE_RATE_CYCLES;
+}
+
 } // namespace
+
+struct VoiceState {
+    std::array<uint64_t, 2> key_on_cycle{};
+    std::array<uint64_t, 2> key_off_cycle{};
+};
 
 struct SPU::Private {
     void write_register(r3000_ptr_t addr, uint16_t value);
     uint16_t read_register(r3000_ptr_t addr);
 
-    void write_ram(size_t addr, uint16_t value)
-    {
-        ram[addr / sizeof(uint16_t)] = value;
-    }
+    void write_ram(size_t addr, uint16_t value) { ram[addr / sizeof(uint16_t)] = value; }
 
-    uint16_t read_ram(size_t addr)
-    {
-        return ram[addr / sizeof(uint16_t)];
-    }
+    uint16_t read_ram(size_t addr) { return ram[addr / sizeof(uint16_t)]; }
 
     uint64_t dma_write(r3000_ptr_t addr, uint32_t nbytes);
     uint64_t dma_read(r3000_ptr_t addr, uint32_t nbytes);
 
     void update_status();
+    void update_key_on_off(uint32_t effective_value, auto member);
+
+    void tick(uint64_t clock_cycle);
+    void tick_voice(size_t v, uint64_t sample_cycle);
 
     R3000* emu;
     DMA* dma;
     EmuBuffer<spu_regs_t> reg;
+
     struct State {
         uint32_t transfer_addr{};
+        std::array<VoiceState, N_VOICES> voice{};
     } state{};
+
     EmuBuffer<uint16_t> system_ram;
+    uint64_t last_sample_cycle{};
+    Timing* timing;
     alignas(uint32_t) std::array<uint16_t, SPU_RAM_SIZE / 2> ram;
 };
 
@@ -124,6 +144,23 @@ void SPU::Private::update_status()
     status.fields.dma_read_req = control.transfer_mode == 3;
 }
 
+void SPU::Private::update_key_on_off(uint32_t effective_value, auto member)
+{
+    uint32_t bit;
+    auto const sample_cycle = get_sample_cycle(timing->get_clock());
+    while ((bit = std::countr_zero(effective_value)) != 32) {
+        effective_value &= ~(1u << bit);
+        if (bit >= state.voice.size()) {
+            break;
+        }
+        for (auto& entry : state.voice[bit].*member) {
+            if (entry == 0) {
+                entry = sample_cycle;
+            }
+        }
+    }
+}
+
 #define start_reg_handling() if (false) {
 #define handle_reg(field_name, ...)                                                        \
     }                                                                                      \
@@ -153,7 +190,7 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
             case 4: write_32bit_reg(&v.adsr.raw, value, 0); break;
             case 5: write_32bit_reg(&v.adsr.raw, value, 2); break;
             case 6: v.adsr_vol                 = value;     break;
-            case 7: v.adsr_repeat_addr.raw     = value;     break;
+            case 7: v.adpcm_repeat_addr.raw    = value;     break;
         }
         // clang-format on
     }
@@ -175,11 +212,13 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     }
     handle_reg(voice_key_on, 0x1f801d88, 0x1f801d8c)
     {
-        write_32bit_reg(&voice_key_on, value, addr - RANGE_BASE);
+        auto effective_value = write_32bit_reg(&voice_key_on, value, addr - RANGE_BASE);
+        update_key_on_off(effective_value, &VoiceState::key_on_cycle);
     }
     handle_reg(voice_key_off, 0x1f801d8c, 0x1f801d90)
     {
-        write_32bit_reg(&voice_key_off, value, addr - RANGE_BASE);
+        auto effective_value = write_32bit_reg(&voice_key_off, value, addr - RANGE_BASE);
+        update_key_on_off(effective_value, &VoiceState::key_off_cycle);
     }
     handle_reg(voice_pitch_mod_en, 0x1f801d90, 0x1f801d94)
     {
@@ -270,7 +309,7 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
             case 4: return read_32bit_reg(v.adsr.raw, 0);
             case 5: return read_32bit_reg(v.adsr.raw, 2);
             case 6: return v.adsr_vol;
-            case 7: return v.adsr_repeat_addr.raw;
+            case 7: return v.adpcm_repeat_addr.raw;
         }
         // clang-format on
     }
@@ -377,6 +416,29 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     return 0;
 }
 
+void SPU::Private::tick(uint64_t const clock_cycle)
+{
+    uint64_t const sample_cycle = get_sample_cycle(clock_cycle);
+    uint64_t const samples_to_generate = sample_cycle - last_sample_cycle;
+    last_sample_cycle = sample_cycle;
+
+    if (!reg->control.fields.enable) {
+        return;
+    }
+
+    for (auto i = 0u; i < samples_to_generate; i++) {
+        for (auto v = 0u; v < N_VOICES; v++) {
+            tick_voice(v, sample_cycle + i);
+        }
+    }
+}
+
+void SPU::Private::tick_voice(size_t const v, uint64_t sample_cycle)
+{
+    auto& voice_regs = reg->voice[v];
+    auto& voice_state = state.voice[v];
+}
+
 void SPU::write_reg(r3000_ptr_t addr, uint16_t value)
 {
     _p->write_register(addr, value);
@@ -403,6 +465,13 @@ void SPU::init(R3000* emu)
     _p->dma = emu->get_dma();
     _p->reg = emu->get_device_buffer<spu_regs_t>(SPU_BASE);
     _p->system_ram = emu->get_buffer<uint16_t>(0, 0x100000);
+    _p->timing = emu->get_timing();
+    _p->timing->schedule(Timing::Event{
+        .name = "spu_tick",
+        .type = Timing::Event::Type::PERIODIC_NON_STRICT,
+        .period = SAMPLE_RATE_CYCLES,
+        .callback = [_p = _p.get()](auto&, uint64_t cycle) { _p->tick(cycle); },
+    });
 }
 
 SPU::SPU()

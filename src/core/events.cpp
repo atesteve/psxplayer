@@ -84,7 +84,13 @@ void Timing::Private::run_events()
             events.erase(it);
             continue;
         }
-        event_time.clk_time += event.period;
+        if (event.type == Event::Type::PERIODIC) {
+            event_time.clk_time += event.period;
+        } else if (event.type == Event::Type::PERIODIC_NON_STRICT) {
+            while (event_time.clk_time <= current_clk) {
+                event_time.clk_time += event.period;
+            }
+        }
         reorder_heap_head(event_heap);
     }
 }
