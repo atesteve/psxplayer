@@ -100,7 +100,7 @@ struct voice_registers_t {
     spu_compressed_addr_t adpcm_start_addr;
     adsr_reg_t adsr;
     int16_t adsr_vol;
-    spu_compressed_addr_t adsr_repeat_addr;
+    spu_compressed_addr_t adpcm_repeat_addr;
 };
 
 union reverb_config_t {

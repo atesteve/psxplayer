@@ -5,8 +5,7 @@
 
 #include "channel-mapper/channel-mapper.h"
 #include "audio.h"
-
-#include "libupse/upse.h"
+#include "core/r3000.h"
 
 #include <QThread>
 #include <QTimer>
@@ -16,12 +15,6 @@
 #include <vector>
 #include <future>
 #include <unordered_map>
-
-struct upse_module_deleter {
-    static void operator()(upse_module_t* mod) noexcept { upse_module_close(mod); }
-};
-
-using upse_module_ptr = std::unique_ptr<upse_module_t, upse_module_deleter>;
 
 class UpseModule : public QThread {
     Q_OBJECT
@@ -40,7 +33,7 @@ public:
 
     void run() override;
 
-    operator bool() const { return _mod.get(); }
+    operator bool() const { return _emu.get(); }
 
 signals:
     void total_time_changed(std::chrono::milliseconds ms);
@@ -98,7 +91,7 @@ private:
                         uint32_t data);
     void sw_hook(upse_module_instance_t* ins, mem_access_size_t size, uint32_t addr, uint32_t data);
 
-    upse_module_ptr _mod;
+    std::unique_ptr<R3000> _emu;
     Audio _audio;
 
     State _state{};

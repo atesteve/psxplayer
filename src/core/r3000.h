@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include "psf/psf.h"
+#include "core/events.h"
+
 #include <cstdint>
 #include <array>
 #include <memory>
@@ -340,7 +343,7 @@ struct R3000 {
 
     static std::unique_ptr<R3000> build();
 
-    virtual void set_regs(uint32_t sp, uint32_t pc) = 0;
+    virtual void init(PSF& psf) = 0;
     virtual void run() = 0;
 
     template<std::integral Int>
@@ -382,6 +385,12 @@ struct R3000 {
             conditional_t<std::is_const_v<std::remove_reference_t<Self>>, std::add_const_t<T>, T>;
         auto* ptr = self.get_buffer_checked(addr, sizeof(T) * size, true);
         return EmuBuffer<RetT>{reinterpret_cast<RetT*>(ptr), addr, size};
+    }
+
+    template<typename Self>
+    auto get_ram_buffer(this Self&& self)
+    {
+        return self.get_buffer(0, 2 * 1024 * 1024);
     }
 
     template<typename T = uint8_t, typename Self>

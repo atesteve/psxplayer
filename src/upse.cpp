@@ -3,7 +3,6 @@
 
 #include "upse.h"
 #include "adpcm.h"
-#include "core/r3000.h"
 #include "psf/psf.h"
 
 #include "libupse/upse-spu-internal.h"
@@ -19,14 +18,6 @@ using namespace std::literals;
 using namespace std::chrono;
 
 namespace {
-
-upse_iofuncs_t stdio_funcs{
-    .open_impl = (void* (*)(const char* path, const char* mode))fopen,
-    .read_impl = (size_t (*)(void* ptr, size_t size, size_t nmemb, void* file))fread,
-    .seek_impl = (int (*)(void* file, long offset, int whence))fseek,
-    .close_impl = (int (*)(void* file))fclose,
-    .tell_impl = (long (*)(void* file))ftell,
-};
 
 constexpr auto SNAPSHOT_INTERVAL = 30s;
 
@@ -86,7 +77,7 @@ void UpseModule::run()
     emit state_changed(_state);
     _slow_timer.start(500);
 
-    int16_t* buf;
+    int16_t* buf{};
     int n;
 
     while (!_shutdown) {
@@ -94,14 +85,14 @@ void UpseModule::run()
             _control.input.speed_multiplier = 2.5;
         }
 
-        if (_mod && (_state == State::Playing || _state == State::Seeking)) {
-            n = upse_eventloop_render(_mod.get(), &buf);
+        if (_emu && (_state == State::Playing || _state == State::Seeking)) {
+            // n = upse_eventloop_render(_mod.get(), &buf);
 
-            auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
-            if (current_seek < milliseconds{_mod->metadata->length}
-                && _snapshots.back().first + SNAPSHOT_INTERVAL < current_seek) {
-                take_snapshot();
-            }
+            // auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
+            // if (current_seek < milliseconds{_mod->metadata->length}
+            //     && _snapshots.back().first + SNAPSHOT_INTERVAL < current_seek) {
+            //     take_snapshot();
+            // }
 
             if (n == 0) {
                 set_state(State::Stopped);
@@ -110,10 +101,10 @@ void UpseModule::run()
                 slow_timer_fired();
             }
 
-            if (n == -1) {
-                _snapshots.clear();
-                take_snapshot();
-            }
+            // if (n == -1) {
+            //     _snapshots.clear();
+            //     take_snapshot();
+            // }
         } else {
             n = 0;
         }
@@ -151,7 +142,7 @@ void UpseModule::run()
 
 void UpseModule::find_sample_frequency()
 {
-    auto const* spu_state = reinterpret_cast<upse_spu_state_t const*>(_mod->instance.spu);
+    /*auto const* spu_state = reinterpret_cast<upse_spu_state_t const*>(_mod->instance.spu);
     auto const offset_to_ram =
         *reinterpret_cast<uint32_t const*>((char const*)spu_state->pCore + sizeof(uint32_t));
     auto const* ram = reinterpret_cast<uint8_t const*>(spu_state->pCore) + offset_to_ram;
@@ -202,7 +193,7 @@ void UpseModule::find_sample_frequency()
                            return find_sample_freq(
                                sample_mem, addr, loop_addr, bounds, _sample_freq_mutex, name);
                        }));
-    }
+    }*/
 }
 
 void UpseModule::handle_channel_fire()
@@ -219,41 +210,43 @@ void UpseModule::handle_channel_fire()
 
 void UpseModule::take_snapshot()
 {
-    auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
-    auto& emplaced = _snapshots.emplace_back();
-    emplaced.first = current_seek;
-    emplaced.second.second = _channel_mapper->take_snapshot();
-    upse_module_take_snapshot(_mod.get(), &emplaced.second.first);
+    // auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
+    // auto& emplaced = _snapshots.emplace_back();
+    // emplaced.first = current_seek;
+    // emplaced.second.second = _channel_mapper->take_snapshot();
+    // upse_module_take_snapshot(_mod.get(), &emplaced.second.first);
 }
 
 void UpseModule::seek(int pos)
 {
-    if (!_mod) {
-        return;
-    }
-
-    int const current_seek = upse_eventloop_tell_seek(_mod.get());
-
-    if (pos == current_seek) {
-        return;
-    }
-
-    auto it = std::ranges::upper_bound(_snapshots,
-                                       milliseconds{pos},
-                                       std::less<>{},
-                                       [](auto const& element) { return element.first; });
-    assert(it != _snapshots.begin());
-    if (pos < current_seek || prev(it)->first.count() > current_seek) {
-        upse_module_restore_snapshot(_mod.get(), &prev(it)->second.first);
-        _channel_mapper->restore_snapshot(prev(it)->second.second);
-
-        if (prev(it)->first.count() == pos) {
+    (void)pos;
+    /*    if (!_emu) {
             return;
         }
-    }
 
-    upse_eventloop_seek(_mod.get(), pos);
-    set_state(State::Seeking);
+        int const current_seek = upse_eventloop_tell_seek(_mod.get());
+
+        if (pos == current_seek) {
+            return;
+        }
+
+        auto it = std::ranges::upper_bound(_snapshots,
+                                           milliseconds{pos},
+                                           std::less<>{},
+                                           [](auto const& element) { return element.first; });
+        assert(it != _snapshots.begin());
+        if (pos < current_seek || prev(it)->first.count() > current_seek) {
+            upse_module_restore_snapshot(_mod.get(), &prev(it)->second.first);
+            _channel_mapper->restore_snapshot(prev(it)->second.second);
+
+            if (prev(it)->first.count() == pos) {
+                return;
+            }
+        }
+
+        upse_eventloop_seek(_mod.get(), pos);
+        set_state(State::Seeking);
+        */
 }
 
 void UpseModule::load_file(QString const& file_name)
@@ -261,7 +254,6 @@ void UpseModule::load_file(QString const& file_name)
     _audio.stop();
 
     auto psf = load_psf(file_name.toStdString());
-    _mod.reset(upse_module_open(file_name.toStdString().c_str(), &stdio_funcs, &_control));
 
     _snapshots.clear();
     _snapshots.shrink_to_fit();
@@ -269,30 +261,22 @@ void UpseModule::load_file(QString const& file_name)
     _control.output = {};
     _control.input.speed_multiplier = _speed;
 
-    if (!_mod) {
+    if (!psf) {
+        _emu.reset();
         set_state(State::Unloaded);
         emit supported_channels(0);
         return;
     }
 
-    auto core = R3000::build();
-    auto ram_buffer = core->get_buffer(0, sizeof(_mod->instance.psxM));
-    memcpy(ram_buffer.data(), psf->psx_ram.data(), ram_buffer.size());
-    core->set_regs(psf->sp, psf->entry_point);
-    *(uint32_t*)&ram_buffer[0xa0] = 0xfc0000a0;
-    *(uint32_t*)&ram_buffer[0xb0] = 0xfc0000b0;
-    *(uint32_t*)&ram_buffer[0xc0] = 0xfc0000c0;
-    *(uint32_t*)&ram_buffer[0xd0] = 0xfc0000d0;
+    _emu = R3000::build();
+    _emu->init(*psf);
 
-    core->run();
-
-    _channel_mapper =
-        ChannelMapper::build(&_mod->instance, _mod->metadata->game, _mod->metadata->title);
+    _channel_mapper = ChannelMapper::build(nullptr, "", "");
     _channel_state.clear();
     _channel_state.resize(_channel_mapper->supported_channels());
 
-    _snapshots.reserve(
-        (_mod->metadata->length / duration_cast<milliseconds>(SNAPSHOT_INTERVAL).count()) + 1);
+    // _snapshots.reserve(
+    //     (_mod->metadata->length / duration_cast<milliseconds>(SNAPSHOT_INTERVAL).count()) + 1);
     take_snapshot();
 
     _paused = false;
@@ -300,13 +284,13 @@ void UpseModule::load_file(QString const& file_name)
     emit supported_channels(_channel_mapper->supported_channels());
 
     set_state(State::Playing);
-    emit total_time_changed(milliseconds{_mod->metadata->length});
+    // emit total_time_changed(milliseconds{_mod->metadata->length});
     emit seek_changed(0ms);
 }
 
 void UpseModule::toggle_pause()
 {
-    if (!_mod) {
+    if (!_emu) {
         return;
     }
 
@@ -334,7 +318,7 @@ void UpseModule::toggle_pause()
 
 void UpseModule::stop()
 {
-    if (!_mod) {
+    if (!_emu) {
         return;
     }
 
@@ -411,10 +395,10 @@ void UpseModule::slow_timer_fired()
     }
     _stopped_cycles++;
 
-    if (!_mod || _state == State::Seeking) {
+    if (!_emu || _state == State::Seeking) {
         return;
     }
-    emit seek_changed(milliseconds{upse_eventloop_tell_seek(_mod.get())});
+    // emit seek_changed(milliseconds{upse_eventloop_tell_seek(_emu.get())});
 }
 
 void UpseModule::fast_timer_fired()

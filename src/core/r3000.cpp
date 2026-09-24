@@ -1138,10 +1138,19 @@ void R3000Core<c>::Private::run(bool letLongjmpThrough)
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::set_regs(uint32_t sp, uint32_t pc)
+void R3000Core<c>::init(PSF& psf)
 {
-    p->core.pc = pc;
-    p->core.gpr.n.sp = sp;
+    auto ram_buffer = get_buffer(0, psf.psx_ram.size());
+    auto const ram_image = std::move(psf.psx_ram);
+    std::copy_n(ram_image.data(), ram_image.size(), ram_buffer.data());
+
+    p->core.pc = psf.entry_point;
+    p->core.gpr.n.sp = psf.sp;
+
+    *(uint32_t*)&ram_buffer[0xa0] = 0xfc0000a0;
+    *(uint32_t*)&ram_buffer[0xb0] = 0xfc0000b0;
+    *(uint32_t*)&ram_buffer[0xc0] = 0xfc0000c0;
+    *(uint32_t*)&ram_buffer[0xd0] = 0xfc0000d0;
 }
 
 template<R3000CoreConfig c>
