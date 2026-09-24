@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 
 class SPU {
 public:
@@ -20,6 +21,10 @@ public:
 
     uint64_t dma_write(r3000_ptr_t addr, uint32_t nbytes);
     uint64_t dma_read(r3000_ptr_t addr, uint32_t nbytes);
+
+    void set_output_buffer(std::span<int16_t> output);
+    size_t rendered_samples() const;
+
 private:
     struct Private;
     std::unique_ptr<Private> _p;

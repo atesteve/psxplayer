@@ -5,7 +5,6 @@
 #include "adpcm.h"
 #include "psf/psf.h"
 
-#include "libupse/upse-spu-internal.h"
 #include <fmt/format.h>
 
 #include <QAbstractEventDispatcher>
@@ -77,8 +76,9 @@ void UpseModule::run()
     emit state_changed(_state);
     _slow_timer.start(500);
 
-    int16_t* buf{};
-    int n;
+    std::vector<int16_t> buf;
+    size_t n;
+    buf.resize(2500);
 
     while (!_shutdown) {
         if (_state == State::Seeking) {
@@ -86,7 +86,8 @@ void UpseModule::run()
         }
 
         if (_emu && (_state == State::Playing || _state == State::Seeking)) {
-            // n = upse_eventloop_render(_mod.get(), &buf);
+
+            n = _emu->render_audio(buf, buf.size() / 4);
 
             // auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
             // if (current_seek < milliseconds{_mod->metadata->length}
@@ -109,9 +110,9 @@ void UpseModule::run()
             n = 0;
         }
 
-        if (n > 0 && buf) {
+        if (n > 0) {
             if (_state != State::Seeking) {
-                auto const success = _audio.write({buf, (unsigned)n * 2});
+                auto const success = _audio.write({buf.begin(), n * 2});
                 if (!success) {
                     toggle_pause();
                 }

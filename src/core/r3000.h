@@ -11,6 +11,7 @@
 #include <memory>
 #include <concepts>
 #include <stacktrace>
+#include <span>
 
 enum class FaultCheck {
     SOFTWARE,
@@ -192,12 +193,13 @@ struct Core {
 };
 
 struct EmuException {
+    virtual ~EmuException() = default;
+#ifndef NDEBUG
     explicit EmuException()
         : stacktrace{std::stacktrace::current()}
     {}
-
-    virtual ~EmuException() = default;
     std::stacktrace stacktrace;
+#endif
 };
 
 struct CoreException : public EmuException {};
@@ -417,6 +419,8 @@ struct R3000 {
     virtual Timing* get_timing() = 0;
 
     virtual uint32_t soft_call(r3000_ptr_t addr) = 0;
+
+    virtual size_t render_audio(std::span<int16_t> output, size_t n_samples) = 0;
 
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;

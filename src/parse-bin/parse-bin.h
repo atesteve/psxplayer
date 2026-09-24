@@ -101,7 +101,7 @@ auto& get_tok(std::basic_istream<StreamCharT>& f,
             }
             break;
         }
-        StreamCharT c;
+        StreamCharT c{};
         f.get(c);
         if (c == delim) {
             if (trimmed_size == 0) {

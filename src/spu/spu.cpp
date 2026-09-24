@@ -104,6 +104,8 @@ struct SPU::Private {
     EmuBuffer<uint16_t> system_ram;
     uint64_t last_sample_cycle{};
     Timing* timing;
+    std::span<int16_t> out{};
+    size_t out_p{};
     alignas(uint32_t) std::array<uint16_t, SPU_RAM_SIZE / 2> ram;
 };
 
@@ -431,12 +433,22 @@ void SPU::Private::tick(uint64_t const clock_cycle)
             tick_voice(v, sample_cycle + i);
         }
     }
+
+    if (out.size() >= out_p + 2) {
+        out[out_p] = 0;
+        out[out_p + 1] = 0;
+        out_p += 2;
+    }
 }
 
 void SPU::Private::tick_voice(size_t const v, uint64_t sample_cycle)
 {
     auto& voice_regs = reg->voice[v];
     auto& voice_state = state.voice[v];
+
+    (void)voice_regs;
+    (void)voice_state;
+    (void)sample_cycle;
 }
 
 void SPU::write_reg(r3000_ptr_t addr, uint16_t value)
@@ -457,6 +469,17 @@ uint64_t SPU::dma_write(r3000_ptr_t addr, uint32_t nbytes)
 uint64_t SPU::dma_read(r3000_ptr_t addr, uint32_t nbytes)
 {
     return _p->dma_read(addr, nbytes);
+}
+
+void SPU::set_output_buffer(std::span<int16_t> output)
+{
+    _p->out = output;
+    _p->out_p = 0;
+}
+
+size_t SPU::rendered_samples() const
+{
+    return _p->out_p / 2;
 }
 
 void SPU::init(R3000* emu)

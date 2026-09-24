@@ -47,6 +47,8 @@ public:
 
     uint32_t soft_call(r3000_ptr_t addr) override;
 
+    size_t render_audio(std::span<int16_t> output, size_t n_samples) override;
+
 private:
     struct Private;
     std::unique_ptr<Private> p;

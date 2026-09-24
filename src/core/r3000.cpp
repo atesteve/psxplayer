@@ -173,6 +173,8 @@ struct R3000Core<c>::Private {
     uint64_t run_ij_bios(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     uint64_t run_ij_unk(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
 
+    size_t render_audio(std::span<int16_t> output, size_t n_samples);
+
     template<std::integral Int>
     void check_alignment(r3000_ptr_t addr, AccessType rw) const
     {
@@ -1138,6 +1140,22 @@ void R3000Core<c>::Private::run(bool letLongjmpThrough)
 }
 
 template<R3000CoreConfig c>
+size_t R3000Core<c>::Private::render_audio(std::span<int16_t> output, size_t n_samples)
+{
+    spu.set_output_buffer(output);
+    ScopeGuard remove_spu_output{[this] { spu.set_output_buffer({}); }};
+
+    Private::HWAlignmentCheck::enable();
+    ScopeGuard align_check_guard{[] { Private::HWAlignmentCheck::disable(); }};
+
+    while (spu.rendered_samples() < n_samples) {
+        handle_longjmp([this] { run_instruction(); }, [&](auto const&) {});
+    }
+
+    return spu.rendered_samples();
+}
+
+template<R3000CoreConfig c>
 void R3000Core<c>::init(PSF& psf)
 {
     auto ram_buffer = get_buffer(0, psf.psx_ram.size());
@@ -1316,6 +1334,12 @@ uint32_t R3000Core<c>::soft_call(r3000_ptr_t addr)
 
     p->return_from_callback_flag = false;
     return core.gpr.n.v0;
+}
+
+template<R3000CoreConfig c>
+size_t R3000Core<c>::render_audio(std::span<int16_t> output, size_t n_samples)
+{
+    return p->render_audio(output, n_samples);
 }
 
 std::unique_ptr<R3000> R3000::build()
