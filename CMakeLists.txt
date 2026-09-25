@@ -71,6 +71,7 @@ set(TARGET_SRC
   src/spu/adpcm.h
   src/spu/spu.cpp
   src/spu/spu.h
+  src/spu/gauss.h
   src/timer/timer.cpp
   src/timer/timer.h
   src/timer/timer_registers.h

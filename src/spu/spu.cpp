@@ -6,7 +6,10 @@
 #include "adpcm.h"
 #include "core/dma.h"
 
+#include "gauss.h"
+
 #include <cstddef>
+#include <utility>
 
 namespace {
 
@@ -72,29 +75,75 @@ constexpr uint64_t get_sample_cycle(uint64_t clock_cycle)
 } // namespace
 
 struct SampleBuffer {
-    size_t pos{};
+    static constexpr auto FRACT_BITS = 12u;
+
+    uint32_t pos{};
     std::array<int16_t, 28> samples{};
 
     void reset()
     {
-        pos = samples.size();
+        pos = samples.size() << FRACT_BITS;
         std::ranges::fill(samples, 0);
     }
 
-    bool empty() { return pos >= samples.size(); }
+    bool empty() { return (pos >> FRACT_BITS) >= samples.size(); }
+
+    void loaded_block() { pos -= samples.size() << FRACT_BITS; }
 
     auto last_samples() const
     {
         return std::make_pair(samples[samples.size() - 1], samples[samples.size() - 2]);
     }
 
-    auto pop() { return samples[pos++]; }
+    std::optional<int16_t> sample_and_advance(uint16_t amount)
+    {
+        amount = std::clamp<uint16_t>(amount, 0, 0x4000);
+        auto const prev_pos = std::exchange(pos, pos + amount);
+        if (prev_pos >> FRACT_BITS != pos >> FRACT_BITS) {
+            return samples[prev_pos >> FRACT_BITS];
+        } else {
+            return std::nullopt;
+        }
+    }
+
+    auto get_fractional() const { return (pos >> 4) % FRACT_BITS; }
+};
+
+struct FilterBuffer {
+    uint16_t pos{};
+    std::array<int16_t, 4> samples{};
+
+    void reset() { std::ranges::fill(samples, 0); }
+    void push(int16_t sample)
+    {
+        samples[pos] = sample;
+        pos = (pos + 1) % samples.size();
+    }
+
+    // clang-format off
+    int16_t get(uint8_t fract) const
+    {
+        int16_t out = 0;
+        auto const oldest = samples[pos];
+        auto const older  = samples[(pos + 1) % samples.size()];
+        auto const old    = samples[(pos + 2) % samples.size()];
+        auto const new_   = samples[(pos + 3) % samples.size()];
+
+        out += (psx_gauss_table[0x0ff - fract] * oldest) >> 15;
+        out += (psx_gauss_table[0x1ff - fract] * older)  >> 15;
+        out += (psx_gauss_table[0x100 + fract] * old)    >> 15;
+        out += (psx_gauss_table[0x000 + fract] * new_)   >> 15;
+
+        return out;
+    }
+    // clang-format on
 };
 
 struct VoiceState {
     std::array<uint64_t, 2> key_on_cycle{};
     std::array<uint64_t, 2> key_off_cycle{};
     SampleBuffer sample_buffer{};
+    FilterBuffer filter_buffer{};
     spu_compressed_addr_t sample_p{};
     bool on{};
 };
@@ -251,9 +300,9 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
         auto effective_value = write_32bit_reg(&voice_key_off, value, addr - RANGE_BASE);
         update_key_on_off(effective_value, &VoiceState::key_off_cycle);
     }
-    handle_reg(voice_pitch_mod_en, 0x1f801d90, 0x1f801d94)
+    handle_reg(voice_fmod_en, 0x1f801d90, 0x1f801d94)
     {
-        write_32bit_reg(&voice_pitch_mod_en, value, addr - RANGE_BASE);
+        write_32bit_reg(&voice_fmod_en, value, addr - RANGE_BASE);
     }
     handle_reg(voice_noise_mode, 0x1f801d94, 0x1f801d98)
     {
@@ -368,9 +417,9 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     {
         return read_32bit_reg(voice_key_off, addr - RANGE_BASE);
     }
-    handle_reg(voice_pitch_mod_en, 0x1f801d90, 0x1f801d94)
+    handle_reg(voice_fmod_en, 0x1f801d90, 0x1f801d94)
     {
-        return read_32bit_reg(voice_pitch_mod_en, addr - RANGE_BASE);
+        return read_32bit_reg(voice_fmod_en, addr - RANGE_BASE);
     }
     handle_reg(voice_noise_mode, 0x1f801d94, 0x1f801d98)
     {
@@ -483,6 +532,7 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
         it != voice_state.key_on_cycle.end()) {
         *it = 0;
         voice_state.sample_buffer.reset();
+        voice_state.filter_buffer.reset();
         voice_state.sample_p = voice_regs.adpcm_start_addr;
         voice_state.on = true;
     }
@@ -502,7 +552,7 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
                                                voice_state.sample_p.get(),
                                                voice_state.sample_buffer.last_samples(),
                                                voice_state.sample_buffer.samples);
-        voice_state.sample_buffer.pos = 0;
+        voice_state.sample_buffer.loaded_block();
         if (header.loop_start) {
             voice_regs.adpcm_repeat_addr = voice_state.sample_p;
         }
@@ -517,8 +567,14 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
         }
     }
 
-    auto const sample = voice_state.sample_buffer.pop();
-    return {sample, sample};
+    auto const sample = voice_state.sample_buffer.sample_and_advance(voice_regs.adpcm_sample_rate);
+    if (sample) {
+        voice_state.filter_buffer.push(*sample);
+    }
+    auto const filtered_sample =
+        voice_state.filter_buffer.get(voice_state.sample_buffer.get_fractional());
+
+    return {filtered_sample, filtered_sample};
 }
 
 void SPU::write_reg(r3000_ptr_t addr, uint16_t value)
