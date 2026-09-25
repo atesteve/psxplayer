@@ -254,6 +254,7 @@ void UpseModule::load_file(QString const& file_name)
     _audio.stop();
 
     auto psf = load_psf(file_name.toStdString());
+    _emu.reset();
 
     _snapshots.clear();
     _snapshots.shrink_to_fit();
@@ -262,7 +263,6 @@ void UpseModule::load_file(QString const& file_name)
     _control.input.speed_multiplier = _speed;
 
     if (!psf) {
-        _emu.reset();
         set_state(State::Unloaded);
         emit supported_channels(0);
         return;
