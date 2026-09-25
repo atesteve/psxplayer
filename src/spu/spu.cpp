@@ -121,23 +121,18 @@ struct FilterBuffer {
         pos = (pos + 1) % samples.size();
     }
 
-    // clang-format off
     int16_t get(uint8_t fract) const
     {
+        auto const table_offset = size_t(fract) * 4;
         int16_t out = 0;
-        auto const oldest = samples[pos];
-        auto const older  = samples[(pos + 1) % samples.size()];
-        auto const old    = samples[(pos + 2) % samples.size()];
-        auto const new_   = samples[(pos + 3) % samples.size()];
 
-        out += (psx_gauss_table[0x0ff - fract] * oldest) >> 15;
-        out += (psx_gauss_table[0x1ff - fract] * older)  >> 15;
-        out += (psx_gauss_table[0x100 + fract] * old)    >> 15;
-        out += (psx_gauss_table[0x000 + fract] * new_)   >> 15;
+        for (auto i = 0u; i < samples.size(); i++) {
+            int32_t const sample = samples[(pos + i) % samples.size()];
+            out += (psx_gauss_table[table_offset + i] * sample) >> 15;
+        }
 
         return out;
     }
-    // clang-format on
 };
 
 struct VoiceState {
