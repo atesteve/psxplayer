@@ -88,9 +88,8 @@ static_assert(sizeof(adsr_reg_t::fields) == sizeof(uint32_t));
 struct spu_compressed_addr_t {
     uint16_t raw;
 
-    size_t get() const { return size_t(raw) << 3; }
-
-    void set(size_t addr) { raw = addr >> 3; }
+    size_t get() const { return size_t(raw) << 2; }
+    void set(size_t addr) { raw = addr >> 2; }
 };
 
 struct voice_registers_t {
@@ -140,6 +139,7 @@ static_assert(sizeof(voice_registers_t) == 16);
 
 inline constexpr unsigned N_VOICES = 24;
 inline constexpr size_t SPU_RAM_SIZE = 512 * 1024; // 512 KiB
+inline constexpr size_t SPU_RAM_SIZE_WORDS = SPU_RAM_SIZE / sizeof(uint16_t); // 256k words
 inline constexpr r3000_ptr_t SPU_BASE = 0x1f801c00;
 
 struct spu_regs_t {

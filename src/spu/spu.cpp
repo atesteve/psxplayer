@@ -153,9 +153,9 @@ struct SPU::Private {
     void write_register(r3000_ptr_t addr, uint16_t value);
     uint16_t read_register(r3000_ptr_t addr);
 
-    void write_ram(size_t addr, uint16_t value) { ram[addr / sizeof(uint16_t)] = value; }
+    void write_ram(size_t addr, uint16_t value) { ram[addr] = value; }
 
-    uint16_t read_ram(size_t addr) { return ram[addr / sizeof(uint16_t)]; }
+    uint16_t read_ram(size_t addr) { return ram[addr]; }
 
     uint64_t dma_write(r3000_ptr_t addr, uint32_t nbytes);
     uint64_t dma_read(r3000_ptr_t addr, uint32_t nbytes);
@@ -180,7 +180,7 @@ struct SPU::Private {
     Timing* timing;
     std::span<int16_t> out{};
     size_t out_p{};
-    alignas(uint32_t) std::array<uint16_t, SPU_RAM_SIZE / 2> ram;
+    alignas(uint32_t) std::array<uint16_t, SPU_RAM_SIZE_WORDS> ram;
 };
 
 uint64_t SPU::Private::dma_write(r3000_ptr_t addr, uint32_t nbytes)
@@ -189,7 +189,7 @@ uint64_t SPU::Private::dma_write(r3000_ptr_t addr, uint32_t nbytes)
     for (auto i = 0u; i < nbytes; i += sizeof(uint16_t)) {
         write_ram(state.transfer_addr, system_ram[addr]);
         addr++;
-        state.transfer_addr = (state.transfer_addr + sizeof(uint16_t)) % SPU_RAM_SIZE;
+        state.transfer_addr = (state.transfer_addr + 1) % SPU_RAM_SIZE_WORDS;
     }
     return nbytes;
 }
@@ -200,7 +200,7 @@ uint64_t SPU::Private::dma_read(r3000_ptr_t addr, uint32_t nbytes)
     for (auto i = 0u; i < nbytes; i += sizeof(uint16_t)) {
         system_ram[addr] = read_ram(state.transfer_addr);
         addr += sizeof(uint16_t);
-        state.transfer_addr = (state.transfer_addr + sizeof(uint16_t)) % SPU_RAM_SIZE;
+        state.transfer_addr = (state.transfer_addr + 1) % SPU_RAM_SIZE_WORDS;
     }
     return nbytes;
 }
@@ -329,7 +329,7 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     handle_reg(transfer_data, 0x1f801da8)
     {
         write_ram(state.transfer_addr, value);
-        state.transfer_addr = (state.transfer_addr + sizeof(uint16_t)) % SPU_RAM_SIZE;
+        state.transfer_addr = (state.transfer_addr + 1) % SPU_RAM_SIZE_WORDS;
     }
     handle_reg(control, 0x1f801daa)
     {
@@ -564,7 +564,7 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
                 return {0, 0};
             }
         } else {
-            voice_state.sample_p.raw++;
+            voice_state.sample_p.raw += 2;
         }
     }
 
