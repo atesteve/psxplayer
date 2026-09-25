@@ -215,19 +215,22 @@ double find_peak_freq(FFTW3Holder<fftw_complex> const& fft, [[maybe_unused]] std
 //     return ret;
 // }
 
-int32_t adpcm_filter(uint8_t filter, int32_t sample, int32_t a, int32_t b)
+int16_t adpcm_filter(uint8_t filter, int32_t sample, int32_t a, int32_t b)
 {
     // clang-format off
-    switch (filter) {
-        case 0: return sample;
-        case 1: return sample + (60  * a          + 32) / 64;
-        case 2: return sample + (115 * a - 52 * b + 32) / 64;
-        case 3: return sample + (98  * a - 55 * b + 32) / 64;
-        case 4: return sample + (122 * a - 60 * b + 32) / 64;
-        // Invalid, just return the raw sample.
-        default: return sample;
-    }
+    auto const ret = [&] {
+        switch (filter) {
+            case 0: return sample;
+            case 1: return sample + (60  * a          + 32) / 64;
+            case 2: return sample + (115 * a - 52 * b + 32) / 64;
+            case 3: return sample + (98  * a - 55 * b + 32) / 64;
+            case 4: return sample + (122 * a - 60 * b + 32) / 64;
+            // Invalid, just return the raw sample.
+            default: return sample;
+        }
+    }();
     // clang-format on
+    return std::saturating_cast<int16_t>(ret);
 }
 
 } // namespace
@@ -245,15 +248,10 @@ ADPCMBlockHeader decode_adpcm_block(std::span<uint16_t const> ram,
     auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
 
     for (auto const& [i, data] : std::ranges::enumerate_view{block->data}) {
-        auto const process_sample = [&](int32_t sample) -> int16_t {
+        auto const process_sample = [&](int32_t sample) {
             auto const shifted = block->header.shift <= 12 ? sample << (12 - block->header.shift)
                                                            : sample >> (block->header.shift - 12);
-            int32_t const ai32 = a;
-            int32_t const bi32 = b;
-
-            auto ret = adpcm_filter(block->header.filter, shifted, ai32, bi32);
-            ret = std::clamp<int32_t>(
-                ret, std::numeric_limits<int16_t>::min(), std::numeric_limits<int16_t>::max());
+            auto const ret = adpcm_filter(block->header.filter, shifted, a, b);
             b = std::exchange(a, ret);
             return ret;
         };
