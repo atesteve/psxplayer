@@ -20,7 +20,6 @@
 #include <algorithm>
 #include <stdckdint.h>
 #include <bit>
-#include <stack>
 #include <vector>
 
 namespace {
