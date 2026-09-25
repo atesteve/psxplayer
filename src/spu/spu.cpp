@@ -85,7 +85,7 @@ struct SampleBuffer {
 
     auto last_samples() const
     {
-        return std::make_pair(samples[samples.size() - 2], samples[samples.size() - 1]);
+        return std::make_pair(samples[samples.size() - 1], samples[samples.size() - 2]);
     }
 
     auto pop() { return samples[pos++]; }
@@ -465,9 +465,10 @@ void SPU::Private::tick(uint64_t const clock_cycle)
             sum.first += sample.first;
             sum.second += sample.second;
         }
+        // Very crude mixing.
         if (out.size() >= out_p + 2) {
-            out[out_p] = sum.first / 24;
-            out[out_p + 1] = sum.second / 24;
+            out[out_p] = sum.first / (int32_t)N_VOICES;
+            out[out_p + 1] = sum.second / (int32_t)N_VOICES;
             out_p += 2;
         }
     }

@@ -246,7 +246,8 @@ ADPCMBlockHeader decode_adpcm_block(std::span<uint16_t const> ram,
 
     for (auto const& [i, data] : std::ranges::enumerate_view{block->data}) {
         auto const process_sample = [&](int32_t sample) -> int16_t {
-            auto const shifted = sample << (12 - block->header.shift);
+            auto const shifted = block->header.shift <= 12 ? sample << (12 - block->header.shift)
+                                                           : sample >> (block->header.shift - 12);
             int32_t const ai32 = a;
             int32_t const bi32 = b;
 
