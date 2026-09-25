@@ -13,7 +13,8 @@
 
 namespace {
 
-constexpr uint64_t SAMPLE_RATE_CYCLES = 384;
+// CPU cycles per each sample emmitted by the SPU, including both channels (L and R).
+constexpr uint64_t SAMPLE_RATE_CYCLES = 768;
 
 constexpr size_t spu_offset(r3000_ptr_t addr, ...)
 {
