@@ -19,10 +19,14 @@ union vol_reg_t {
         uint16_t sweep_dir   : 1;
         uint16_t sweep_mode  : 1;
         uint16_t mode        : 1;
-    } fields;
+    } sweep_mode;
+    struct {
+        int16_t volume : 15;
+        int16_t mode   : 1;
+    } direct_mode;
 };
 
-static_assert(sizeof(vol_reg_t::fields) == sizeof(uint16_t));
+static_assert(sizeof(vol_reg_t) == sizeof(uint16_t));
 
 union control_reg_t {
     uint16_t raw;

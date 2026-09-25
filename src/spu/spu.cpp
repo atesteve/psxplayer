@@ -517,8 +517,8 @@ void SPU::Private::tick(uint64_t const clock_cycle)
         }
         // Very crude mixing.
         if (out.size() >= out_p + 2) {
-            out[out_p] = sum.first / (int32_t)N_VOICES;
-            out[out_p + 1] = sum.second / (int32_t)N_VOICES;
+            out[out_p] = sum.first / 2;
+            out[out_p + 1] = sum.second / 2;
             out_p += 2;
         }
     }
@@ -575,7 +575,16 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
     auto const filtered_sample =
         voice_state.filter_buffer.get(voice_state.sample_buffer.get_fractional());
 
-    return {filtered_sample, filtered_sample};
+    auto apply_vol = [&](int16_t sample, auto const& vol_reg) -> int16_t {
+        if (!vol_reg.sweep_mode.mode) {
+            return (int32_t(sample) * vol_reg.direct_mode.volume) >> 14;
+        } else {
+            return sample;
+        }
+    };
+
+    return {apply_vol(filtered_sample, voice_regs.vol_left),
+            apply_vol(filtered_sample, voice_regs.vol_right)};
 }
 
 void SPU::write_reg(r3000_ptr_t addr, uint16_t value)
