@@ -5,8 +5,9 @@
 #include "spu_registers.h"
 #include "adpcm.h"
 #include "core/dma.h"
-
 #include "gauss.h"
+
+#include <fmt/format.h>
 
 #include <cstddef>
 #include <utility>
@@ -147,14 +148,13 @@ enum class AdsrPhase : uint8_t {
 
 struct AdsrState {
     uint16_t counter{};
-    int16_t volume{};
     AdsrPhase phase{};
 
     void start() { *this = {}; }
 
     void release() { phase = AdsrPhase::RELEASE; }
 
-    bool tick(adsr_reg_t const& regs)
+    bool tick(voice_registers_t& regs)
     {
         using enum AdsrPhase;
 
@@ -169,36 +169,38 @@ struct AdsrState {
             switch (phase) {
             case ATTACK:
                 return {
-                    .exponential = regs.fields.attack_exp,
+                    .exponential = regs.adsr.fields.attack_exp,
                     .decrease = false,
-                    .shift = regs.fields.attack_shift,
-                    .step = regs.fields.attack_step,
+                    .shift = regs.adsr.fields.attack_shift,
+                    .step = regs.adsr.fields.attack_step,
                 };
             case DECAY:
                 return {
                     .exponential = true,
                     .decrease = true,
-                    .shift = regs.fields.decay_shift,
+                    .shift = regs.adsr.fields.decay_shift,
                     .step = 0,
                 };
             case SUSTAIN:
                 return {
-                    .exponential = regs.fields.sustain_exp,
-                    .decrease = regs.fields.sustain_dir,
-                    .shift = regs.fields.sustain_shift,
-                    .step = regs.fields.sustain_step,
+                    .exponential = regs.adsr.fields.sustain_exp,
+                    .decrease = regs.adsr.fields.sustain_dir,
+                    .shift = regs.adsr.fields.sustain_shift,
+                    .step = regs.adsr.fields.sustain_step,
                 };
             case RELEASE:
                 return {
-                    .exponential = regs.fields.release_exp,
+                    .exponential = regs.adsr.fields.release_exp,
                     .decrease = true,
-                    .shift = regs.fields.release_shift,
+                    .shift = regs.adsr.fields.release_shift,
                     .step = 0,
                 };
             default:
                 std::unreachable();
             }
         }();
+
+        auto& volume = regs.adsr_vol;
 
         int vol_inc = 7 - settings.step;
         if (settings.decrease) {
@@ -236,7 +238,7 @@ struct AdsrState {
             }
             return false;
         case DECAY:
-            if (int const sustain_level = ((regs.fields.sustain_level + 1) << 12);
+            if (int const sustain_level = ((regs.adsr.fields.sustain_level + 1) << 12);
                 volume <= sustain_level) {
                 phase = SUSTAIN;
             }
@@ -365,6 +367,7 @@ void SPU::Private::update_key_on_off(uint32_t effective_value, auto member)
 }
 
 #define start_reg_handling() if (false) {
+
 #define handle_reg(field_name, ...)                                                        \
     }                                                                                      \
     else if (in_range(addr, __VA_ARGS__))                                                  \
@@ -373,6 +376,7 @@ void SPU::Private::update_key_on_off(uint32_t effective_value, auto member)
         static_assert(sizeof(spu_regs_t::field_name) == range_size(__VA_ARGS__));          \
         [[maybe_unused]] static constexpr r3000_ptr_t RANGE_BASE = get_first(__VA_ARGS__); \
         [[maybe_unused]] auto& field_name = reg->field_name;
+#define handle_unhandled() } else {
 #define end_reg_handling() }
 
 void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
@@ -492,6 +496,10 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     handle_reg(voice_current_vol, 0x1f801e00, 0x1f801e60)
     {
         // Read-only registers, do nothing.
+    }
+    handle_unhandled()
+    {
+        fmt::println("Unhandled SPU write: {:#010x} = {:#06x}", addr, value);
     }
     end_reg_handling();
 }
@@ -616,6 +624,10 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
             return v.right;
         }
     }
+    handle_unhandled()
+    {
+        fmt::println("Unhandled SPU read: {:#010x}", addr);
+    }
     end_reg_handling();
 
     return 0;
@@ -662,6 +674,7 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
         voice_state.sample_p = voice_regs.adpcm_start_addr;
         voice_state.status = VoiceStatus::ON;
         voice_state.ignore_loop_start = false;
+        voice_regs.adsr_vol = 0;
     }
 
     if (auto const it = std::ranges::find(voice_state.key_off_cycle, sample_cycle);
@@ -677,6 +690,7 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
     if (voice_state.sample_buffer.empty()) {
         if (voice_state.status == VoiceStatus::LOOP_END) {
             voice_state.status = VoiceStatus::OFF;
+            voice_regs.adsr_vol = 0;
             return {0, 0};
         }
         auto const header = decode_adpcm_block(ram,
@@ -704,12 +718,13 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
     auto filtered_sample =
         voice_state.filter_buffer.get_filtered(voice_state.sample_buffer.get_fractional_index());
 
-    auto const turn_off_voice = voice_state.adsr.tick(voice_regs.adsr);
+    auto const turn_off_voice = voice_state.adsr.tick(voice_regs);
     if (turn_off_voice) {
         voice_state.status = VoiceStatus::OFF;
+        voice_regs.adsr_vol = 0;
     }
 
-    filtered_sample = (filtered_sample * int(voice_state.adsr.volume)) >> 15;
+    filtered_sample = (filtered_sample * int(voice_regs.adsr_vol)) >> 15;
 
     auto apply_vol = [&](int16_t sample, auto const& vol_reg) -> int16_t {
         if (!vol_reg.sweep_mode.mode) {
