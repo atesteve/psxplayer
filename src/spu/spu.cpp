@@ -75,6 +75,23 @@ constexpr uint64_t get_sample_cycle(uint64_t clock_cycle)
     return clock_cycle / SAMPLE_RATE_CYCLES;
 }
 
+constexpr int16_t smooth_clamp(int32_t sample)
+{
+    // This is essentially fixed-point math, that's why it looks kind of funky.
+    // Assuming the range -32768..32767 maps to -1..1, this code implements this function:
+    // sample = clamp(sample, -1.5, 1.5);
+    // sample = sample / 3 + 0.5;
+    // sample = sample * sample * (6 - 4 * sample) - 1;
+
+    int64_t sample64 = std::clamp(sample, -49152, 49152); // 1.5 times the range size.
+    sample64 = sample64 / 3 + 16385;
+    auto const sample_sq = (sample64 * sample64) >> 15;
+    auto const third_term = (196608 - 4 * sample64);
+    sample64 = (sample_sq * third_term) >> 15;
+    sample64 -= 32768;
+    return sample64;
+}
+
 } // namespace
 
 struct SampleBuffer {
@@ -651,10 +668,9 @@ void SPU::Private::tick(uint64_t const clock_cycle)
             sum.first += sample.first;
             sum.second += sample.second;
         }
-        // Very crude mixing.
         if (out.size() >= out_p + 2) {
-            out[out_p] = sum.first / 2;
-            out[out_p + 1] = sum.second / 2;
+            out[out_p] = smooth_clamp(sum.first);
+            out[out_p + 1] = smooth_clamp(sum.second);
             out_p += 2;
         }
     }
