@@ -111,26 +111,28 @@ struct SampleBuffer {
 };
 
 struct FilterBuffer {
-    uint16_t pos{};
-    std::array<int16_t, 4> samples{};
+    uint64_t buf{};
 
-    void reset() { std::ranges::fill(samples, 0); }
-    void push(int16_t sample)
+    void reset() { buf = 0; }
+
+    // Intentionally unsigned integer to avoid sign extension in the bit operation.
+    void push(uint16_t sample)
     {
-        samples[pos] = sample;
-        pos = (pos + 1) % samples.size();
+        buf = buf << 16;
+        buf |= sample;
     }
 
     int16_t get(uint8_t fract) const
     {
-        auto const table_offset = size_t(fract) * 4;
+        auto const samples = std::bit_cast<std::array<int16_t, 4>>(buf);
+        auto const gauss_entry = psx_gauss_table[fract];
+        auto const gauss_entries = std::bit_cast<std::array<int16_t, 4>>(gauss_entry);
+
         int16_t out = 0;
-
         for (auto i = 0u; i < samples.size(); i++) {
-            int32_t const sample = samples[(pos + i) % samples.size()];
-            out += (psx_gauss_table[table_offset + i] * sample) >> 15;
+            int32_t const sample = samples[i];
+            out += (gauss_entries[i] * sample) >> 15;
         }
-
         return out;
     }
 };
