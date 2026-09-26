@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <utility>
+#include <numeric>
 
 namespace {
 
@@ -107,7 +108,7 @@ struct SampleBuffer {
         }
     }
 
-    auto get_fractional() const { return (pos >> 4) % FRACT_BITS; }
+    auto get_fractional_index() const { return (pos >> 4) % FRACT_BITS; }
 };
 
 struct FilterBuffer {
@@ -122,7 +123,7 @@ struct FilterBuffer {
         buf |= sample;
     }
 
-    int16_t get(uint8_t fract) const
+    int16_t get_filtered(uint8_t fract) const
     {
         auto const samples = std::bit_cast<std::array<int16_t, 4>>(buf);
         auto const gauss_entry = psx_gauss_table[fract];
@@ -137,13 +138,137 @@ struct FilterBuffer {
     }
 };
 
+enum class AdsrPhase : uint8_t {
+    ATTACK,
+    DECAY,
+    SUSTAIN,
+    RELEASE,
+};
+
+struct AdsrState {
+    uint16_t counter{};
+    int16_t volume{};
+    AdsrPhase phase{};
+
+    void start() { *this = {}; }
+
+    void release() { phase = AdsrPhase::RELEASE; }
+
+    bool tick(adsr_reg_t const& regs)
+    {
+        using enum AdsrPhase;
+
+        struct Settings {
+            bool exponential;
+            bool decrease;
+            int shift;
+            int step;
+        };
+
+        auto const settings = [&] -> Settings {
+            switch (phase) {
+            case ATTACK:
+                return {
+                    .exponential = regs.fields.attack_exp,
+                    .decrease = false,
+                    .shift = regs.fields.attack_shift,
+                    .step = regs.fields.attack_step,
+                };
+            case DECAY:
+                return {
+                    .exponential = true,
+                    .decrease = true,
+                    .shift = regs.fields.decay_shift,
+                    .step = 0,
+                };
+            case SUSTAIN:
+                return {
+                    .exponential = regs.fields.sustain_exp,
+                    .decrease = regs.fields.sustain_dir,
+                    .shift = regs.fields.sustain_shift,
+                    .step = regs.fields.sustain_step,
+                };
+            case RELEASE:
+                return {
+                    .exponential = regs.fields.release_exp,
+                    .decrease = true,
+                    .shift = regs.fields.release_shift,
+                    .step = 0,
+                };
+            default:
+                std::unreachable();
+            }
+        }();
+
+        int vol_inc = 7 - settings.step;
+        if (settings.decrease) {
+            // Bitwise negation, not arithmetic negation.
+            vol_inc = ~vol_inc;
+        }
+        int vol_shift = std::max(0, 11 - settings.shift);
+        int counter_shift = std::max(0, settings.shift - 11);
+        vol_inc <<= vol_shift;
+        int counter_inc = 0x8000 >> counter_shift;
+        if (settings.exponential && !settings.decrease && volume > 0x6000) {
+            vol_inc >>= 1;
+            counter_inc >>= 1;
+            if (settings.shift < 10) {
+                vol_inc >>= 1;
+            } else if (settings.shift >= 11) {
+                counter_inc >>= 1;
+            }
+        } else if (settings.exponential && settings.decrease) {
+            vol_inc = (vol_inc * volume) >> 15;
+        }
+
+        counter += counter_inc;
+        if (counter < 0x8000) {
+            return false;
+        }
+
+        counter = 0;
+        volume = std::saturating_add<int16_t>(volume, vol_inc);
+
+        switch (phase) {
+        case ATTACK:
+            if (volume == std::numeric_limits<int16_t>::max()) {
+                phase = DECAY;
+            }
+            return false;
+        case DECAY:
+            if (int const sustain_level = ((regs.fields.sustain_level + 1) << 12);
+                volume <= sustain_level) {
+                phase = SUSTAIN;
+            }
+            return false;
+        case SUSTAIN:
+            if (settings.decrease && volume < 0) {
+                volume = 0;
+            }
+            return false;
+        case RELEASE:
+            return volume <= 0;
+        default:
+            std::unreachable();
+        };
+    }
+};
+
+enum class VoiceStatus : uint8_t {
+    OFF,
+    ON,
+    LOOP_END,
+};
+
 struct VoiceState {
     std::array<uint64_t, 2> key_on_cycle{};
     std::array<uint64_t, 2> key_off_cycle{};
     SampleBuffer sample_buffer{};
     FilterBuffer filter_buffer{};
     spu_compressed_addr_t sample_p{};
-    bool on{};
+    AdsrState adsr{};
+    VoiceStatus status{};
+    bool ignore_loop_start{};
 };
 
 struct SPU::Private {
@@ -268,17 +393,19 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
             case 4: write_32bit_reg(&v.adsr.raw, value, 0); break;
             case 5: write_32bit_reg(&v.adsr.raw, value, 2); break;
             case 6: v.adsr_vol                 = value;     break;
-            case 7: v.adpcm_repeat_addr.raw    = value;     break;
+            case 7: v.adpcm_repeat_addr.raw    = value;
+                    state.voice[voice_n].ignore_loop_start = true;
+                    break;
         }
         // clang-format on
     }
-    handle_reg(vol_left, 0x1f801d80)
+    handle_reg(master_vol_left, 0x1f801d80)
     {
-        vol_left.raw = value;
+        master_vol_left = value;
     }
-    handle_reg(vol_right, 0x1f801d82)
+    handle_reg(master_vol_right, 0x1f801d82)
     {
-        vol_right.raw = value;
+        master_vol_right = value;
     }
     handle_reg(reverb_vol_left, 0x1f801d84)
     {
@@ -391,13 +518,13 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
         }
         // clang-format on
     }
-    handle_reg(vol_left, 0x1f801d80)
+    handle_reg(master_vol_left, 0x1f801d80)
     {
-        return vol_left.raw;
+        return master_vol_left;
     }
-    handle_reg(vol_right, 0x1f801d82)
+    handle_reg(master_vol_right, 0x1f801d82)
     {
-        return vol_right.raw;
+        return master_vol_right;
     }
     handle_reg(reverb_vol_left, 0x1f801d84)
     {
@@ -531,34 +658,39 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
         *it = 0;
         voice_state.sample_buffer.reset();
         voice_state.filter_buffer.reset();
+        voice_state.adsr.start();
         voice_state.sample_p = voice_regs.adpcm_start_addr;
-        voice_state.on = true;
+        voice_state.status = VoiceStatus::ON;
+        voice_state.ignore_loop_start = false;
     }
 
     if (auto const it = std::ranges::find(voice_state.key_off_cycle, sample_cycle);
         it != voice_state.key_off_cycle.end()) {
         *it = 0;
-        voice_state.on = false;
+        voice_state.adsr.release();
     }
 
-    if (!voice_state.on) {
+    if (voice_state.status == VoiceStatus::OFF) {
         return {0, 0};
     }
 
     if (voice_state.sample_buffer.empty()) {
+        if (voice_state.status == VoiceStatus::LOOP_END) {
+            voice_state.status = VoiceStatus::OFF;
+            return {0, 0};
+        }
         auto const header = decode_adpcm_block(ram,
                                                voice_state.sample_p.get(),
                                                voice_state.sample_buffer.last_samples(),
                                                voice_state.sample_buffer.samples);
         voice_state.sample_buffer.loaded_block();
-        if (header.loop_start) {
+        if (header.loop_start && !voice_state.ignore_loop_start) {
             voice_regs.adpcm_repeat_addr = voice_state.sample_p;
         }
         if (header.loop_end) {
             voice_state.sample_p = voice_regs.adpcm_repeat_addr;
             if (!header.loop_repeat) {
-                voice_state.on = false;
-                return {0, 0};
+                voice_state.status = VoiceStatus::LOOP_END;
             }
         } else {
             voice_state.sample_p.raw += 2;
@@ -569,8 +701,15 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
     if (sample) {
         voice_state.filter_buffer.push(*sample);
     }
-    auto const filtered_sample =
-        voice_state.filter_buffer.get(voice_state.sample_buffer.get_fractional());
+    auto filtered_sample =
+        voice_state.filter_buffer.get_filtered(voice_state.sample_buffer.get_fractional_index());
+
+    auto const turn_off_voice = voice_state.adsr.tick(voice_regs.adsr);
+    if (turn_off_voice) {
+        voice_state.status = VoiceStatus::OFF;
+    }
+
+    filtered_sample = (filtered_sample * int(voice_state.adsr.volume)) >> 15;
 
     auto apply_vol = [&](int16_t sample, auto const& vol_reg) -> int16_t {
         if (!vol_reg.sweep_mode.mode) {

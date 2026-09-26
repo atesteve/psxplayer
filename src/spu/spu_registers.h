@@ -74,14 +74,14 @@ union adsr_reg_t {
         uint32_t decay_shift   : 4;
         uint32_t attack_step   : 2;
         uint32_t attack_shift  : 5;
-        uint32_t attack_mode   : 1;
+        uint32_t attack_exp    : 1;
         uint32_t release_shift : 5;
-        uint32_t release_mode  : 1;
+        uint32_t release_exp   : 1;
         uint32_t sustain_step  : 2;
         uint32_t sustain_shift : 5;
         uint32_t               : 1;
         uint32_t sustain_dir   : 1;
-        uint32_t sustain_mode  : 1;
+        uint32_t sustain_exp   : 1;
     } fields;
 };
 
@@ -148,8 +148,8 @@ inline constexpr r3000_ptr_t SPU_BASE = 0x1f801c00;
 
 struct spu_regs_t {
     voice_registers_t voice[N_VOICES];
-    vol_reg_t vol_left;
-    vol_reg_t vol_right;
+    int16_t master_vol_left;
+    int16_t master_vol_right;
     int16_t reverb_vol_left;
     int16_t reverb_vol_right;
     uint32_t voice_key_on;
