@@ -95,38 +95,29 @@ constexpr int16_t smooth_clamp(int32_t sample)
 } // namespace
 
 struct SampleBuffer {
-    static constexpr auto FRACT_BITS = 12u;
-
-    uint32_t pos{};
+    uint16_t pos{};
+    uint16_t frac{};
     std::array<int16_t, 28> samples{};
 
     void reset()
     {
-        pos = samples.size() << FRACT_BITS;
+        pos = samples.size();
+        frac = 0;
         std::ranges::fill(samples, 0);
     }
 
-    bool empty() { return (pos >> FRACT_BITS) >= samples.size(); }
+    bool empty() { return pos >= samples.size(); }
 
-    void loaded_block() { pos -= samples.size() << FRACT_BITS; }
+    void loaded_block() { pos -= samples.size(); }
 
     auto last_samples() const
     {
         return std::make_pair(samples[samples.size() - 1], samples[samples.size() - 2]);
     }
 
-    std::optional<int16_t> sample_and_advance(uint16_t amount)
-    {
-        amount = std::clamp<uint16_t>(amount, 0, 0x4000);
-        auto const prev_pos = std::exchange(pos, pos + amount);
-        if (prev_pos >> FRACT_BITS != pos >> FRACT_BITS) {
-            return samples[prev_pos >> FRACT_BITS];
-        } else {
-            return std::nullopt;
-        }
-    }
+    int16_t sample_and_advance() { return samples[pos++]; }
 
-    uint8_t get_fractional_index() const { return pos >> 4; }
+    uint8_t get_fractional_index() const { return frac >> 4; }
 };
 
 struct FilterBuffer {
@@ -137,7 +128,7 @@ struct FilterBuffer {
     // Intentionally unsigned integer to avoid sign extension in the bit operation.
     void push(uint16_t sample)
     {
-        buf = buf << 16;
+        buf <<= 16;
         buf |= sample;
     }
 
@@ -147,12 +138,12 @@ struct FilterBuffer {
         auto const gauss_entry = psx_gauss_table[fract];
         auto const gauss_entries = std::bit_cast<std::array<int16_t, 4>>(gauss_entry);
 
-        int16_t out = 0;
+        int32_t out = 0;
         for (auto i = 0u; i < samples.size(); i++) {
             int32_t const sample = samples[i];
-            out += (gauss_entries[i] * sample) >> 15;
+            out += gauss_entries[i] * sample;
         }
-        return out;
+        return out >> 15;
     }
 };
 
@@ -706,34 +697,38 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
         return {0, 0};
     }
 
-    if (voice_state.sample_buffer.empty()) {
-        if (voice_state.status == VoiceStatus::LOOP_END) {
-            voice_state.status = VoiceStatus::OFF;
-            voice_regs.adsr_vol = 0;
-            return {0, 0};
-        }
-        auto const header = decode_adpcm_block(ram,
-                                               voice_state.sample_p.get(),
-                                               voice_state.sample_buffer.last_samples(),
-                                               voice_state.sample_buffer.samples);
-        voice_state.sample_buffer.loaded_block();
-        if (header.loop_start && !voice_state.ignore_loop_start) {
-            voice_regs.adpcm_repeat_addr = voice_state.sample_p;
-        }
-        if (header.loop_end) {
-            voice_state.sample_p = voice_regs.adpcm_repeat_addr;
-            if (!header.loop_repeat) {
-                voice_state.status = VoiceStatus::LOOP_END;
+    auto const adpcm_sample_rate = std::min<uint16_t>(voice_regs.adpcm_sample_rate, 0x4000);
+    voice_state.sample_buffer.frac += adpcm_sample_rate;
+    while (voice_state.sample_buffer.frac >= 0x1000) {
+        if (voice_state.sample_buffer.empty()) {
+            if (voice_state.status == VoiceStatus::LOOP_END) {
+                voice_state.status = VoiceStatus::OFF;
+                voice_regs.adsr_vol = 0;
+                return {0, 0};
             }
-        } else {
-            voice_state.sample_p.raw += 2;
+            auto const header = decode_adpcm_block(ram,
+                                                   voice_state.sample_p.get(),
+                                                   voice_state.sample_buffer.last_samples(),
+                                                   voice_state.sample_buffer.samples);
+            voice_state.sample_buffer.loaded_block();
+            if (header.loop_start && !voice_state.ignore_loop_start) {
+                voice_regs.adpcm_repeat_addr = voice_state.sample_p;
+            }
+            if (header.loop_end) {
+                voice_state.sample_p = voice_regs.adpcm_repeat_addr;
+                if (!header.loop_repeat) {
+                    voice_state.status = VoiceStatus::LOOP_END;
+                }
+            } else {
+                voice_state.sample_p.raw += 2;
+            }
         }
+
+        auto const sample = voice_state.sample_buffer.sample_and_advance();
+        voice_state.filter_buffer.push(sample);
+        voice_state.sample_buffer.frac -= 0x1000;
     }
 
-    auto const sample = voice_state.sample_buffer.sample_and_advance(voice_regs.adpcm_sample_rate);
-    if (sample) {
-        voice_state.filter_buffer.push(*sample);
-    }
     auto filtered_sample =
         voice_state.filter_buffer.get_filtered(voice_state.sample_buffer.get_fractional_index());
 
