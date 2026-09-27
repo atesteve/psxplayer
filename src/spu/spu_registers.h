@@ -128,7 +128,8 @@ union reverb_config_t {
         uint16_t iir_src_b[2];
         uint16_t mix_dest_a[2];
         uint16_t mix_dest_b[2];
-        int16_t in_coef[2];
+        int16_t vol_in_l;
+        int16_t vol_in_r;
     } n;
 
     uint16_t r[sizeof(n) / sizeof(uint16_t)];
@@ -148,8 +149,8 @@ inline constexpr r3000_ptr_t SPU_BASE = 0x1f801c00;
 
 struct spu_regs_t {
     voice_registers_t voice[N_VOICES];
-    int16_t master_vol_left;
-    int16_t master_vol_right;
+    int16_t mixer_vol_left;
+    int16_t mixer_vol_right;
     int16_t reverb_vol_left;
     int16_t reverb_vol_right;
     uint32_t voice_key_on;

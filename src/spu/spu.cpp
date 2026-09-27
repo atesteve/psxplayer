@@ -126,7 +126,7 @@ struct SampleBuffer {
         }
     }
 
-    auto get_fractional_index() const { return (pos >> 4) % FRACT_BITS; }
+    uint8_t get_fractional_index() const { return pos >> 4; }
 };
 
 struct FilterBuffer {
@@ -393,7 +393,10 @@ void SPU::Private::update_key_on_off(uint32_t effective_value, auto member)
         static_assert(sizeof(spu_regs_t::field_name) == range_size(__VA_ARGS__));          \
         [[maybe_unused]] static constexpr r3000_ptr_t RANGE_BASE = get_first(__VA_ARGS__); \
         [[maybe_unused]] auto& field_name = reg->field_name;
-#define handle_unhandled() } else {
+#define handle_unhandled() \
+    }                      \
+    else                   \
+    {
 #define end_reg_handling() }
 
 void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
@@ -420,13 +423,13 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
         }
         // clang-format on
     }
-    handle_reg(master_vol_left, 0x1f801d80)
+    handle_reg(mixer_vol_left, 0x1f801d80)
     {
-        master_vol_left = value;
+        mixer_vol_left = value;
     }
-    handle_reg(master_vol_right, 0x1f801d82)
+    handle_reg(mixer_vol_right, 0x1f801d82)
     {
-        master_vol_right = value;
+        mixer_vol_right = value;
     }
     handle_reg(reverb_vol_left, 0x1f801d84)
     {
@@ -543,13 +546,13 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
         }
         // clang-format on
     }
-    handle_reg(master_vol_left, 0x1f801d80)
+    handle_reg(mixer_vol_left, 0x1f801d80)
     {
-        return master_vol_left;
+        return mixer_vol_left;
     }
-    handle_reg(master_vol_right, 0x1f801d82)
+    handle_reg(mixer_vol_right, 0x1f801d82)
     {
-        return master_vol_right;
+        return mixer_vol_right;
     }
     handle_reg(reverb_vol_left, 0x1f801d84)
     {
