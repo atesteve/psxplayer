@@ -281,13 +281,70 @@ struct VoiceState {
     bool ignore_loop_start{};
 };
 
+struct FIR {
+    // clang-format off
+    static constexpr int16_t COEFFICIENTS[]{
+        -0x0001, 0x0000,  0x0002, 0x0000, -0x000a, 0x0000,  0x0023, 0x0000, -0x0067, 0x0000,
+         0x010a, 0x0000, -0x0268, 0x0000,  0x0534, 0x0000, -0x0b90, 0x0000,  0x2806, 0x4000,
+         0x2806, 0x0000, -0x0b90, 0x0000,  0x0534, 0x0000, -0x0268, 0x0000,  0x010a, 0x0000,
+        -0x0067, 0x0000,  0x0023, 0x0000, -0x000a, 0x0000,  0x0002, 0x0000, -0x0001,
+    };
+    // clang-format on
+    static constexpr auto SIZE = std::size(COEFFICIENTS);
+
+    std::array<int16_t, SIZE> buf{};
+    size_t p{};
+
+    void push(int16_t sample)
+    {
+        buf[p++] = sample;
+        if (p >= SIZE) {
+            p = 0;
+        }
+    }
+
+    int16_t filter() const
+    {
+        int32_t o{};
+        auto p = this->p;
+        for (auto const coeff : COEFFICIENTS) {
+            auto const sample = buf[p++];
+            if (p >= SIZE) {
+                p = 0;
+            }
+            o += sample * coeff;
+        }
+        return std::saturating_cast<int16_t>(o >> 15);
+    }
+};
+
+// Small ad-hoc 16-bit saturanting fixed-point helper type.
+struct Fixed16 {
+    Fixed16(int16_t i)
+        : raw{i}
+    {}
+
+    friend Fixed16 operator*(Fixed16 a, Fixed16 b)
+    {
+        return std::saturating_cast<int16_t>((a.raw * b.raw) >> 15);
+    }
+
+    friend Fixed16 operator+(Fixed16 a, Fixed16 b) { return std::saturating_add(a.raw, b.raw); }
+
+    friend Fixed16 operator-(Fixed16 a, Fixed16 b) { return std::saturating_sub(a.raw, b.raw); }
+
+    int16_t raw;
+};
+
+struct ReverbState {
+    FIR input_filter[2];
+    FIR output_filter[2];
+    uint32_t current{};
+};
+
 struct SPU::Private {
     void write_register(r3000_ptr_t addr, uint16_t value);
     uint16_t read_register(r3000_ptr_t addr);
-
-    void write_ram(size_t addr, uint16_t value) { ram[addr] = value; }
-
-    uint16_t read_ram(size_t addr) { return ram[addr]; }
 
     uint64_t dma_write(r3000_ptr_t addr, uint32_t nbytes);
     uint64_t dma_read(r3000_ptr_t addr, uint32_t nbytes);
@@ -297,6 +354,8 @@ struct SPU::Private {
 
     void tick(uint64_t clock_cycle);
     std::pair<int16_t, int16_t> tick_voice(size_t v, uint64_t sample_cycle);
+    std::pair<int16_t, int16_t> tick_reverb(std::pair<int16_t, int16_t> input,
+                                            uint64_t sample_cycle);
 
     R3000* emu;
     DMA* dma;
@@ -305,6 +364,7 @@ struct SPU::Private {
     struct State {
         uint32_t transfer_addr{};
         std::array<VoiceState, N_VOICES> voice{};
+        ReverbState reverb{};
     } state{};
 
     EmuBuffer<uint16_t> system_ram;
@@ -319,7 +379,7 @@ uint64_t SPU::Private::dma_write(r3000_ptr_t addr, uint32_t nbytes)
 {
     addr /= sizeof(uint16_t);
     for (auto i = 0u; i < nbytes; i += sizeof(uint16_t)) {
-        write_ram(state.transfer_addr, system_ram[addr]);
+        ram[state.transfer_addr] = system_ram[addr];
         addr++;
         state.transfer_addr = (state.transfer_addr + 1) % SPU_RAM_SIZE_WORDS;
     }
@@ -330,7 +390,7 @@ uint64_t SPU::Private::dma_read(r3000_ptr_t addr, uint32_t nbytes)
 {
     addr /= sizeof(uint16_t);
     for (auto i = 0u; i < nbytes; i += sizeof(uint16_t)) {
-        system_ram[addr] = read_ram(state.transfer_addr);
+        system_ram[addr] = ram[state.transfer_addr];
         addr += sizeof(uint16_t);
         state.transfer_addr = (state.transfer_addr + 1) % SPU_RAM_SIZE_WORDS;
     }
@@ -448,13 +508,14 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     {
         write_32bit_reg(&voice_noise_mode, value, addr - RANGE_BASE);
     }
-    handle_reg(voice_reberv_on, 0x1f801d98, 0x1f801d9c)
+    handle_reg(voice_reverb_on, 0x1f801d98, 0x1f801d9c)
     {
-        write_32bit_reg(&voice_reberv_on, value, addr - RANGE_BASE);
+        write_32bit_reg(&voice_reverb_on, value, addr - RANGE_BASE);
     }
-    handle_reg(reberv_base_addr, 0x1f801da2)
+    handle_reg(reverb_base_addr, 0x1f801da2)
     {
-        reberv_base_addr.raw = value;
+        reverb_base_addr.raw = value;
+        state.reverb.current = reverb_base_addr.get();
     }
     handle_reg(irq_addr, 0x1f801da4)
     {
@@ -467,7 +528,7 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     }
     handle_reg(transfer_data, 0x1f801da8)
     {
-        write_ram(state.transfer_addr, value);
+        ram[state.transfer_addr] = value;
         state.transfer_addr = (state.transfer_addr + 1) % SPU_RAM_SIZE_WORDS;
     }
     handle_reg(control, 0x1f801daa)
@@ -569,13 +630,13 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     {
         return read_32bit_reg(voice_noise_mode, addr - RANGE_BASE);
     }
-    handle_reg(voice_reberv_on, 0x1f801d98, 0x1f801d9c)
+    handle_reg(voice_reverb_on, 0x1f801d98, 0x1f801d9c)
     {
-        return read_32bit_reg(voice_reberv_on, addr - RANGE_BASE);
+        return read_32bit_reg(voice_reverb_on, addr - RANGE_BASE);
     }
-    handle_reg(reberv_base_addr, 0x1f801da2)
+    handle_reg(reverb_base_addr, 0x1f801da2)
     {
-        return reberv_base_addr.raw;
+        return reverb_base_addr.raw;
     }
     handle_reg(irq_addr, 0x1f801da4)
     {
@@ -657,11 +718,26 @@ void SPU::Private::tick(uint64_t const clock_cycle)
 
     for (auto i = 0u; i < samples_to_generate; i++) {
         std::pair<int32_t, int32_t> sum{};
+        std::pair<int32_t, int32_t> reverbSum{};
+
         for (auto v = 0u; v < N_VOICES; v++) {
             auto const sample = tick_voice(v, current_sample_cycle + i);
             sum.first += sample.first;
             sum.second += sample.second;
+            if (reg->voice_reverb_on & (1 << v)) {
+                reverbSum.first += sample.first;
+                reverbSum.second += sample.second;
+            }
         }
+
+        if (reg->control.fields.reverb_en) {
+            auto const clamped =
+                std::make_pair(smooth_clamp(reverbSum.first), smooth_clamp(reverbSum.second));
+            auto const reverb_sample = tick_reverb(clamped, current_sample_cycle + i);
+            sum.first += reverb_sample.first;
+            sum.second += reverb_sample.second;
+        }
+
         if (out.size() >= out_p + 2) {
             out[out_p] = smooth_clamp(sum.first);
             out[out_p + 1] = smooth_clamp(sum.second);
@@ -750,6 +826,93 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
 
     return {apply_vol(filtered_sample, voice_regs.vol_left),
             apply_vol(filtered_sample, voice_regs.vol_right)};
+}
+
+std::pair<int16_t, int16_t> SPU::Private::tick_reverb(std::pair<int16_t, int16_t> input_raw,
+                                                      uint64_t sample_cycle)
+{
+    auto& reverb_state = state.reverb;
+    auto& reverb_regs = reg->reverb_config.n;
+    reverb_state.input_filter[0].push(input_raw.first);
+    reverb_state.input_filter[1].push(input_raw.second);
+
+    size_t const c = sample_cycle % 2;
+    int16_t const input =
+        (int32_t(reverb_state.input_filter[c].filter()) * reverb_regs.vol_in[c]) >> 15;
+
+    auto reverb_addr = [&](spu_compressed_addr_t offset_c, uint32_t sub = 0) {
+        uint32_t offset =
+            (offset_c.get() - sub) % (SPU_RAM_SIZE_WORDS - reg->reverb_base_addr.get());
+        size_t out = reverb_state.current + offset;
+        if (out >= SPU_RAM_SIZE_WORDS) {
+            out = reg->reverb_base_addr.get() + (out - SPU_RAM_SIZE_WORDS);
+        }
+        return out;
+    };
+
+    auto tick_reflection = [&](auto m_addr_c, auto d_addr_c) {
+        auto const m_addr = reverb_addr(m_addr_c);
+        auto const m_addr_p = reverb_addr(m_addr_c, 1);
+        auto const d_addr = reverb_addr(d_addr_c);
+        Fixed16 const input_sample = input;
+        Fixed16 const d_v = ram[d_addr];
+        Fixed16 const m_v = ram[m_addr_p];
+        Fixed16 const v_wall = reverb_regs.v_wall;
+        Fixed16 const v_iir = reverb_regs.v_iir;
+        auto const out = (input_sample + d_v * v_wall - m_v) * v_iir + m_v;
+        ram[m_addr] = out.raw;
+    };
+
+    auto tick_comb = [&] {
+        Fixed16 const v_comb1 = reverb_regs.v_comb1;
+        Fixed16 const v_comb2 = reverb_regs.v_comb2;
+        Fixed16 const v_comb3 = reverb_regs.v_comb3;
+        Fixed16 const v_comb4 = reverb_regs.v_comb4;
+        Fixed16 const m_comb1 = ram[reverb_addr(reverb_regs.m_comb1[c])];
+        Fixed16 const m_comb2 = ram[reverb_addr(reverb_regs.m_comb2[c])];
+        Fixed16 const m_comb3 = ram[reverb_addr(reverb_regs.m_comb3[c])];
+        Fixed16 const m_comb4 = ram[reverb_addr(reverb_regs.m_comb4[c])];
+        auto const out =
+            v_comb1 * m_comb1 + v_comb2 * m_comb2 + v_comb3 * m_comb3 + v_comb4 * m_comb4;
+        return out;
+    };
+
+    auto tick_all_pass = [&](Fixed16 input_sample, Fixed16 v_apf, auto m_apf_c, auto d_apf_c) {
+        auto const ram_out_addr = reverb_addr(m_apf_c);
+        auto const ram_in_addr = reverb_addr(m_apf_c, d_apf_c.get());
+        Fixed16 const ram_in = ram[ram_in_addr];
+        Fixed16 const tmp = input_sample - v_apf * ram_in;
+        ram[ram_out_addr] = tmp.raw;
+        auto const out = v_apf * tmp + ram_in;
+        return out;
+    };
+
+    // Same side reflection
+    tick_reflection(reverb_regs.m_same[c], reverb_regs.d_same[c]);
+    // Different side reflection
+    tick_reflection(reverb_regs.m_diff[!c], reverb_regs.d_diff[c]);
+    // Comb filter
+    auto const comb_out = tick_comb();
+    // Two all-pass filters
+    auto const apf1_out =
+        tick_all_pass(comb_out, reverb_regs.v_apf1, reverb_regs.m_apf1[c], reverb_regs.d_apf1);
+    auto const apf2_out =
+        tick_all_pass(apf1_out, reverb_regs.v_apf2, reverb_regs.m_apf2[c], reverb_regs.d_apf2);
+
+    reverb_state.output_filter[c].push(apf2_out.raw);
+    reverb_state.output_filter[!c].push(0);
+
+    int16_t const out_l = reverb_state.output_filter[0].filter() * 2;
+    int16_t const out_r = reverb_state.output_filter[1].filter() * 2;
+
+    if (c) {
+        reverb_state.current++;
+        if (reverb_state.current >= SPU_RAM_SIZE_WORDS) {
+            reverb_state.current = reg->reverb_base_addr.get();
+        }
+    }
+
+    return {(out_l * reg->reverb_vol_left) >> 15, (out_r * reg->reverb_vol_right) >> 15};
 }
 
 void SPU::write_reg(r3000_ptr_t addr, uint16_t value)

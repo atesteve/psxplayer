@@ -37,7 +37,7 @@ union control_reg_t {
         uint16_t ext_audio_reverb : 1;
         uint16_t transfer_mode    : 2;
         uint16_t irq_en           : 1;
-        uint16_t reberv_en        : 1;
+        uint16_t reverb_en        : 1;
         uint16_t noise_freq_step  : 2;
         uint16_t noise_freq_shift : 4;
         uint16_t unmute           : 1;
@@ -108,32 +108,33 @@ struct voice_registers_t {
 
 union reverb_config_t {
     struct {
-        uint16_t fb_src_a;
-        uint16_t fb_src_b;
-        int16_t iir_alpha;
-        int16_t acc_coef_a;
-        int16_t acc_coef_b;
-        int16_t acc_coef_c;
-        int16_t acc_coef_d;
-        int16_t iir_coef;
-        int16_t fb_alpha;
-        int16_t fb_x;
-        uint16_t iir_dest_a[2];
-        uint16_t acc_src_a[2];
-        uint16_t acc_src_b[2];
-        uint16_t iir_src_a[2];
-        uint16_t iir_dest_b[2];
-        uint16_t acc_src_c[2];
-        uint16_t acc_src_d[2];
-        uint16_t iir_src_b[2];
-        uint16_t mix_dest_a[2];
-        uint16_t mix_dest_b[2];
-        int16_t vol_in_l;
-        int16_t vol_in_r;
+        spu_compressed_addr_t d_apf1;
+        spu_compressed_addr_t d_apf2;
+        int16_t v_iir;
+        int16_t v_comb1;
+        int16_t v_comb2;
+        int16_t v_comb3;
+        int16_t v_comb4;
+        int16_t v_wall;
+        int16_t v_apf1;
+        int16_t v_apf2;
+        spu_compressed_addr_t m_same[2];
+        spu_compressed_addr_t m_comb1[2];
+        spu_compressed_addr_t m_comb2[2];
+        spu_compressed_addr_t d_same[2];
+        spu_compressed_addr_t m_diff[2];
+        spu_compressed_addr_t m_comb3[2];
+        spu_compressed_addr_t m_comb4[2];
+        spu_compressed_addr_t d_diff[2];
+        spu_compressed_addr_t m_apf1[2];
+        spu_compressed_addr_t m_apf2[2];
+        int16_t vol_in[2];
     } n;
 
     uint16_t r[sizeof(n) / sizeof(uint16_t)];
 };
+
+static_assert(sizeof(reverb_config_t) == 64);
 
 struct voice_current_vol_t {
     int16_t left;
@@ -157,9 +158,9 @@ struct spu_regs_t {
     uint32_t voice_key_off;
     uint32_t voice_fmod_en;
     uint32_t voice_noise_mode;
-    uint32_t voice_reberv_on;
+    uint32_t voice_reverb_on;
     uint16_t _unused1[3];
-    spu_compressed_addr_t reberv_base_addr;
+    spu_compressed_addr_t reverb_base_addr;
     spu_compressed_addr_t irq_addr;
     spu_compressed_addr_t transfer_addr;
     uint16_t transfer_data;
