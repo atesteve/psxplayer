@@ -46,7 +46,7 @@ struct bcall_impl<Fn, Result (Bios::*)(Args...)> {
     static bios_call_result run(Bios& bios, R3000& emu)
         requires(sizeof...(Args) != 0)
     {
-        constexpr auto [...index] = std::make_index_sequence<sizeof...(Args)>{};
+        constexpr auto [... index] = std::make_index_sequence<sizeof...(Args)>{};
         constexpr bool sub_one = std::is_same_v<Args...[0], R3000&>;
         auto const& core = emu.core();
 
@@ -96,6 +96,7 @@ std::unordered_map<uint32_t, bios_call_result (*)(Bios& bios, R3000& emu)> const
     {0xb00d, bcall<&Bios::disableEvent>},
     {0xb019, bcall<&Bios::HookEntryInt>},
     {0xb017, bcall<&Bios::returnFromException>},
+    {0xb04a, bcall<&Bios::return_value<1>>}, // InitCard
     {0xb05b, bcall<&Bios::unimplemented>},
 
     {0xc00a, bcall<&Bios::setIrqAutoAck>},

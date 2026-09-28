@@ -39,6 +39,12 @@ public:
 
     void unimplemented() {}
 
+    template<uint32_t V>
+    auto return_value()
+    {
+        return V;
+    }
+
     void deliverEvent(R3000& emu, uint32_t clazz, uint32_t spec);
     uint32_t openEvent(uint32_t clazz, uint32_t spec, uint32_t mode, uint32_t handler);
     int32_t closeEvent(uint32_t event);
