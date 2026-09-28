@@ -306,7 +306,6 @@ private:
 struct HWReg {
     static constexpr size_t ISTAT = 0x1f801070;
     static constexpr size_t IMASK = 0x1f801074;
-    static constexpr size_t SPU_DELAY = 0x1f801014;
     static constexpr size_t DEVICE_BASE = 0x1f801000;
     static constexpr size_t DMA_start = 0x1f801080;
     static constexpr size_t DMA_end = 0x1f801100;
@@ -314,7 +313,6 @@ struct HWReg {
     static constexpr size_t SPU_end = 0x1F802000;
     static constexpr size_t Timers_start = 0x1f801100;
     static constexpr size_t Timers_end = 0x1f801130;
-    static constexpr size_t GPU_STATUS = 0x1f801814;
 };
 
 struct IRQ {
@@ -339,6 +337,7 @@ class DMA;
 class SPU;
 class TimerHandler;
 class Timing;
+class Misc;
 
 struct R3000 {
     virtual ~R3000() = default;
@@ -417,6 +416,7 @@ struct R3000 {
     virtual SPU* get_spu() = 0;
     virtual TimerHandler* get_timers() = 0;
     virtual Timing* get_timing() = 0;
+    virtual Misc* get_misc() = 0;
 
     virtual uint32_t soft_call(r3000_ptr_t addr) = 0;
 

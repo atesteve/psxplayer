@@ -5,6 +5,7 @@
 #include "psxemu/dma/dma.h"
 #include "psxemu/timer/timer.h"
 #include "psxemu/spu/spu.h"
+#include "psxemu/misc/misc_peripheral.h"
 
 #include <fmt/format.h>
 
@@ -75,12 +76,8 @@ void RegisterDispatcher::write_reg(r3000_ptr_t addr, Int value) const
         spu->write_reg(addr, value);
     } else if (addr >= HWReg::Timers_start && addr < HWReg::Timers_end) {
         fix_32bit_write(&TimerHandler::write_reg, timers, addr, value);
-    } else if (addr == HWReg::SPU_DELAY) {
-        // Just write it, do nothing.
-        fix_32bit_write(&RegisterDispatcher::write<uint32_t>, this, addr, value);
     } else {
-        fmt::println("Write to unknown reg: {:#010x} = {:#010x}", addr, value);
-        write<Int>(addr, value);
+        fix_32bit_write(&Misc::write_reg, misc, addr, value);
     }
 }
 
@@ -106,15 +103,8 @@ Int RegisterDispatcher::read_reg(r3000_ptr_t addr) const
         return spu->read_reg(addr);
     } else if (addr >= HWReg::Timers_start && addr < HWReg::Timers_end) {
         return fix_32bit_read<Int>(&TimerHandler::read_reg, timers, addr);
-    } else if (addr == HWReg::SPU_DELAY) {
-        // Just read it, do nothing.
-        return fix_32bit_read<Int>(&RegisterDispatcher::read<uint32_t>, this, addr);
-    } else if (addr == HWReg::GPU_STATUS) {
-        // Return this magic value as "initialized"
-        return (Int)0x14802000u;
     } else {
-        fmt::println("Read from unknown reg: {:#010x} = {:#010x}", addr, read<Int>(addr));
-        return read<Int>(addr);
+        return fix_32bit_read<Int>(&Misc::read_reg, misc, addr);
     }
 }
 
@@ -124,6 +114,7 @@ void RegisterDispatcher::init(R3000* emu)
     spu = emu->get_spu();
     dma = emu->get_dma();
     timers = emu->get_timers();
+    misc = emu->get_misc();
 }
 
 template void RegisterDispatcher::write_reg(r3000_ptr_t, uint32_t) const;

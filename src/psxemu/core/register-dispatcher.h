@@ -30,5 +30,6 @@ private:
     R3000* emu;
     DMA* dma;
     SPU* spu;
+    Misc* misc;
     TimerHandler* timers;
 };

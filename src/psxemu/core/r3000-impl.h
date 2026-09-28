@@ -44,6 +44,7 @@ public:
     SPU* get_spu() override;
     TimerHandler* get_timers() override;
     Timing* get_timing() override;
+    Misc* get_misc() override;
 
     uint32_t soft_call(r3000_ptr_t addr) override;
 

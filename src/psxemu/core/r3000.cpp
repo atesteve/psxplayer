@@ -7,6 +7,7 @@
 #include "psxemu/dma/dma.h"
 #include "psxemu/spu/spu.h"
 #include "psxemu/timer/timer.h"
+#include "psxemu/misc/misc_peripheral.h"
 #include "util/util.h"
 #include "events.h"
 
@@ -273,6 +274,7 @@ struct R3000Core<c>::Private {
     SPU spu;
     TimerHandler timers;
     Timing timing;
+    Misc misc;
     R3000Core<c>* parent;
     bool return_from_callback_flag = false;
 };
@@ -1305,6 +1307,12 @@ template<R3000CoreConfig c>
 Timing* R3000Core<c>::get_timing()
 {
     return &p->timing;
+}
+
+template<R3000CoreConfig c>
+Misc* R3000Core<c>::get_misc()
+{
+    return &p->misc;
 }
 
 template<R3000CoreConfig c>

@@ -75,6 +75,8 @@ set(TARGET_SRC
   src/psxemu/timer/timer.cpp
   src/psxemu/timer/timer.h
   src/psxemu/timer/timer_registers.h
+  src/psxemu/misc/misc_peripheral.cpp
+  src/psxemu/misc/misc_peripheral.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp
