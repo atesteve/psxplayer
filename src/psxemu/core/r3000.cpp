@@ -1106,13 +1106,7 @@ uint64_t R3000Core<c>::Private::run_ij_unk(uint32_t, uint32_t, uint32_t, uint32_
 template<R3000CoreConfig c>
 R3000Core<c>::R3000Core()
     : p{std::make_unique<Private>(this)}
-{
-    p->bus.init(this);
-    p->dma.init(this);
-    p->spu.init(this);
-    p->timers.init(this);
-    p->bios.init_exception_handlers();
-}
+{}
 
 template<R3000CoreConfig c>
 R3000Core<c>::~R3000Core() = default;
@@ -1157,17 +1151,19 @@ size_t R3000Core<c>::Private::render_audio(std::span<int16_t> output, size_t n_s
 template<R3000CoreConfig c>
 void R3000Core<c>::init(PSF& psf)
 {
-    auto ram_buffer = get_buffer(0, psf.psx_ram.size());
+    p->bus.init(this);
+    p->dma.init(this);
+    p->spu.init(this);
+    p->timers.init(this);
+
+    auto ram_buffer = get_ram_buffer();
     auto const ram_image = std::move(psf.psx_ram);
     std::copy_n(ram_image.data(), ram_image.size(), ram_buffer.data());
 
     p->core.pc = psf.entry_point;
     p->core.gpr.n.sp = psf.sp;
 
-    *(uint32_t*)&ram_buffer[0xa0] = 0xfc0000a0;
-    *(uint32_t*)&ram_buffer[0xb0] = 0xfc0000b0;
-    *(uint32_t*)&ram_buffer[0xc0] = 0xfc0000c0;
-    *(uint32_t*)&ram_buffer[0xd0] = 0xfc0000d0;
+    p->bios.init(ram_buffer);
 }
 
 template<R3000CoreConfig c>

@@ -37,10 +37,10 @@ public:
 
     void setIrqAutoAck(uint32_t irq, int value);
 
-    void unimplemented() {}
+    void noop() {}
 
     template<uint32_t V>
-    auto return_value()
+    auto noop_return()
     {
         return V;
     }
@@ -56,6 +56,7 @@ public:
     noreturn returnFromException(R3000& emu);
 
     void exception_handler(R3000& emu);
+    void init(EmuBuffer<uint8_t> ram);
     void init_exception_handlers();
 
     uint32_t syscall_verifier(R3000& emu);
