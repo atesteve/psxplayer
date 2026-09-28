@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "dma.h"
-#include "spu/spu.h"
-#include "events.h"
+#include "psxemu/spu/spu.h"
+#include "psxemu/core/events.h"
 
 #include <fmt/format.h>
 

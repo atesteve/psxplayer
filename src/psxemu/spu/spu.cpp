@@ -4,7 +4,7 @@
 #include "spu.h"
 #include "spu_registers.h"
 #include "adpcm.h"
-#include "core/dma.h"
+#include "psxemu/dma/dma.h"
 #include "gauss.h"
 
 #include <fmt/format.h>

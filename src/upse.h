@@ -5,7 +5,7 @@
 
 #include "channel-mapper/channel-mapper.h"
 #include "audio.h"
-#include "core/r3000.h"
+#include "psxemu/core/r3000.h"
 
 #include <QThread>
 #include <QTimer>

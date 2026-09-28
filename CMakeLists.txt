@@ -48,33 +48,33 @@ set(TARGET_SRC
   src/channel-mapper/square-mapper.h
   src/channel-mapper/square-retro-mapper.cpp
   src/channel-mapper/square-retro-mapper.h
-  src/core/r3000.cpp
-  src/core/r3000.h
-  src/core/mmap-r3000bus.cpp
-  src/core/mmap-r3000bus.h
-  src/core/mmap-r3000bus-rw.s
-  src/core/bios.cpp
-  src/core/bios-alloc.cpp
-  src/core/bios-a0.cpp
-  src/core/bios-b0.cpp
-  src/core/bios-c0.cpp
-  src/core/bios-printf.cpp
-  src/core/bios-exception-handler.cpp
-  src/core/bios.h
-  src/core/register-dispatcher.cpp
-  src/core/register-dispatcher.h
-  src/core/dma.cpp
-  src/core/dma.h
-  src/core/events.cpp
-  src/core/events.h
-  src/spu/adpcm.cpp
-  src/spu/adpcm.h
-  src/spu/spu.cpp
-  src/spu/spu.h
-  src/spu/gauss.h
-  src/timer/timer.cpp
-  src/timer/timer.h
-  src/timer/timer_registers.h
+  src/psxemu/core/r3000.cpp
+  src/psxemu/core/r3000.h
+  src/psxemu/core/mmap-r3000bus.cpp
+  src/psxemu/core/mmap-r3000bus.h
+  src/psxemu/core/mmap-r3000bus-rw.s
+  src/psxemu/core/register-dispatcher.cpp
+  src/psxemu/core/register-dispatcher.h
+  src/psxemu/core/events.cpp
+  src/psxemu/core/events.h
+  src/psxemu/bios/bios.cpp
+  src/psxemu/bios/bios-alloc.cpp
+  src/psxemu/bios/bios-a0.cpp
+  src/psxemu/bios/bios-b0.cpp
+  src/psxemu/bios/bios-c0.cpp
+  src/psxemu/bios/bios-printf.cpp
+  src/psxemu/bios/bios-exception-handler.cpp
+  src/psxemu/bios/bios.h
+  src/psxemu/dma/dma.cpp
+  src/psxemu/dma/dma.h
+  src/psxemu/spu/adpcm.cpp
+  src/psxemu/spu/adpcm.h
+  src/psxemu/spu/spu.cpp
+  src/psxemu/spu/spu.h
+  src/psxemu/spu/gauss.h
+  src/psxemu/timer/timer.cpp
+  src/psxemu/timer/timer.h
+  src/psxemu/timer/timer_registers.h
   src/iop/iop.cpp
   src/iop/iop.h
   src/iop/upse_loader_psf2.cpp

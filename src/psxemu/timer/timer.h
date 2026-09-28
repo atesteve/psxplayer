@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "core/r3000.h"
+#include "psxemu/core/r3000.h"
 
 #include <cstdint>
 

@@ -3,7 +3,7 @@
 
 #include "bios.h"
 
-#include "core/events.h"
+#include "psxemu/core/events.h"
 
 #include <array>
 

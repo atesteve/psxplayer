@@ -3,10 +3,10 @@
 
 #include "r3000-impl.h"
 #include "mmap-r3000bus.h"
-#include "bios.h"
-#include "dma.h"
-#include "spu/spu.h"
-#include "timer/timer.h"
+#include "psxemu/bios/bios.h"
+#include "psxemu/dma/dma.h"
+#include "psxemu/spu/spu.h"
+#include "psxemu/timer/timer.h"
 #include "util/util.h"
 #include "events.h"
 

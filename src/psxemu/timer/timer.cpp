@@ -4,7 +4,7 @@
 #include "timer.h"
 #include "timer_registers.h"
 
-#include "core/events.h"
+#include "psxemu/core/events.h"
 
 #include <fmt/format.h>
 

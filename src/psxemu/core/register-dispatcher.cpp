@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "register-dispatcher.h"
-#include "dma.h"
-#include "timer/timer.h"
-#include "spu/spu.h"
+#include "psxemu/dma/dma.h"
+#include "psxemu/timer/timer.h"
+#include "psxemu/spu/spu.h"
 
 #include <fmt/format.h>
 

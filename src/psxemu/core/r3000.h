@@ -4,7 +4,7 @@
 #pragma once
 
 #include "psf/psf.h"
-#include "core/events.h"
+#include "events.h"
 
 #include <cstdint>
 #include <array>
