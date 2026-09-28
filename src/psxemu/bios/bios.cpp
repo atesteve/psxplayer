@@ -13,8 +13,8 @@
 
 namespace {
 
-constexpr uint32_t B0TableLocation = 0x400;
-constexpr uint32_t C0TableLocation = 0x800;
+constexpr r3000_ptr_t B0TableLocation = 0x400;
+constexpr r3000_ptr_t C0TableLocation = 0x800;
 constexpr uint32_t BiosTableSize = 256 * sizeof(uint32_t);
 
 using bios_call_result = std::variant<std::monostate, uint32_t, Bios::noreturn>;
