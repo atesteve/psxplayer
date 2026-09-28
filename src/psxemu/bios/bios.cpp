@@ -86,6 +86,8 @@ bios_call_result bcall(Bios& bios, R3000& emu)
 std::unordered_map<uint32_t, bios_call_result (*)(Bios& bios, R3000& emu)> const bios_fns = {
     {0xa013, bcall<&Bios::setjmp>},
     {0xa014, bcall<&Bios::longjmp>},
+    {0xa02a, bcall<&Bios::memcpy>},
+    {0xa02b, bcall<&Bios::memset>},
     {0xa039, bcall<&Bios::InitHeap>},
     {0xa03f, bcall<&Bios::printf>},
     {0xa044, bcall<&Bios::noop>},           // FlushCache

@@ -31,6 +31,8 @@ public:
 
     uint32_t setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf);
     noreturn longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t ret);
+    r3000_ptr_t memset(R3000& emu, r3000_ptr_t s, int c, uint32_t n);
+    r3000_ptr_t memcpy(R3000& emu, r3000_ptr_t d, r3000_ptr_t s, uint32_t n);
     int32_t printf(R3000& emu, r3000_ptr_t fmt);
 
     void InitHeap(R3000& emu, uint32_t base, uint32_t size);

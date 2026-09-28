@@ -3,6 +3,8 @@
 
 #include "bios.h"
 
+#include <algorithm>
+
 uint32_t Bios::setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf)
 {
     auto const& regs = emu.core().gpr;
@@ -41,4 +43,19 @@ Bios::noreturn Bios::longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t re
     core.gpr.n.v0 = ret;
     core.pc = buf->ra;
     throw LongjmpException{};
+}
+
+r3000_ptr_t Bios::memset(R3000& emu, r3000_ptr_t s, int c, uint32_t n)
+{
+    auto buf = emu.get_buffer(s, n);
+    std::fill_n(&buf[0], n, c);
+    return s;
+}
+
+r3000_ptr_t Bios::memcpy(R3000& emu, r3000_ptr_t d, r3000_ptr_t s, uint32_t n)
+{
+    auto dst = emu.get_buffer(d, n);
+    auto src = emu.get_buffer(s, n);
+    std::copy_n(&src[0], n, &dst[0]);
+    return s;
 }
