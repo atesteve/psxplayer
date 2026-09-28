@@ -108,6 +108,7 @@ struct R3000Core<c>::Private {
 
     uint64_t run_r_inst(uint32_t function, uint32_t rs, uint32_t rt, uint32_t rd, uint32_t shift);
     uint64_t run_bcond_inst(uint32_t function, uint32_t rs, uint32_t offset);
+    uint64_t run_cop0_inst(uint32_t function, uint32_t rt, uint32_t rd);
     uint64_t run_ij_inst(uint32_t opcode, uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     void run_branch(uint32_t offset);
 
@@ -143,6 +144,11 @@ struct R3000Core<c>::Private {
 
     uint64_t run_bcond_bltz(uint32_t rs, uint32_t offset, bool link);
     uint64_t run_bcond_bgez(uint32_t rs, uint32_t offset, bool link);
+
+    uint64_t run_cop0_mfc(uint32_t rt, uint32_t rd);
+    uint64_t run_cop0_cfc(uint32_t rt, uint32_t rd);
+    uint64_t run_cop0_mtc(uint32_t rt, uint32_t rd);
+    uint64_t run_cop0_ctc(uint32_t rt, uint32_t rd);
 
     uint64_t run_ij_j(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     uint64_t run_ij_jal(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
@@ -321,6 +327,9 @@ void R3000Core<c>::Private::run_instruction()
         } else if (opcode == 1) {
             auto const [offset, function, rs, _] = std::bit_cast<imm_inst_t>(raw_inst);
             return run_bcond_inst(function, rs, offset);
+        } else if (opcode == 16) {
+            auto const [_, _, rd, rt, function, _] = std::bit_cast<reg_inst_t>(raw_inst);
+            return run_cop0_inst(function, rt, rd);
         } else {
             auto const [imm, rt, rs, _] = std::bit_cast<imm_inst_t>(raw_inst);
             auto const [target, _] = std::bit_cast<jump_inst_t>(raw_inst);
@@ -483,6 +492,20 @@ uint64_t R3000Core<c>::Private::run_bcond_inst(uint32_t function, uint32_t rs, u
         case 0: return run_bcond_bltz(rs, offset, link);
         case 1: return run_bcond_bgez(rs, offset, link);
         default: throw InstructionException{1, uint16_t(function)};
+    }
+    // clang-format on
+}
+
+template<R3000CoreConfig c>
+uint64_t R3000Core<c>::Private::run_cop0_inst(uint32_t function, uint32_t rt, uint32_t rd)
+{
+    // clang-format off
+    switch (function) {
+        case 0: return run_cop0_mfc(rt, rd);
+        case 2: return run_cop0_cfc(rt, rd);
+        case 4: return run_cop0_mtc(rt, rd);
+        case 6: return run_cop0_ctc(rt, rd);
+        default: throw InstructionException{16, uint16_t(function)};
     }
     // clang-format on
 }
@@ -851,6 +874,34 @@ uint64_t R3000Core<c>::Private::run_bcond_bgez(uint32_t rs, uint32_t offset, boo
     if (link) {
         core.gpr.n.ra = core.pc + sizeof(uint32_t);
     }
+    return 1;
+}
+
+template<R3000CoreConfig c>
+uint64_t R3000Core<c>::Private::run_cop0_mfc(uint32_t rt, uint32_t rd)
+{
+    (void)rt, (void)rd;
+    return 1;
+}
+
+template<R3000CoreConfig c>
+uint64_t R3000Core<c>::Private::run_cop0_cfc(uint32_t rt, uint32_t rd)
+{
+    (void)rt, (void)rd;
+    return 1;
+}
+
+template<R3000CoreConfig c>
+uint64_t R3000Core<c>::Private::run_cop0_mtc(uint32_t rt, uint32_t rd)
+{
+    (void)rt, (void)rd;
+    return 1;
+}
+
+template<R3000CoreConfig c>
+uint64_t R3000Core<c>::Private::run_cop0_ctc(uint32_t rt, uint32_t rd)
+{
+    (void)rt, (void)rd;
     return 1;
 }
 
