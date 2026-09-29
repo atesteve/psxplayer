@@ -27,8 +27,13 @@ namespace {
 constexpr uintptr_t MEMORY_SPACE_SIZE = 0x100000000ul;
 
 constexpr uint32_t PSX_RAM_SIZE = 2 * 1024 * 1024;
-constexpr auto PSX_RAM_ADDRS = std::to_array<r3000_ptr_t>({0x0, 0x80000000, 0xa0000000});
-
+// clang-format off
+constexpr auto PSX_RAM_ADDRS = std::to_array<r3000_ptr_t>({
+    0x00000000, 0x00200000, 0x00400000, 0x00600000,
+    0x80000000, 0x80200000, 0x80400000, 0x80600000,
+    0xa0000000, 0xa0200000, 0xa0400000, 0xa0600000,
+});
+// clang-format on
 // It's 1024 bytes, not 4096, but we are limited by the page size.
 constexpr uint32_t PSX_SPAD_SIZE = 4096;
 constexpr auto PSX_SPAD_ADDRS = std::to_array<r3000_ptr_t>({0x1f800000, 0x9f800000});
