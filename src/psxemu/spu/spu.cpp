@@ -510,7 +510,7 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     handle_reg(reverb_base_addr, 0x1f801da2)
     {
         reverb_base_addr.raw = value;
-        state.reverb.current = reverb_base_addr.get();
+        state.reverb.current = 0;
     }
     handle_reg(irq_addr, 0x1f801da4)
     {
@@ -839,17 +839,17 @@ std::pair<int16_t, int16_t> SPU::Private::tick_reverb(std::pair<int16_t, int16_t
     reverb_state.input_filter[1].push(input_raw.second);
 
     auto const c = reverb_state.do_left;
+    auto const buffer_size = SPU_RAM_SIZE_WORDS - reg->reverb_base_addr.get();
     reverb_state.do_left = !reverb_state.do_left;
     int16_t const input = (reverb_state.input_filter[c].filter() * reverb_regs.vol_in[c]) >> 15;
 
     auto reverb_addr = [&](spu_compressed_addr_t offset_c, uint32_t sub = 0) {
-        uint32_t offset =
-            (offset_c.get() - sub) % (SPU_RAM_SIZE_WORDS - reg->reverb_base_addr.get());
-        size_t out = reverb_state.current + offset;
-        if (out >= SPU_RAM_SIZE_WORDS) {
-            out = reg->reverb_base_addr.get() + (out - SPU_RAM_SIZE_WORDS);
+        int32_t offset = reverb_state.current + offset_c.get() - sub;
+        offset %= buffer_size;
+        if (offset < 0) {
+            offset += buffer_size;
         }
-        return out;
+        return reg->reverb_base_addr.get() + offset;
     };
 
     auto tick_reflection = [&](auto m_addr_c, auto d_addr_c) {
@@ -904,13 +904,13 @@ std::pair<int16_t, int16_t> SPU::Private::tick_reverb(std::pair<int16_t, int16_t
     reverb_state.output_filter[c].push(apf2_out.raw);
     reverb_state.output_filter[!c].push(0);
 
-    int16_t const out_l = reverb_state.output_filter[0].filter() * 2;
-    int16_t const out_r = reverb_state.output_filter[1].filter() * 2;
+    int16_t const out_l = std::saturating_mul<int16_t>(reverb_state.output_filter[0].filter(), 2);
+    int16_t const out_r = std::saturating_mul<int16_t>(reverb_state.output_filter[1].filter(), 2);
 
     if (c) {
         reverb_state.current++;
-        if (reverb_state.current >= SPU_RAM_SIZE_WORDS) {
-            reverb_state.current = reg->reverb_base_addr.get();
+        if (reverb_state.current >= buffer_size) {
+            reverb_state.current = 0;
         }
     }
 
