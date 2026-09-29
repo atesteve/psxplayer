@@ -13,6 +13,8 @@
 #include <utility>
 #include <numeric>
 
+int32_t speed = 256;
+
 namespace {
 
 // CPU cycles per each sample emmitted by the SPU, including both channels (L and R).
@@ -68,11 +70,6 @@ uint16_t read_32bit_reg(uint32_t const& reg, r3000_ptr_t offset)
     } else {
         return reg >> 16;
     }
-}
-
-constexpr uint64_t get_sample_cycle(uint64_t clock_cycle)
-{
-    return clock_cycle / SAMPLE_RATE_CYCLES;
 }
 
 constexpr int16_t smooth_clamp(int32_t sample)
@@ -271,8 +268,8 @@ enum class VoiceStatus : uint8_t {
 };
 
 struct VoiceState {
-    std::array<uint64_t, 2> key_on_cycle{};
-    std::array<uint64_t, 2> key_off_cycle{};
+    bool key_on_requested{};
+    bool key_off_requested{};
     SampleBuffer sample_buffer{};
     FilterBuffer filter_buffer{};
     spu_compressed_addr_t sample_p{};
@@ -340,6 +337,7 @@ struct ReverbState {
     FIR input_filter[2];
     FIR output_filter[2];
     uint32_t current{};
+    bool do_left{};
 };
 
 struct SPU::Private {
@@ -352,10 +350,9 @@ struct SPU::Private {
     void update_status();
     void update_key_on_off(uint32_t effective_value, auto member);
 
-    void tick(uint64_t clock_cycle);
-    std::pair<int16_t, int16_t> tick_voice(size_t v, uint64_t sample_cycle);
-    std::pair<int16_t, int16_t> tick_reverb(std::pair<int16_t, int16_t> input,
-                                            uint64_t sample_cycle);
+    void tick(Timing::Event& event, uint64_t clock_cycle);
+    std::pair<int16_t, int16_t> tick_voice(size_t v, uint64_t rt_cycle);
+    std::pair<int16_t, int16_t> tick_reverb(std::pair<int16_t, int16_t> input);
 
     R3000* emu;
     DMA* dma;
@@ -368,7 +365,7 @@ struct SPU::Private {
     } state{};
 
     EmuBuffer<uint16_t> system_ram;
-    uint64_t last_sample_cycle{};
+    uint64_t last_rt_cycle{};
     Timing* timing;
     std::span<int16_t> out{};
     size_t out_p{};
@@ -419,18 +416,12 @@ void SPU::Private::update_key_on_off(uint32_t effective_value, auto member)
     }
 
     uint32_t bit;
-    auto const sample_cycle = get_sample_cycle(timing->get_clock());
     while ((bit = std::countr_zero(effective_value)) != 32) {
         effective_value &= ~(1u << bit);
         if (bit >= state.voice.size()) {
             break;
         }
-        auto& arr = state.voice[bit].*member;
-        if (auto const it = std::ranges::find(arr, 0); it != arr.end()) {
-            *it = sample_cycle;
-        } else {
-            arr.back() = sample_cycle;
-        }
+        state.voice[bit].*member = true;
     }
 }
 
@@ -493,12 +484,12 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     handle_reg(voice_key_on, 0x1f801d88, 0x1f801d8c)
     {
         auto effective_value = write_32bit_reg(&voice_key_on, value, addr - RANGE_BASE);
-        update_key_on_off(effective_value, &VoiceState::key_on_cycle);
+        update_key_on_off(effective_value, &VoiceState::key_on_requested);
     }
     handle_reg(voice_key_off, 0x1f801d8c, 0x1f801d90)
     {
         auto effective_value = write_32bit_reg(&voice_key_off, value, addr - RANGE_BASE);
-        update_key_on_off(effective_value, &VoiceState::key_off_cycle);
+        update_key_on_off(effective_value, &VoiceState::key_off_requested);
     }
     handle_reg(voice_fmod_en, 0x1f801d90, 0x1f801d94)
     {
@@ -705,55 +696,52 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     return 0;
 }
 
-void SPU::Private::tick(uint64_t const clock_cycle)
+void SPU::Private::tick(Timing::Event& event, uint64_t const clock_cycle)
 {
-    uint64_t const sample_cycle = get_sample_cycle(clock_cycle);
-    uint64_t const samples_to_generate = sample_cycle - last_sample_cycle;
-    uint64_t const current_sample_cycle = last_sample_cycle;
-    last_sample_cycle = sample_cycle;
+    uint64_t const rt_cycle = clock_cycle / SAMPLE_RATE_CYCLES;
 
     if (!reg->control.fields.enable) {
         return;
     }
 
-    for (auto i = 0u; i < samples_to_generate; i++) {
-        std::pair<int32_t, int32_t> sum{};
-        std::pair<int32_t, int32_t> reverbSum{};
+    std::pair<int32_t, int32_t> sum{};
+    std::pair<int32_t, int32_t> reverbSum{};
 
-        for (auto v = 0u; v < N_VOICES; v++) {
-            auto const sample = tick_voice(v, current_sample_cycle + i);
-            sum.first += sample.first;
-            sum.second += sample.second;
-            if (reg->voice_reverb_on & (1 << v)) {
-                reverbSum.first += sample.first;
-                reverbSum.second += sample.second;
-            }
-        }
-
-        if (reg->control.fields.reverb_en) {
-            auto const clamped =
-                std::make_pair(smooth_clamp(reverbSum.first), smooth_clamp(reverbSum.second));
-            auto const reverb_sample = tick_reverb(clamped, current_sample_cycle + i);
-            sum.first += reverb_sample.first;
-            sum.second += reverb_sample.second;
-        }
-
-        if (out.size() >= out_p + 2) {
-            out[out_p] = smooth_clamp(sum.first);
-            out[out_p + 1] = smooth_clamp(sum.second);
-            out_p += 2;
+    for (auto v = 0u; v < N_VOICES; v++) {
+        auto const sample = tick_voice(v, rt_cycle);
+        sum.first += sample.first;
+        sum.second += sample.second;
+        if (reg->voice_reverb_on & (1 << v)) {
+            reverbSum.first += sample.first;
+            reverbSum.second += sample.second;
         }
     }
+
+    if (reg->control.fields.reverb_en) {
+        auto const clamped =
+            std::make_pair(smooth_clamp(reverbSum.first), smooth_clamp(reverbSum.second));
+        auto const reverb_sample = tick_reverb(clamped);
+        sum.first += reverb_sample.first;
+        sum.second += reverb_sample.second;
+    }
+
+    if (out.size() >= out_p + 2) {
+        out[out_p] = smooth_clamp(sum.first);
+        out[out_p + 1] = smooth_clamp(sum.second);
+        out_p += 2;
+    }
+
+    last_rt_cycle = rt_cycle;
+    event.period = (SAMPLE_RATE_CYCLES * speed) >> 8;
 }
 
-std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sample_cycle)
+std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t rt_cycle)
 {
     auto& voice_regs = reg->voice[v];
     auto& voice_state = state.voice[v];
 
-    if (auto const it = std::ranges::find(voice_state.key_on_cycle, sample_cycle);
-        it != voice_state.key_on_cycle.end()) {
-        *it = 0;
+    if (voice_state.key_on_requested) {
+        voice_state.key_on_requested = false;
         voice_state.sample_buffer.reset();
         voice_state.filter_buffer.reset();
         voice_state.adsr.start();
@@ -763,9 +751,8 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
         voice_regs.adsr_vol = 0;
     }
 
-    if (auto const it = std::ranges::find(voice_state.key_off_cycle, sample_cycle);
-        it != voice_state.key_off_cycle.end()) {
-        *it = 0;
+    if (voice_state.key_off_requested) {
+        voice_state.key_off_requested = false;
         voice_state.adsr.release();
     }
 
@@ -808,17 +795,23 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
     auto filtered_sample =
         voice_state.filter_buffer.get_filtered(voice_state.sample_buffer.get_fractional_index());
 
-    auto const turn_off_voice = voice_state.adsr.tick(voice_regs);
-    if (turn_off_voice) {
-        voice_state.status = VoiceStatus::OFF;
-        voice_regs.adsr_vol = 0;
+    // Run the ADSR once per "real time" cycle. That way, the ADSR speed scales smoothly with the
+    // playback speed. For speeds faster than real time, that means running ADSR twice or more per
+    // sample. For slower speeds, some samples would skip ADSR.
+    for (auto i = last_rt_cycle; i < rt_cycle; i++) {
+        auto const turn_off_voice = voice_state.adsr.tick(voice_regs);
+        if (turn_off_voice) {
+            voice_state.status = VoiceStatus::OFF;
+            voice_regs.adsr_vol = 0;
+            break;
+        }
     }
 
     filtered_sample = (filtered_sample * int(voice_regs.adsr_vol)) >> 15;
 
     auto apply_vol = [&](int16_t sample, auto const& vol_reg) -> int16_t {
         if (!vol_reg.sweep_mode.mode) {
-            return (int32_t(sample) * vol_reg.direct_mode.volume) >> 14;
+            return (sample * vol_reg.direct_mode.volume) >> 14;
         } else {
             return sample;
         }
@@ -828,17 +821,16 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t sa
             apply_vol(filtered_sample, voice_regs.vol_right)};
 }
 
-std::pair<int16_t, int16_t> SPU::Private::tick_reverb(std::pair<int16_t, int16_t> input_raw,
-                                                      uint64_t sample_cycle)
+std::pair<int16_t, int16_t> SPU::Private::tick_reverb(std::pair<int16_t, int16_t> input_raw)
 {
     auto& reverb_state = state.reverb;
     auto& reverb_regs = reg->reverb_config.n;
     reverb_state.input_filter[0].push(input_raw.first);
     reverb_state.input_filter[1].push(input_raw.second);
 
-    size_t const c = sample_cycle % 2;
-    int16_t const input =
-        (int32_t(reverb_state.input_filter[c].filter()) * reverb_regs.vol_in[c]) >> 15;
+    auto const c = reverb_state.do_left;
+    reverb_state.do_left = !reverb_state.do_left;
+    int16_t const input = (reverb_state.input_filter[c].filter() * reverb_regs.vol_in[c]) >> 15;
 
     auto reverb_addr = [&](spu_compressed_addr_t offset_c, uint32_t sub = 0) {
         uint32_t offset =
@@ -955,9 +947,9 @@ void SPU::init(R3000* emu)
     _p->timing = emu->get_timing();
     _p->timing->schedule(Timing::Event{
         .name = "spu_tick",
-        .type = Timing::Event::Type::PERIODIC_NON_STRICT,
-        .period = SAMPLE_RATE_CYCLES,
-        .callback = [_p = _p.get()](auto&, uint64_t cycle) { _p->tick(cycle); },
+        .type = Timing::Event::Type::PERIODIC,
+        .period = (SAMPLE_RATE_CYCLES << 8) / speed,
+        .callback = [_p = _p.get()](auto& event, uint64_t cycle) { _p->tick(event, cycle); },
     });
 }
 
