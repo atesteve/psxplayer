@@ -503,6 +503,10 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     {
         write_32bit_reg(&voice_reverb_on, value, addr - RANGE_BASE);
     }
+    handle_reg(voice_end, 0x1f801d9c, 0x1f801da0)
+    {
+        // Read-only, do nothing.
+    }
     handle_reg(reverb_base_addr, 0x1f801da2)
     {
         reverb_base_addr.raw = value;
@@ -624,6 +628,10 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     handle_reg(voice_reverb_on, 0x1f801d98, 0x1f801d9c)
     {
         return read_32bit_reg(voice_reverb_on, addr - RANGE_BASE);
+    }
+    handle_reg(voice_end, 0x1f801d9c, 0x1f801da0)
+    {
+        return read_32bit_reg(voice_end, addr - RANGE_BASE);
     }
     handle_reg(reverb_base_addr, 0x1f801da2)
     {
@@ -749,6 +757,7 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t rt
         voice_state.status = VoiceStatus::ON;
         voice_state.ignore_loop_start = false;
         voice_regs.adsr_vol = 0;
+        reg->voice_end &= ~(1 << v);
     }
 
     if (voice_state.key_off_requested) {
@@ -779,6 +788,7 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t rt
             }
             if (header.loop_end) {
                 voice_state.sample_p = voice_regs.adpcm_repeat_addr;
+                reg->voice_end |= 1 << v;
                 if (!header.loop_repeat) {
                     voice_state.status = VoiceStatus::LOOP_END;
                 }

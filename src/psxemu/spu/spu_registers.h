@@ -159,7 +159,8 @@ struct spu_regs_t {
     uint32_t voice_fmod_en;
     uint32_t voice_noise_mode;
     uint32_t voice_reverb_on;
-    uint16_t _unused1[3];
+    uint32_t voice_end;
+    uint16_t _unused1;
     spu_compressed_addr_t reverb_base_addr;
     spu_compressed_addr_t irq_addr;
     spu_compressed_addr_t transfer_addr;
