@@ -61,7 +61,6 @@ set(TARGET_SRC
   src/psxemu/bios/bios-alloc.cpp
   src/psxemu/bios/bios-a0.cpp
   src/psxemu/bios/bios-b0.cpp
-  src/psxemu/bios/bios-c0.cpp
   src/psxemu/bios/bios-printf.cpp
   src/psxemu/bios/bios-exception-handler.cpp
   src/psxemu/bios/bios.h

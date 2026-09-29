@@ -31,13 +31,13 @@ public:
 
     uint32_t setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf);
     noreturn longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t ret);
-    r3000_ptr_t memset(R3000& emu, r3000_ptr_t s, int c, uint32_t n);
+    r3000_ptr_t memset(R3000& emu, r3000_ptr_t s, int32_t c, uint32_t n);
     r3000_ptr_t memcpy(R3000& emu, r3000_ptr_t d, r3000_ptr_t s, uint32_t n);
     int32_t printf(R3000& emu, r3000_ptr_t fmt);
 
     void InitHeap(R3000& emu, uint32_t base, uint32_t size);
 
-    void setIrqAutoAck(uint32_t irq, int value);
+    int32_t setTimerAutoAck(uint32_t irq, int32_t value);
 
     void noop() {}
 
@@ -81,7 +81,8 @@ public:
 
     struct State {
         EmuBuffer<psx_jmp_buf> unhandled_irq_farjmp{};
-        int irq_auto_ack[11]{};
+        std::array<int32_t, 11> irq_auto_ack{};
+        std::array<int32_t, 4> timer_auto_ack{};
         std::flat_map<uint32_t, Event> events;
         uint32_t next_event_id = 0xf1000000;
         struct {

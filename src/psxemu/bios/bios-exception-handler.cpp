@@ -125,7 +125,9 @@ uint32_t Bios::timer_verifier(R3000& emu, uint32_t timer)
 
 void Bios::timer_handler(R3000& emu, uint32_t timer)
 {
-    // TODO: check timersAutoAck
+    if (!state.timer_auto_ack[timer]) {
+        return;
+    }
     auto const irq_mask = TIMER_IRQ_MASK[timer];
     emu.istat() &= ~irq_mask;
     returnFromException(emu);
@@ -149,4 +151,14 @@ uint32_t Bios::irq_verifier(R3000& emu)
     }
 
     return 0;
+}
+
+int32_t Bios::setTimerAutoAck(uint32_t timer, int32_t value)
+{
+    if (timer > std::size(state.timer_auto_ack)) {
+        throw AddressException{};
+    }
+    auto const old = state.timer_auto_ack[timer];
+    state.timer_auto_ack[timer] = value;
+    return old;
 }

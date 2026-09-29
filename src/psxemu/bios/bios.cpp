@@ -110,7 +110,7 @@ std::unordered_map<uint32_t, bios_call_result (*)(Bios& bios, R3000& emu)> const
     {0xb057, bcall<&Bios::noop_return<C0TableLocation>>}, // getC0Table
     {0xb05b, bcall<&Bios::noop>},
 
-    {0xc00a, bcall<&Bios::setIrqAutoAck>},
+    {0xc00a, bcall<&Bios::setTimerAutoAck>},
 };
 
 } // namespace
@@ -158,4 +158,7 @@ void Bios::init(EmuBuffer<uint8_t> ram)
     // Fill the simulated BIOS table region with 0xff for now, if any game tries to use them it will
     // at least crash.
     std::fill_n(&ram[B0TableLocation], BiosTableSize * 2, 0xff);
+
+    // Init timer_auto_ack to 1
+    std::ranges::fill(state.timer_auto_ack, 1);
 }
