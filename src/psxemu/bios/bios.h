@@ -84,7 +84,7 @@ public:
         std::array<int32_t, 11> irq_auto_ack{};
         std::array<int32_t, 4> timer_auto_ack{};
         std::flat_map<uint32_t, Event> events;
-        uint32_t next_event_id = 0xf1000000;
+        uint32_t next_event_id = 0xa0000000;
         struct {
             Core core{};
             sr_t sr{};

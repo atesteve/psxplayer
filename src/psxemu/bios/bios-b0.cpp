@@ -84,7 +84,10 @@ uint32_t Bios::openEvent(uint32_t clazz, uint32_t spec, uint32_t mode, uint32_t 
         return -1;
     }
 
-    auto const id = state.next_event_id++;
+    auto const id = state.next_event_id;
+    // Apparently some games read the returned handler as if it was a memory address, so increment
+    // the counter by 4 so at least the memory access is aligned.
+    state.next_event_id += sizeof(uint32_t);
     state.events.emplace(id,
                          Event{
                              .clazz = clazz,
