@@ -674,8 +674,8 @@ uint64_t R3000Core<c>::Private::run_r_syscall(uint32_t, uint32_t, uint32_t, uint
 template<R3000CoreConfig c>
 uint64_t R3000Core<c>::Private::run_r_break(uint32_t, uint32_t, uint32_t, uint32_t)
 {
-    // Not supported yet.
-    throw InstructionException{};
+    run_exception(ExceptionCode::Break);
+    return 100;
 }
 
 template<R3000CoreConfig c>
