@@ -300,7 +300,7 @@ struct FIR {
         }
     }
 
-    int16_t filter() const
+    int16_t filter(bool mult_by_two = false) const
     {
         int32_t o{};
         auto p = this->p;
@@ -311,7 +311,7 @@ struct FIR {
             }
             o += sample * coeff;
         }
-        return std::saturating_cast<int16_t>(o >> 15);
+        return std::saturating_cast<int16_t>(o >> (15 - mult_by_two));
     }
 };
 
@@ -823,6 +823,7 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t rt
         if (!vol_reg.sweep_mode.mode) {
             return (sample * vol_reg.direct_mode.volume) >> 14;
         } else {
+            fmt::println("Unsupported volume sweep mode");
             return sample;
         }
     };
@@ -904,8 +905,8 @@ std::pair<int16_t, int16_t> SPU::Private::tick_reverb(std::pair<int16_t, int16_t
     reverb_state.output_filter[c].push(apf2_out.raw);
     reverb_state.output_filter[!c].push(0);
 
-    int16_t const out_l = std::saturating_mul<int16_t>(reverb_state.output_filter[0].filter(), 2);
-    int16_t const out_r = std::saturating_mul<int16_t>(reverb_state.output_filter[1].filter(), 2);
+    int16_t const out_l = reverb_state.output_filter[0].filter(true);
+    int16_t const out_r = reverb_state.output_filter[1].filter(true);
 
     if (c) {
         reverb_state.current++;
