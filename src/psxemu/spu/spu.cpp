@@ -468,10 +468,12 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     handle_reg(mixer_vol_left, 0x1f801d80)
     {
         mixer_vol_left = value;
+        reg->current_mixer_vol_left = value;
     }
     handle_reg(mixer_vol_right, 0x1f801d82)
     {
         mixer_vol_right = value;
+        reg->current_mixer_vol_right = value;
     }
     handle_reg(reverb_vol_left, 0x1f801d84)
     {
@@ -495,9 +497,9 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     {
         write_32bit_reg(&voice_fmod_en, value, addr - RANGE_BASE);
     }
-    handle_reg(voice_noise_mode, 0x1f801d94, 0x1f801d98)
+    handle_reg(voice_noise_on, 0x1f801d94, 0x1f801d98)
     {
-        write_32bit_reg(&voice_noise_mode, value, addr - RANGE_BASE);
+        write_32bit_reg(&voice_noise_on, value, addr - RANGE_BASE);
     }
     handle_reg(voice_reverb_on, 0x1f801d98, 0x1f801d9c)
     {
@@ -555,6 +557,14 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     handle_reg(ext_vol_right, 0x1f801db6)
     {
         ext_vol_right = value;
+    }
+    handle_reg(current_mixer_vol_left, 0x1f801db8)
+    {
+        // Read-only register, do nothing.
+    }
+    handle_reg(current_mixer_vol_right, 0x1f801dba)
+    {
+        // Read-only register, do nothing.
     }
     handle_reg(reverb_config, 0x1f801dc0, 0x1f801e00)
     {
@@ -621,9 +631,9 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     {
         return read_32bit_reg(voice_fmod_en, addr - RANGE_BASE);
     }
-    handle_reg(voice_noise_mode, 0x1f801d94, 0x1f801d98)
+    handle_reg(voice_noise_on, 0x1f801d94, 0x1f801d98)
     {
-        return read_32bit_reg(voice_noise_mode, addr - RANGE_BASE);
+        return read_32bit_reg(voice_noise_on, addr - RANGE_BASE);
     }
     handle_reg(voice_reverb_on, 0x1f801d98, 0x1f801d9c)
     {
@@ -677,6 +687,14 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     handle_reg(ext_vol_right, 0x1f801db6)
     {
         return ext_vol_right;
+    }
+    handle_reg(current_mixer_vol_left, 0x1f801db8)
+    {
+        return current_mixer_vol_left;
+    }
+    handle_reg(current_mixer_vol_right, 0x1f801dba)
+    {
+        return current_mixer_vol_right;
     }
     handle_reg(reverb_config, 0x1f801dc0, 0x1f801e00)
     {

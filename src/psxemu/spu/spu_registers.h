@@ -157,7 +157,7 @@ struct spu_regs_t {
     uint32_t voice_key_on;
     uint32_t voice_key_off;
     uint32_t voice_fmod_en;
-    uint32_t voice_noise_mode;
+    uint32_t voice_noise_on;
     uint32_t voice_reverb_on;
     uint32_t voice_end;
     uint16_t _unused1;
@@ -172,7 +172,9 @@ struct spu_regs_t {
     uint16_t cd_audio_right;
     uint16_t ext_vol_left;
     uint16_t ext_vol_right;
-    uint16_t _unused2[4];
+    int16_t current_mixer_vol_left;
+    int16_t current_mixer_vol_right;
+    uint32_t _unused2;
     reverb_config_t reverb_config;
     voice_current_vol_t voice_current_vol[N_VOICES];
 };
