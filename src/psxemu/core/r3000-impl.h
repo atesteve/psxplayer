@@ -50,6 +50,8 @@ public:
 
     size_t render_audio(std::span<int16_t> output, size_t n_samples) override;
 
+    std::chrono::milliseconds tell_seek() const override;
+
     SnapshotBuffer take_snapshot() override;
     void restore_snapshot(SnapshotBuffer const& snapshot) override;
 

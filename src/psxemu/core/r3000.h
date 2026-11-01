@@ -13,6 +13,7 @@
 #include <concepts>
 #include <stacktrace>
 #include <span>
+#include <chrono>
 
 enum class FaultCheck {
     SOFTWARE,
@@ -422,6 +423,8 @@ struct R3000 {
     virtual uint32_t soft_call(r3000_ptr_t addr) = 0;
 
     virtual size_t render_audio(std::span<int16_t> output, size_t n_samples) = 0;
+
+    virtual std::chrono::milliseconds tell_seek() const = 0;
 
     virtual SnapshotBuffer take_snapshot() = 0;
     virtual void restore_snapshot(SnapshotBuffer const& snapshot) = 0;

@@ -1397,6 +1397,13 @@ size_t R3000Core<c>::render_audio(std::span<int16_t> output, size_t n_samples)
 }
 
 template<R3000CoreConfig c>
+std::chrono::milliseconds R3000Core<c>::tell_seek() const
+{
+    // TODO: count from start of music, not start of emulation.
+    return std::chrono::milliseconds{(p->timing.get_clock() * 1000) / CPU_FREQ};
+}
+
+template<R3000CoreConfig c>
 SnapshotBuffer R3000Core<c>::take_snapshot()
 {
     SnapshotBuffer snapshot;

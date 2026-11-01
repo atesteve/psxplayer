@@ -398,7 +398,7 @@ void UpseModule::slow_timer_fired()
     if (!_emu || _state == State::Seeking) {
         return;
     }
-    // emit seek_changed(milliseconds{upse_eventloop_tell_seek(_emu.get())});
+    emit seek_changed(_emu->tell_seek());
 }
 
 void UpseModule::fast_timer_fired()
