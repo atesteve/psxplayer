@@ -7,9 +7,12 @@
 
 #include <fmt/format.h>
 #include <zlib.h>
+#include <ctre.hpp>
 
 #include <fstream>
 #include <algorithm>
+
+using namespace std::literals;
 
 namespace {
 
@@ -205,6 +208,9 @@ std::expected<PSF, std::string> load_psf_internal(std::filesystem::path path,
     return psf;
 }
 
+template<typename T>
+constexpr auto to = []<typename U>(U&& u) { return T{std::forward<U>(u)}; };
+
 } // namespace
 
 std::expected<PSF, std::string> load_psf(std::filesystem::path path)
@@ -219,4 +225,47 @@ std::expected<PSF, std::string> load_psf(std::filesystem::path path)
     }
 
     return ret;
+}
+
+std::chrono::milliseconds PSF::get_length() const
+{
+    auto const it = tags.find("length");
+    if (it == tags.cend()) {
+        return 0ms;
+    }
+
+    static constexpr auto matcher = ctre::match<
+        R"(^\s*(((?<hours>\d+):)?(?<minutes>\d+):)?(?<seconds>\d+)([,\.](?<fract>\d+))?\s*$)">;
+
+    if (auto const m = matcher(it->second)) {
+        // clang-format off
+        auto const hours = m.get<"hours">()
+                                 .to_optional_number()
+                                 .transform(to<std::chrono::hours>)
+                                 .value_or(0h);
+
+        auto const minutes = m.get<"minutes">()
+                                 .to_optional_number()
+                                 .transform(to<std::chrono::minutes>)
+                                 .value_or(0min);
+
+        auto const seconds = m.get<"seconds">()
+                                 .to_optional_number()
+                                 .transform(to<std::chrono::seconds>)
+                                 .value_or(0s);
+
+        auto const milliseconds = m.get<"fract">()
+                                 .to_optional_view()
+                                 .transform([](auto sv) {
+                                     std::string fract_s{sv.substr(0, std::min(3uz, sv.length()))};
+                                     fract_s.resize(3, '0');
+                                     return std::chrono::milliseconds(std::stoi(fract_s));
+                                 })
+                                 .value_or(0s);
+
+        return hours + minutes + seconds + milliseconds;
+        // clang-format on
+    } else {
+        return 0ms;
+    }
 }

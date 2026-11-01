@@ -284,7 +284,7 @@ void UpseModule::load_file(QString const& file_name)
     emit supported_channels(_channel_mapper->supported_channels());
 
     set_state(State::Playing);
-    // emit total_time_changed(milliseconds{_mod->metadata->length});
+    emit total_time_changed(psf->get_length());
     emit seek_changed(0ms);
 }
 
