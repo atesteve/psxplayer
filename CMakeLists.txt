@@ -41,6 +41,8 @@ set(TARGET_SRC
   src/sound-meter-bar.cpp
   src/sound-meter-bar.h
   src/square-button.h
+  src/psx-player.cpp
+  src/psx-player.h
   src/channel-mapper/channel-mapper.cpp
   src/channel-mapper/channel-mapper.h
   src/channel-mapper/null-mapper.h

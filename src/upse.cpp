@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "upse.h"
-#include "psf/psf.h"
 
 #include <fmt/format.h>
 
@@ -84,9 +83,9 @@ void UpseModule::run()
             _control.input.speed_multiplier = 2.5;
         }
 
-        if (_emu && (_state == State::Playing || _state == State::Seeking)) {
+        if (_player && (_state == State::Playing || _state == State::Seeking)) {
 
-            n = _emu->render_audio(buf, buf.size() / 4);
+            n = _player->render_audio(buf, buf.size() / 4);
 
             // auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
             // if (current_seek < milliseconds{_mod->metadata->length}
@@ -214,7 +213,7 @@ void UpseModule::take_snapshot()
     auto& emplaced = _snapshots.emplace_back();
     emplaced.first = current_seek;
     emplaced.second.second = _channel_mapper->take_snapshot();
-    emplaced.second.first = _emu->take_snapshot();
+    emplaced.second.first = _player->take_snapshot();
 }
 
 void UpseModule::seek(int pos)
@@ -253,23 +252,22 @@ void UpseModule::load_file(QString const& file_name)
 {
     _audio.stop();
 
-    auto psf = load_psf(file_name.toStdString());
-    _emu.reset();
-
+    _player.reset();
     _snapshots.clear();
     _snapshots.shrink_to_fit();
     _sample_freq.clear();
     _control.output = {};
     _control.input.speed_multiplier = _speed;
 
-    if (!psf) {
+    auto new_player = PsxPlayer::build(file_name.toStdString());
+
+    if (!new_player) {
         set_state(State::Unloaded);
         emit supported_channels(0);
         return;
     }
 
-    _emu = R3000::build();
-    _emu->init(*psf);
+    _player = std::move(*new_player);
 
     _channel_mapper = ChannelMapper::build(nullptr, "", "");
     _channel_state.clear();
@@ -284,13 +282,13 @@ void UpseModule::load_file(QString const& file_name)
     emit supported_channels(_channel_mapper->supported_channels());
 
     set_state(State::Playing);
-    emit total_time_changed(psf->get_length());
+    emit total_time_changed(_player->get_duration());
     emit seek_changed(0ms);
 }
 
 void UpseModule::toggle_pause()
 {
-    if (!_emu) {
+    if (!_player) {
         return;
     }
 
@@ -318,7 +316,7 @@ void UpseModule::toggle_pause()
 
 void UpseModule::stop()
 {
-    if (!_emu) {
+    if (!_player) {
         return;
     }
 
@@ -395,10 +393,10 @@ void UpseModule::slow_timer_fired()
     }
     _stopped_cycles++;
 
-    if (!_emu || _state == State::Seeking) {
+    if (!_player || _state == State::Seeking) {
         return;
     }
-    emit seek_changed(_emu->tell_seek());
+    emit seek_changed(_player->tell_seek());
 }
 
 void UpseModule::fast_timer_fired()

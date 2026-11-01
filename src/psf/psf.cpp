@@ -11,6 +11,7 @@
 
 #include <fstream>
 #include <algorithm>
+#include <locale>
 
 using namespace std::literals;
 
@@ -165,12 +166,16 @@ std::expected<PSF, std::string> load_psf_internal(std::filesystem::path path,
 
     // PSF specifies that anything less or equal to 0x20 (i.e. ' ') is considered "whitespace".
     auto const is_whitespace = [](uint8_t c) { return c <= ' '; };
+    static auto const locale = std::locale{"C"};
 
     while (get_tok(f, line, '\n')) {
         std::istringstream line_iss{line};
         std::string key, value;
         get_tok(line_iss, key, '=', is_whitespace);
         get_tok(line_iss, value, '=', is_whitespace);
+        std::ranges::transform(key, key.begin(), [](char c) {
+            return std::tolower(c, locale);
+        });
         auto& entry = tags[std::move(key)];
         if (entry.empty()) {
             entry = std::move(value);
@@ -229,7 +234,17 @@ std::expected<PSF, std::string> load_psf(std::filesystem::path path)
 
 std::chrono::milliseconds PSF::get_length() const
 {
-    auto const it = tags.find("length");
+    return decode_length("length");
+}
+
+std::chrono::milliseconds PSF::get_fadeout_length() const
+{
+    return decode_length("fade");
+}
+
+std::chrono::milliseconds PSF::decode_length(std::string_view key) const
+{
+    auto const it = tags.find(std::string{key});
     if (it == tags.cend()) {
         return 0ms;
     }

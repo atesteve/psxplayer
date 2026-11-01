@@ -5,7 +5,7 @@
 
 #include "channel-mapper/channel-mapper.h"
 #include "audio.h"
-#include "psxemu/core/r3000.h"
+#include "psx-player.h"
 
 #include <QThread>
 #include <QTimer>
@@ -33,7 +33,7 @@ public:
 
     void run() override;
 
-    operator bool() const { return _emu.get(); }
+    operator bool() const { return (bool)_player; }
 
 signals:
     void total_time_changed(std::chrono::milliseconds ms);
@@ -91,7 +91,7 @@ private:
                         uint32_t data);
     void sw_hook(upse_module_instance_t* ins, mem_access_size_t size, uint32_t addr, uint32_t data);
 
-    std::unique_ptr<R3000> _emu;
+    std::optional<PsxPlayer> _player;
     Audio _audio;
 
     State _state{};
