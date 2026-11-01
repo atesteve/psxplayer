@@ -226,11 +226,9 @@ struct MMAPR3000Bus::Private {
     void protect_hw(bool throwOnError = true);
 
     uint8_t* mem_space = nullptr;
-    uint8_t* exec_page = nullptr;
     std::vector<uint8_t> device_mem;
     int ram_memfd = -1;
     int spad_memfd = -1;
-    int io_memfd = -1;
     R3000* emu;
     RegisterDispatcher dispatcher;
 };
@@ -259,12 +257,6 @@ void MMAPR3000Bus::Private::init(R3000* emu)
     // there is no need to call mprotect. The memory can be just an std::vector;
     device_mem.resize(PSX_IO_SIZE);
 
-    exec_page = (uint8_t*)mmap(
-        nullptr, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    if (!exec_page) {
-        throw_errno("Can't map executable page");
-    }
-
     dispatcher.set_mem_space(device_mem.data());
 }
 
@@ -275,13 +267,9 @@ MMAPR3000Bus::Private::~Private()
 
     unmap_memory(ram_memfd, mem_space, PSX_RAM_SIZE, PSX_RAM_ADDRS);
     unmap_memory(spad_memfd, mem_space, PSX_SPAD_SIZE, PSX_SPAD_ADDRS);
-    unmap_memory(io_memfd, mem_space, PSX_IO_SIZE, PSX_IO_ADDRS);
 
     if (mem_space) {
         munmap(mem_space, MEMORY_SPACE_SIZE);
-    }
-    if (exec_page) {
-        munmap(exec_page, 4096);
     }
 
     signal_ptr = nullptr;
