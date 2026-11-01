@@ -22,6 +22,7 @@ public:
     bool get_master_irq_flag();
 
     void take_snapshot(SnapshotSerializer& s);
+    void restore_snapshot(SnapshotDeserializer& s);
 private:
     struct Private;
     std::unique_ptr<Private> _p;

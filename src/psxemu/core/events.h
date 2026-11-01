@@ -26,6 +26,8 @@ public:
             template<typename T>
             using fn_ptr = void (*)(T*, uintptr_t, Event&, uint64_t);
 
+            explicit EventCallback() = default;
+
             template<typename T, typename Fn>
                 requires(requires(fn_ptr<T> fn_ptr, Fn&& fn) { fn_ptr = fn; })
             EventCallback(T* ptr, Fn fn)
@@ -85,6 +87,7 @@ public:
     bool cancel(Handler handler);
 
     void take_snapshot(SnapshotSerializer& s);
+    void restore_snapshot(SnapshotDeserializer& s);
 
 private:
     struct Private;

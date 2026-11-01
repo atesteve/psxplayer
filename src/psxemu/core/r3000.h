@@ -424,6 +424,7 @@ struct R3000 {
     virtual size_t render_audio(std::span<int16_t> output, size_t n_samples) = 0;
 
     virtual SnapshotBuffer take_snapshot() = 0;
+    virtual void restore_snapshot(SnapshotBuffer const& snapshot) = 0;
 
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;

@@ -26,6 +26,7 @@ public:
     size_t rendered_samples() const;
 
     void take_snapshot(SnapshotSerializer& s);
+    void restore_snapshot(SnapshotDeserializer& s);
 
 private:
     struct Private;

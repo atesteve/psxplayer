@@ -991,6 +991,12 @@ void SPU::take_snapshot(SnapshotSerializer& s)
     s.serialize(_p->ram);
 }
 
+void SPU::restore_snapshot(SnapshotDeserializer& s)
+{
+    s.deserialize(_p->state);
+    s.deserialize(_p->ram);
+}
+
 SPU::SPU()
     : _p{std::make_unique<Private>()}
 {}

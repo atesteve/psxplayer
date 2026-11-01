@@ -39,6 +39,7 @@ public:
     uint8_t* get_device_mem_ptr();
 
     void take_snapshot(SnapshotSerializer& s);
+    void restore_snapshot(SnapshotDeserializer& s);
 
 private:
     struct Private;

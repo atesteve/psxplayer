@@ -167,3 +167,8 @@ void Bios::take_snapshot(SnapshotSerializer& s)
 {
     s.serialize(state);
 }
+
+void Bios::restore_snapshot(SnapshotDeserializer& s)
+{
+    s.deserialize(state);
+}

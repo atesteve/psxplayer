@@ -67,6 +67,7 @@ public:
     uint32_t irq_verifier(R3000& emu);
 
     void take_snapshot(SnapshotSerializer& s);
+    void restore_snapshot(SnapshotDeserializer& s);
 
     struct Event {
         uint32_t clazz;

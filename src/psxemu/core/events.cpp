@@ -158,6 +158,11 @@ void Timing::take_snapshot(SnapshotSerializer& s)
     s.serialize(*_p);
 }
 
+void Timing::restore_snapshot(SnapshotDeserializer& s)
+{
+    s.deserialize(*_p);
+}
+
 void Timing::init(R3000*)
 {}
 

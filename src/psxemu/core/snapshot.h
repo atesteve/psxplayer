@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
+#include <meta>
 
 struct aligned_bytes_t {
     alignas(max_align_t) std::byte storage[alignof(max_align_t)];
@@ -106,7 +107,8 @@ struct SnapshotSerializer {
     template<nontrivial_container T>
     void serialize(T const& c)
     {
-        serialize(c.size());
+        size_t const size = c.size();
+        serialize(size);
         for (auto&& e : c) {
             serialize(e);
         }
@@ -151,7 +153,32 @@ private:
     }
 };
 
+template<typename T>
+auto consteval remove_template_const()
+{
+    static constexpr auto t_dealias = dealias(^^T);
+    if constexpr (has_template_arguments(t_dealias)) {
+        static constexpr auto templ = template_of(t_dealias);
+        auto template_arguments = template_arguments_of(t_dealias);
+        for (auto& t : template_arguments) {
+            if (!is_type(t)) {
+                continue;
+            }
+            t = remove_const(t);
+        }
+        return substitute(templ, template_arguments);
+    } else {
+        return t_dealias;
+    }
+}
+
 struct SnapshotDeserializer {
+    void deserialize(std::span<uint8_t> span)
+    {
+        auto* ptr = advance_ptr(span.size());
+        memcpy(span.data(), ptr, span.size());
+    }
+
     template<trivially_copiable T>
     void deserialize(T& o)
     {
@@ -159,7 +186,32 @@ struct SnapshotDeserializer {
         memcpy(&o, ptr, sizeof(o));
     }
 
-    SnapshotBuffer* _b;
+    template<nontrivial_container T>
+    void deserialize(T& c)
+    {
+        size_t n_elements;
+        deserialize(n_elements);
+        c.clear();
+        auto it = std::inserter(c, c.begin());
+        for (size_t i = 0; i < n_elements; i++) {
+            using value_type = [:remove_template_const<typename T::value_type>():];
+            value_type e;
+            deserialize(e);
+            *it = std::move(e);
+        }
+    }
+
+    template<nontrivial_bindable T>
+    void deserialize(T& c)
+    {
+        auto& [... members] = c;
+        template for (auto& m : {members...})
+        {
+            deserialize(m);
+        }
+    }
+
+    SnapshotBuffer const* _b;
     size_t _p{};
 
 private:
@@ -172,6 +224,13 @@ private:
         }
         auto* ptr = &(*_b)[_p];
         _p += sizeof(T);
+        return ptr;
+    }
+
+    std::byte const* advance_ptr(size_t n)
+    {
+        auto* ptr = &(*_b)[_p];
+        _p += n;
         return ptr;
     }
 };

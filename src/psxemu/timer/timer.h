@@ -25,6 +25,7 @@ public:
     uint32_t read_reg(r3000_ptr_t addr);
 
     void take_snapshot(SnapshotSerializer& s);
+    void restore_snapshot(SnapshotDeserializer& s);
 
 private:
     struct Private;

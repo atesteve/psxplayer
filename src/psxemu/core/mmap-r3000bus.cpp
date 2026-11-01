@@ -427,6 +427,13 @@ void MMAPR3000Bus::take_snapshot(SnapshotSerializer& s)
     s.serialize(_p->device_mem);
 }
 
+void MMAPR3000Bus::restore_snapshot(SnapshotDeserializer& s)
+{
+    s.deserialize(std::span{_p->mem_space, PSX_RAM_SIZE});
+    s.deserialize(std::span{_p->mem_space + PSX_SPAD_ADDRS[0], PSX_SPAD_SIZE});
+    s.deserialize(_p->device_mem);
+}
+
 MMAPR3000Bus::MMAPR3000Bus()
     : _p{std::make_unique<Private>()}
 {}

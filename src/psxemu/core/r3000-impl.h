@@ -50,7 +50,8 @@ public:
 
     size_t render_audio(std::span<int16_t> output, size_t n_samples) override;
 
-    virtual SnapshotBuffer take_snapshot() override;
+    SnapshotBuffer take_snapshot() override;
+    void restore_snapshot(SnapshotBuffer const& snapshot) override;
 
 private:
     struct Private;

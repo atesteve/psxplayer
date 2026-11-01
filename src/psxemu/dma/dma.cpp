@@ -332,6 +332,10 @@ void DMA::take_snapshot(SnapshotSerializer& s)
     s.serialize(_p->device_dma_request);
 }
 
+void DMA::restore_snapshot(SnapshotDeserializer& s)
+{
+    s.deserialize(_p->device_dma_request);
+}
 
 DMA::DMA()
     : _p{std::make_unique<Private>()}

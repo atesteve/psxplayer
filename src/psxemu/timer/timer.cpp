@@ -302,6 +302,11 @@ void TimerHandler::take_snapshot(SnapshotSerializer& s)
     s.serialize(_p->timing_info);
 }
 
+void TimerHandler::restore_snapshot(SnapshotDeserializer& s)
+{
+    s.deserialize(_p->timing_info);
+}
+
 void TimerHandler::init(R3000* emu)
 {
     _p->init(emu);

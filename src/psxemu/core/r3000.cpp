@@ -1414,6 +1414,22 @@ SnapshotBuffer R3000Core<c>::take_snapshot()
     return snapshot;
 }
 
+template<R3000CoreConfig c>
+void R3000Core<c>::restore_snapshot(SnapshotBuffer const& snapshot)
+{
+    SnapshotDeserializer deserializer{&snapshot};
+    deserializer.deserialize(p->core);
+    deserializer.deserialize(p->cp0);
+    deserializer.deserialize(p->load_slot);
+    deserializer.deserialize(p->branch_slot);
+    p->bus.restore_snapshot(deserializer);
+    p->bios.restore_snapshot(deserializer);
+    p->dma.restore_snapshot(deserializer);
+    p->spu.restore_snapshot(deserializer);
+    p->timers.restore_snapshot(deserializer);
+    p->timing.restore_snapshot(deserializer);
+}
+
 std::unique_ptr<R3000> R3000::build()
 {
     return std::make_unique<R3000Core<{FaultCheck::HARDWARE, AlignmentCheck::NO_CHECK}>>();
