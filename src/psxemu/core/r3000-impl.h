@@ -49,6 +49,8 @@ public:
     uint32_t soft_call(r3000_ptr_t addr) override;
 
     size_t render_audio(std::span<int16_t> output, size_t n_samples) override;
+    void fast_forward(std::chrono::milliseconds pos,
+                      std::chrono::milliseconds max_runtime) override;
 
     std::chrono::milliseconds tell_seek() const override;
 

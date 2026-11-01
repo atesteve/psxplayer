@@ -180,6 +180,7 @@ struct R3000Core<c>::Private {
     uint64_t run_ij_unk(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
 
     size_t render_audio(std::span<int16_t> output, size_t n_samples);
+    void fast_forward(std::chrono::milliseconds pos, std::chrono::milliseconds max_runtime);
 
     template<std::integral Int>
     void check_alignment(r3000_ptr_t addr, AccessType rw) const
@@ -1202,6 +1203,21 @@ size_t R3000Core<c>::Private::render_audio(std::span<int16_t> output, size_t n_s
 }
 
 template<R3000CoreConfig c>
+void R3000Core<c>::Private::fast_forward(std::chrono::milliseconds pos,
+                                         std::chrono::milliseconds max_runtime)
+{
+    auto const timeout = std::chrono::steady_clock::now() + max_runtime;
+    auto const clk_target = (pos.count() * CPU_FREQ) / 1000;
+
+    Private::HWAlignmentCheck::enable();
+    ScopeGuard align_check_guard{[] { Private::HWAlignmentCheck::disable(); }};
+
+    while (timing.get_clock() < clk_target && std::chrono::steady_clock::now() < timeout) {
+        handle_longjmp([this] { run_instruction(); }, [&](auto const&) {});
+    }
+}
+
+template<R3000CoreConfig c>
 void R3000Core<c>::init(PSF& psf)
 {
     p->bus.init(this);
@@ -1394,6 +1410,13 @@ template<R3000CoreConfig c>
 size_t R3000Core<c>::render_audio(std::span<int16_t> output, size_t n_samples)
 {
     return p->render_audio(output, n_samples);
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::fast_forward(std::chrono::milliseconds pos,
+                                std::chrono::milliseconds max_runtime)
+{
+    return p->fast_forward(pos, max_runtime);
 }
 
 template<R3000CoreConfig c>

@@ -11,6 +11,10 @@
 #include <cstddef>
 #include <cstring>
 #include <meta>
+#include <algorithm>
+#include <ranges>
+
+#include <fmt/format.h>
 
 struct aligned_bytes_t {
     alignas(max_align_t) std::byte storage[alignof(max_align_t)];
@@ -75,19 +79,60 @@ private:
     size_t _size{};
 };
 
-consteval void decompose(auto&& c)
+template<typename T>
+auto consteval remove_template_const()
 {
-    auto const& [... m] = c;
+    static constexpr auto t_dealias = dealias(^^T);
+    if constexpr (has_template_arguments(t_dealias)) {
+        static constexpr auto templ = template_of(t_dealias);
+        auto template_arguments = template_arguments_of(t_dealias);
+        for (auto& t : template_arguments) {
+            if (!is_type(t)) {
+                continue;
+            }
+            t = remove_const(t);
+        }
+        return substitute(templ, template_arguments);
+    } else {
+        return t_dealias;
+    }
 }
 
 template<typename T>
-concept trivially_copiable = std::is_trivially_copyable_v<T>;
+consteval auto all_nonstatic_data_members_of() {
+    static constexpr auto ctx = std::meta::access_context::unchecked();
+    auto members = nonstatic_data_members_of(^^T, ctx);
+    template for (constexpr auto const& b : define_static_array(bases_of(^^T, ctx))) {
+        using Base = [:type_of(b):];
+        auto base_members = all_nonstatic_data_members_of<Base>();
+        members.append_range(base_members);
+    }
+    return members;
+}
 
 template<typename T>
-concept nontrivial_container = !std::is_trivially_copyable_v<T> && requires(T&& c) { c.begin(); };
+bool consteval is_trivially_copyable()
+{
+    if constexpr (!std::is_trivially_copyable_v<T>) {
+        return false;
+    }
+    else if constexpr (!std::is_class_v<T>) {
+        return true;
+    } else {
+        auto const member_types = std::views::all(all_nonstatic_data_members_of<T>())
+            | std::views::transform(std::meta::type_of);
+        return std::ranges::none_of(member_types, std::meta::is_reference_type);
+    }
+}
 
 template<typename T>
-concept nontrivial_bindable = !std::is_trivially_copyable_v<T> && !nontrivial_container<T>
+concept trivially_copiable = is_trivially_copyable<T>();
+
+template<typename T>
+concept nontrivial_container = !trivially_copiable<T> && requires(T&& c) { c.begin(); };
+
+template<typename T>
+concept nontrivial_bindable = !trivially_copiable<T> && !nontrivial_container<T>
     && (std::is_aggregate_v<T> || requires() { std::tuple_size<T>{}; });
 
 struct SnapshotSerializer {
@@ -152,25 +197,6 @@ private:
         return &(*_b)[_b->size() - n];
     }
 };
-
-template<typename T>
-auto consteval remove_template_const()
-{
-    static constexpr auto t_dealias = dealias(^^T);
-    if constexpr (has_template_arguments(t_dealias)) {
-        static constexpr auto templ = template_of(t_dealias);
-        auto template_arguments = template_arguments_of(t_dealias);
-        for (auto& t : template_arguments) {
-            if (!is_type(t)) {
-                continue;
-            }
-            t = remove_const(t);
-        }
-        return substitute(templ, template_arguments);
-    } else {
-        return t_dealias;
-    }
-}
 
 struct SnapshotDeserializer {
     void deserialize(std::span<uint8_t> span)

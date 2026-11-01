@@ -75,7 +75,7 @@ void UpseModule::run()
     _slow_timer.start(500);
 
     std::vector<int16_t> buf;
-    size_t n;
+    int64_t n;
     buf.resize(4096);
 
     while (!_shutdown) {
@@ -87,30 +87,25 @@ void UpseModule::run()
 
             n = _player->render_audio(buf, buf.size() / 4);
 
-            // auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
-            // if (current_seek < milliseconds{_mod->metadata->length}
-            //     && _snapshots.back().first + SNAPSHOT_INTERVAL < current_seek) {
-            //     take_snapshot();
-            // }
+            if (auto const current_seek = _player->tell_seek();
+                current_seek < _player->get_duration()
+                && _snapshots.back().first + SNAPSHOT_INTERVAL < current_seek) {
+                take_snapshot();
+            }
 
-            if (n == 0) {
+            if (n == -1) {
                 set_state(State::Stopped);
                 _paused = true;
                 _control.input.speed_multiplier = _speed;
                 slow_timer_fired();
             }
-
-            // if (n == -1) {
-            //     _snapshots.clear();
-            //     take_snapshot();
-            // }
         } else {
             n = 0;
         }
 
         if (n > 0) {
             if (_state != State::Seeking) {
-                auto const success = _audio.write({buf.begin(), n * 2});
+                auto const success = _audio.write({buf.begin(), size_t(n * 2)});
                 if (!success) {
                     toggle_pause();
                 }
@@ -209,7 +204,7 @@ void UpseModule::handle_channel_fire()
 
 void UpseModule::take_snapshot()
 {
-    auto const current_seek = milliseconds{0};
+    auto const current_seek = _player->tell_seek();
     auto& emplaced = _snapshots.emplace_back();
     emplaced.first = current_seek;
     emplaced.second.second = _channel_mapper->take_snapshot();
@@ -218,34 +213,27 @@ void UpseModule::take_snapshot()
 
 void UpseModule::seek(int pos)
 {
-    (void)pos;
-    /*    if (!_emu) {
-            return;
-        }
+    if (!_player) {
+        return;
+    }
 
-        int const current_seek = upse_eventloop_tell_seek(_mod.get());
+    milliseconds const pos_ms{pos};
+    auto const current_seek = _player->tell_seek();
 
-        if (pos == current_seek) {
-            return;
-        }
+    if (pos_ms == current_seek) {
+        return;
+    }
 
-        auto it = std::ranges::upper_bound(_snapshots,
-                                           milliseconds{pos},
-                                           std::less<>{},
-                                           [](auto const& element) { return element.first; });
-        assert(it != _snapshots.begin());
-        if (pos < current_seek || prev(it)->first.count() > current_seek) {
-            upse_module_restore_snapshot(_mod.get(), &prev(it)->second.first);
-            _channel_mapper->restore_snapshot(prev(it)->second.second);
+    auto it = std::ranges::upper_bound(
+        _snapshots, pos_ms, std::less<>{}, [](auto const& element) { return element.first; });
+    assert(it != _snapshots.begin());
+    if (pos_ms < current_seek || prev(it)->first > current_seek) {
+        _player->restore_snapshot(prev(it)->second.first);
+        _channel_mapper->restore_snapshot(prev(it)->second.second);
+    }
 
-            if (prev(it)->first.count() == pos) {
-                return;
-            }
-        }
-
-        upse_eventloop_seek(_mod.get(), pos);
-        set_state(State::Seeking);
-        */
+    _player->seek(pos_ms);
+    set_state(State::Seeking);
 }
 
 void UpseModule::load_file(QString const& file_name)
