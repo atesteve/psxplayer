@@ -153,6 +153,11 @@ void Timing::run_events()
     _p->run_events();
 }
 
+void Timing::take_snapshot(SnapshotSerializer& s)
+{
+    s.serialize(*_p);
+}
+
 void Timing::init(R3000*)
 {}
 

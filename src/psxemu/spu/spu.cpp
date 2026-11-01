@@ -362,10 +362,10 @@ struct SPU::Private {
         uint32_t transfer_addr{};
         std::array<VoiceState, N_VOICES> voice{};
         ReverbState reverb{};
+        uint64_t last_rt_cycle{};
     } state{};
 
     EmuBuffer<uint16_t> system_ram;
-    uint64_t last_rt_cycle{};
     Timing* timing;
     std::span<int16_t> out{};
     size_t out_p{};
@@ -757,7 +757,7 @@ void SPU::Private::tick(Timing::Event& event, uint64_t const clock_cycle)
         out_p += 2;
     }
 
-    last_rt_cycle = rt_cycle;
+    state.last_rt_cycle = rt_cycle;
     event.period = (SAMPLE_RATE_CYCLES * speed) >> 8;
 }
 
@@ -826,7 +826,7 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t rt
     // Run the ADSR once per "real time" cycle. That way, the ADSR speed scales smoothly with the
     // playback speed. For speeds faster than real time, that means running ADSR twice or more per
     // sample. For slower speeds, some samples would skip ADSR.
-    for (auto i = last_rt_cycle; i < rt_cycle; i++) {
+    for (auto i = state.last_rt_cycle; i < rt_cycle; i++) {
         auto const turn_off_voice = voice_state.adsr.tick(voice_regs);
         if (turn_off_voice) {
             voice_state.status = VoiceStatus::OFF;
@@ -978,8 +978,17 @@ void SPU::init(R3000* emu)
         .name = "spu_tick",
         .type = Timing::Event::Type::PERIODIC,
         .period = (SAMPLE_RATE_CYCLES << 8) / speed,
-        .callback = [_p = _p.get()](auto& event, uint64_t cycle) { _p->tick(event, cycle); },
+        .callback = {_p.get(),
+                     [](SPU::Private* p, auto, auto& event, uint64_t cycle) {
+                         p->tick(event, cycle);
+                     }},
     });
+}
+
+void SPU::take_snapshot(SnapshotSerializer& s)
+{
+    s.serialize(_p->state);
+    s.serialize(_p->ram);
 }
 
 SPU::SPU()

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "r3000.h"
+#include "snapshot.h"
 
 #include <string>
 #include <functional>
@@ -21,13 +22,49 @@ public:
             PERIODIC_NON_STRICT,
         };
 
+        struct EventCallback {
+            template<typename T>
+            using fn_ptr = void (*)(T*, uintptr_t, Event&, uint64_t);
+
+            template<typename T, typename Fn>
+                requires(requires(fn_ptr<T> fn_ptr, Fn&& fn) { fn_ptr = fn; })
+            EventCallback(T* ptr, Fn fn)
+                : ptr{(void*)ptr}
+                , arg{0}
+            {
+                fn_ptr<T> fn_ptr = fn;
+                this->fn = (uintptr_t)fn_ptr;
+            }
+
+            template<typename T, typename Fn>
+                requires(requires(fn_ptr<T> fn_ptr, Fn&& fn) { fn_ptr = fn; })
+            EventCallback(T* ptr, uintptr_t arg, Fn fn)
+                : ptr{(void*)ptr}
+                , arg{arg}
+            {
+                fn_ptr<T> fn_ptr = fn;
+                this->fn = (uintptr_t)fn_ptr;
+            }
+
+            void operator()(Event& event, uint64_t clock) const
+            {
+                // Uber UB... but it's fine.
+                auto fn_cast = (fn_ptr<void>)fn;
+                fn_cast(ptr, arg, event, clock);
+            }
+
+            void* ptr;
+            uintptr_t arg;
+            uintptr_t fn;
+        };
+
         static constexpr uint64_t UNINITIALIZED = -1;
 
         std::string name;
         Type type;
         uint64_t period = UNINITIALIZED;
         uint64_t first_shot = UNINITIALIZED;
-        std::move_only_function<void(Event&,uint64_t)> callback;
+        EventCallback callback;
         bool cancelled = false;
     };
 
@@ -46,6 +83,8 @@ public:
     void run_events();
     Handler schedule(Event event);
     bool cancel(Handler handler);
+
+    void take_snapshot(SnapshotSerializer& s);
 
 private:
     struct Private;

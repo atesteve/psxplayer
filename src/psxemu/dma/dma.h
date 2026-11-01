@@ -20,6 +20,8 @@ public:
 
     void request_transfer(uint32_t channel, bool request);
     bool get_master_irq_flag();
+
+    void take_snapshot(SnapshotSerializer& s);
 private:
     struct Private;
     std::unique_ptr<Private> _p;

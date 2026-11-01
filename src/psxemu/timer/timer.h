@@ -24,6 +24,8 @@ public:
     void write_reg(r3000_ptr_t addr, uint32_t value);
     uint32_t read_reg(r3000_ptr_t addr);
 
+    void take_snapshot(SnapshotSerializer& s);
+
 private:
     struct Private;
     std::unique_ptr<Private> _p;

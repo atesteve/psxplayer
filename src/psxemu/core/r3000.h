@@ -5,6 +5,7 @@
 
 #include "psf/psf.h"
 #include "events.h"
+#include "snapshot.h"
 
 #include <cstdint>
 #include <array>
@@ -421,6 +422,8 @@ struct R3000 {
     virtual uint32_t soft_call(r3000_ptr_t addr) = 0;
 
     virtual size_t render_audio(std::span<int16_t> output, size_t n_samples) = 0;
+
+    virtual SnapshotBuffer take_snapshot() = 0;
 
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;

@@ -420,6 +420,13 @@ void MMAPR3000Bus::init(R3000* emu)
     _p->dispatcher.init(emu);
 }
 
+void MMAPR3000Bus::take_snapshot(SnapshotSerializer& s)
+{
+    s.serialize(std::span{_p->mem_space, PSX_RAM_SIZE});
+    s.serialize(std::span{_p->mem_space + PSX_SPAD_ADDRS[0], PSX_SPAD_SIZE});
+    s.serialize(_p->device_mem);
+}
+
 MMAPR3000Bus::MMAPR3000Bus()
     : _p{std::make_unique<Private>()}
 {}

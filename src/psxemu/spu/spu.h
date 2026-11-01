@@ -25,6 +25,8 @@ public:
     void set_output_buffer(std::span<int16_t> output);
     size_t rendered_samples() const;
 
+    void take_snapshot(SnapshotSerializer& s);
+
 private:
     struct Private;
     std::unique_ptr<Private> _p;

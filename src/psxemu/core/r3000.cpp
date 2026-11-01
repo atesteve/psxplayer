@@ -1396,6 +1396,24 @@ size_t R3000Core<c>::render_audio(std::span<int16_t> output, size_t n_samples)
     return p->render_audio(output, n_samples);
 }
 
+template<R3000CoreConfig c>
+SnapshotBuffer R3000Core<c>::take_snapshot()
+{
+    SnapshotBuffer snapshot;
+    SnapshotSerializer serializer{&snapshot};
+    serializer.serialize(p->core);
+    serializer.serialize(p->cp0);
+    serializer.serialize(p->load_slot);
+    serializer.serialize(p->branch_slot);
+    p->bus.take_snapshot(serializer);
+    p->bios.take_snapshot(serializer);
+    p->dma.take_snapshot(serializer);
+    p->spu.take_snapshot(serializer);
+    p->timers.take_snapshot(serializer);
+    p->timing.take_snapshot(serializer);
+    return snapshot;
+}
+
 std::unique_ptr<R3000> R3000::build()
 {
     return std::make_unique<R3000Core<{FaultCheck::HARDWARE, AlignmentCheck::NO_CHECK}>>();

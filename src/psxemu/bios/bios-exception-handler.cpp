@@ -28,7 +28,7 @@ void Bios::exception_handler(R3000& emu)
     };
     state.saved_state.core.pc = cp0.EPC;
 
-    for (auto const& handlers : state.irq_handlers) {
+    for (auto const& handlers : irq_handlers) {
         for (auto const& handler : handlers) {
             if (!handler.verifier) {
                 continue;
@@ -56,18 +56,18 @@ void Bios::exception_handler(R3000& emu)
 
 void Bios::init_exception_handlers()
 {
-    state.irq_handlers[0].emplace_back(IRQHandler{
+    irq_handlers[0].emplace_back(IRQHandler{
         .verifier = [this](R3000& emu) { return syscall_verifier(emu); },
     });
 
     for (auto timer = 0u; timer < 4; timer++) {
-        state.irq_handlers[1].emplace_back(IRQHandler{
+        irq_handlers[1].emplace_back(IRQHandler{
             .verifier = [this, timer](R3000& emu) { return timer_verifier(emu, timer); },
             .handler = [this, timer](R3000& emu, uint32_t) { return timer_handler(emu, timer); },
         });
     }
 
-    state.irq_handlers[3].emplace_back(IRQHandler{
+    irq_handlers[3].emplace_back(IRQHandler{
         .verifier = [this](R3000& emu) { return irq_verifier(emu); },
     });
 }

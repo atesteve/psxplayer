@@ -77,11 +77,8 @@ struct TimerHandler::Private {
     void write_reg(r3000_ptr_t addr, uint32_t value);
     uint32_t read_reg(r3000_ptr_t addr);
 
-    void update_timer_event(timer_regs_t& timer, uint32_t timer_n);
-    void timer_event(timer_regs_t& timer,
-                     uint32_t timer_n,
-                     uint64_t current_clk,
-                     EventType event_type);
+    void update_timer_event(uint32_t timer_n);
+    void timer_event(uint32_t timer_n, uint64_t current_clk, EventType event_type);
     void vblank_event();
 
     R3000* emu;
@@ -100,7 +97,8 @@ void TimerHandler::Private::init(R3000* emu)
         .name = "vblank-clock",
         .type = Timing::Event::Type::PERIODIC,
         .period = CPU_FREQ / 60,
-        .callback = [this](auto&, auto) { vblank_event(); },
+        .callback = {this,
+                     [](TimerHandler::Private* self, auto, auto&, auto) { self->vblank_event(); }},
     });
     reg = emu->get_device_buffer<timer_regs_t>(TIMER_BASE, TIMER_N);
     for (auto i = 0u; i < TIMER_N; i++) {
@@ -111,8 +109,9 @@ void TimerHandler::Private::init(R3000* emu)
     }
 }
 
-void TimerHandler::Private::update_timer_event(timer_regs_t& timer, uint32_t timer_n)
+void TimerHandler::Private::update_timer_event(uint32_t timer_n)
 {
+    auto& timer = reg[timer_n];
     auto& timing_info = this->timing_info[timer_n];
     auto& counter_mode = timer.counter_mode.fields;
 
@@ -132,9 +131,11 @@ void TimerHandler::Private::update_timer_event(timer_regs_t& timer, uint32_t tim
             .period = 0x10000 * timing_info.clock_divider,
             .first_shot = (0x10000 - timer.counter) * timing_info.clock_divider,
             .callback =
-                [this, &timer, timer_n](auto&, uint64_t current_clk) {
-                    timer_event(timer, timer_n, current_clk, EventType::OVERFLOW);
-                },
+                {this,
+                 timer_n,
+                 [](TimerHandler::Private* self, auto timer_n, auto&, uint64_t current_clk) {
+                     self->timer_event(timer_n, current_clk, EventType::OVERFLOW);
+                 }},
         });
     } else {
         bool const first_overflow = timer.counter > timer.target;
@@ -147,10 +148,14 @@ void TimerHandler::Private::update_timer_event(timer_regs_t& timer, uint32_t tim
                     .name = fmt::format("timer{}", timer_n),
                     .type = Timing::Event::Type::ONE_SHOT,
                     .first_shot = first_shot,
-                    .callback =
-                        [this, &timer, timer_n](auto&, uint64_t current_clk) {
-                            timer_event(timer, timer_n, current_clk, EventType::OVERFLOW);
-                        },
+                    .callback = {this,
+                                 timer_n,
+                                 [](TimerHandler::Private* self,
+                                    auto timer_n,
+                                    auto&,
+                                    uint64_t current_clk) {
+                                     self->timer_event(timer_n, current_clk, EventType::OVERFLOW);
+                                 }},
                 });
             }
             return;
@@ -161,23 +166,21 @@ void TimerHandler::Private::update_timer_event(timer_regs_t& timer, uint32_t tim
             .period = (timer.target + 1) * timing_info.clock_divider,
             .first_shot = first_shot,
             .callback =
-                [this, &timer, timer_n, first_overflow = first_overflow](
-                    auto&, uint64_t current_clk) mutable {
-                    timer_event(timer,
-                                timer_n,
-                                current_clk,
-                                first_overflow ? EventType::OVERFLOW : EventType::TARGET);
-                    first_overflow = false;
-                },
+                {this,
+                 timer_n,
+                 [](TimerHandler::Private* self, auto timer_n, auto&, uint64_t current_clk) {
+                    // TODO: handle the case where the counter is higher than the target.
+                     self->timer_event(timer_n, current_clk, EventType::TARGET);
+                 }},
         });
     }
 }
 
-void TimerHandler::Private::timer_event(timer_regs_t& timer,
-                                        uint32_t timer_n,
+void TimerHandler::Private::timer_event(uint32_t timer_n,
                                         uint64_t current_clk,
                                         EventType event_type)
 {
+    auto& timer = reg[timer_n];
     auto& counter_mode = timer.counter_mode.fields;
     auto const irq = timer_irq[timer_n];
 
@@ -196,12 +199,10 @@ void TimerHandler::Private::timer_event(timer_regs_t& timer,
         if (!counter_mode.irq) {
             emu->istat() |= (1 << irq);
         }
-    }
-    else if (counter_mode.irq_repeat_mode) {
+    } else if (counter_mode.irq_repeat_mode) {
         counter_mode.irq = 1;
         emu->istat() |= (1 << irq);
-    }
-    else {
+    } else {
         if (counter_mode.irq) {
             emu->istat() |= (1 << irq);
         }
@@ -223,13 +224,13 @@ void TimerHandler::Private::vblank_event()
         case 1:
         case 2:
             timer1.counter = 0;
-            update_timer_event(timer1, 1);
+            update_timer_event(1);
             break;
 
         case 3:
             timer1.counter = 0;
             timer1.counter_mode.fields.sync_enable = 0;
-            update_timer_event(timer1, 1);
+            update_timer_event(1);
             break;
         }
     }
@@ -241,7 +242,7 @@ void TimerHandler::Private::write_reg(r3000_ptr_t addr, uint32_t value)
     handle_reg(counter)
     {
         counter = value & 0xffffu;
-        update_timer_event(timer, timer_n);
+        update_timer_event(timer_n);
     }
     handle_reg(counter_mode)
     {
@@ -250,13 +251,13 @@ void TimerHandler::Private::write_reg(r3000_ptr_t addr, uint32_t value)
         counter_mode.raw = value;
         counter_mode.fields.irq = 1;
         timer.counter = 0;
-        update_timer_event(timer, timer_n);
+        update_timer_event(timer_n);
     }
     handle_reg(target)
     {
         target = value & 0xffffu;
         if (timer.counter_mode.fields.reset_mode == RESET_MODE_TARGET) {
-            update_timer_event(timer, timer_n);
+            update_timer_event(timer_n);
         }
     }
     end_reg_handling();
@@ -294,6 +295,11 @@ void TimerHandler::write_reg(r3000_ptr_t addr, uint32_t value)
 uint32_t TimerHandler::read_reg(r3000_ptr_t addr)
 {
     return _p->read_reg(addr);
+}
+
+void TimerHandler::take_snapshot(SnapshotSerializer& s)
+{
+    s.serialize(_p->timing_info);
 }
 
 void TimerHandler::init(R3000* emu)

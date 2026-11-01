@@ -210,11 +210,11 @@ void UpseModule::handle_channel_fire()
 
 void UpseModule::take_snapshot()
 {
-    // auto const current_seek = milliseconds{upse_eventloop_tell_seek(_mod.get())};
-    // auto& emplaced = _snapshots.emplace_back();
-    // emplaced.first = current_seek;
-    // emplaced.second.second = _channel_mapper->take_snapshot();
-    // upse_module_take_snapshot(_mod.get(), &emplaced.second.first);
+    auto const current_seek = milliseconds{0};
+    auto& emplaced = _snapshots.emplace_back();
+    emplaced.first = current_seek;
+    emplaced.second.second = _channel_mapper->take_snapshot();
+    emplaced.second.first = _emu->take_snapshot();
 }
 
 void UpseModule::seek(int pos)

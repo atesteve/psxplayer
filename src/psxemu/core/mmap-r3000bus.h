@@ -38,6 +38,8 @@ public:
 
     uint8_t* get_device_mem_ptr();
 
+    void take_snapshot(SnapshotSerializer& s);
+
 private:
     struct Private;
     uint8_t* _mem_space;

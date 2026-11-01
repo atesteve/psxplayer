@@ -105,7 +105,7 @@ private:
 
     std::unique_ptr<ChannelMapper> _channel_mapper;
 
-    std::vector<std::pair<std::chrono::milliseconds, std::pair<upse_snapshot_t, std::any>>>
+    std::vector<std::pair<std::chrono::milliseconds, std::pair<SnapshotBuffer, std::any>>>
         _snapshots;
 
     emulation_control_t _control{

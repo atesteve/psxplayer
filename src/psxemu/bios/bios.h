@@ -66,6 +66,8 @@ public:
     void timer_handler(R3000& emu, uint32_t timer);
     uint32_t irq_verifier(R3000& emu);
 
+    void take_snapshot(SnapshotSerializer& s);
+
     struct Event {
         uint32_t clazz;
         uint32_t spec;
@@ -89,8 +91,9 @@ public:
             Core core{};
             sr_t sr{};
         } saved_state{};
-        std::array<std::vector<IRQHandler>, 4> irq_handlers;
     };
 
     State state;
+    // TODO: may need to snapshot these.
+    std::array<std::vector<IRQHandler>, 4> irq_handlers;
 };

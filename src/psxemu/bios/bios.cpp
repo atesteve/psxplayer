@@ -162,3 +162,8 @@ void Bios::init(EmuBuffer<uint8_t> ram)
     // Init timer_auto_ack to 1
     std::ranges::fill(state.timer_auto_ack, 1);
 }
+
+void Bios::take_snapshot(SnapshotSerializer& s)
+{
+    s.serialize(state);
+}

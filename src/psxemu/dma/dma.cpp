@@ -327,6 +327,12 @@ void DMA::init(R3000* emu)
     _p->init(emu);
 }
 
+void DMA::take_snapshot(SnapshotSerializer& s)
+{
+    s.serialize(_p->device_dma_request);
+}
+
+
 DMA::DMA()
     : _p{std::make_unique<Private>()}
 {}
