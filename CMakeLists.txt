@@ -158,6 +158,9 @@ find_package(ZLIB REQUIRED)
 target_link_libraries(${TARGET_LIBUPSE} PRIVATE ZLIB::ZLIB)
 target_link_libraries(${TARGET} PRIVATE ZLIB::ZLIB)
 
+add_subdirectory("lib/ctre")
+target_link_libraries(${TARGET} PRIVATE ctre)
+
 set_target_properties(${TARGET} PROPERTIES
     CXX_STANDARD 26
     #INTERPROCEDURAL_OPTIMIZATION TRUE
