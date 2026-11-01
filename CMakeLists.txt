@@ -152,9 +152,6 @@ endif()
 find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
 target_link_libraries(${TARGET} PRIVATE SDL3::SDL3)
 
-find_package(ZYDIS REQUIRED)
-target_link_libraries(${TARGET} PRIVATE Zydis::Zydis)
-
 target_link_libraries(${TARGET} PRIVATE Qt6::Widgets)
 
 find_package(ZLIB REQUIRED)
