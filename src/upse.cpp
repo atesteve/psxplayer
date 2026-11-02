@@ -16,7 +16,7 @@ using namespace std::chrono;
 
 namespace {
 
-constexpr auto SNAPSHOT_INTERVAL = 30s;
+constexpr auto SNAPSHOT_INTERVAL = 15s;
 
 } // namespace
 

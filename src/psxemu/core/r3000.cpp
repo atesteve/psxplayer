@@ -1441,13 +1441,14 @@ SnapshotBuffer R3000Core<c>::take_snapshot()
     p->spu.take_snapshot(serializer);
     p->timers.take_snapshot(serializer);
     p->timing.take_snapshot(serializer);
-    return snapshot;
+    return snapshot.compress();
 }
 
 template<R3000CoreConfig c>
 void R3000Core<c>::restore_snapshot(SnapshotBuffer const& snapshot)
 {
-    SnapshotDeserializer deserializer{&snapshot};
+    SnapshotBuffer const decompressed = snapshot.decompress();
+    SnapshotDeserializer deserializer{&decompressed};
     deserializer.deserialize(p->core);
     deserializer.deserialize(p->cp0);
     deserializer.deserialize(p->load_slot);

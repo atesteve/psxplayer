@@ -59,6 +59,8 @@ set(TARGET_SRC
   src/psxemu/core/register-dispatcher.h
   src/psxemu/core/events.cpp
   src/psxemu/core/events.h
+  src/psxemu/core/snapshot.cpp
+  src/psxemu/core/snapshot.h
   src/psxemu/bios/bios.cpp
   src/psxemu/bios/bios-alloc.cpp
   src/psxemu/bios/bios-a0.cpp
@@ -162,6 +164,9 @@ target_link_libraries(${TARGET} PRIVATE ZLIB::ZLIB)
 
 add_subdirectory("lib/ctre")
 target_link_libraries(${TARGET} PRIVATE ctre)
+
+find_package(zstd REQUIRED)
+target_link_libraries(${TARGET} PRIVATE zstd)
 
 set_target_properties(${TARGET} PROPERTIES
     CXX_STANDARD 26

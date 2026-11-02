@@ -15,72 +15,49 @@
 #include <ranges>
 
 #include <fmt/format.h>
-
-struct aligned_bytes_t {
-    alignas(max_align_t) std::byte storage[alignof(max_align_t)];
-};
+#include <boost/align/aligned_allocator.hpp>
 
 class SnapshotBuffer {
-    static constexpr auto bundle_size = sizeof(aligned_bytes_t);
-
 public:
-    decltype(auto) operator[](this auto&& self, size_t p)
-    {
-        return self._storage[p / bundle_size].storage[p % bundle_size];
-    }
-
-    decltype(auto) front(this auto&& self) { return self._storage[0].storage[0]; }
-
-    decltype(auto) back(this auto&& self) { return self[self._size - 1]; }
-
-    decltype(auto) data(this auto&& self) { return &self[0]; }
-
-    decltype(auto) begin(this auto&& self) { return self.data(); }
-
-    decltype(auto) cbegin(this auto const& self) { return self.begin(); }
-
-    decltype(auto) end(this auto&& self) { return &self[self._size]; }
-
-    decltype(auto) cend(this auto const& self) { return self.end(); }
-
-    bool empty() const { return _size == 0; }
-
-    auto size() const { return _size; }
-
-    void reserve(size_t new_cap) { _storage.reserve(new_cap / bundle_size); }
-
-    auto capacity() const { return _storage.capacity() * bundle_size; }
-
+    decltype(auto) operator[](this auto&& self, size_t p) { return self._storage[p]; }
+    decltype(auto) data(this auto&& self) { return self._storage.data(); }
+    bool empty() const { return _storage.empty(); }
+    auto size() const { return _storage.size(); }
+    void reserve(size_t new_cap) { _storage.reserve(new_cap); }
+    auto capacity() const { return _storage.capacity(); }
     void shrink_to_fit() { _storage.shrink_to_fit(); }
 
     void clear()
     {
         _storage.clear();
-        _size = 0;
+        _decompressed_size = 0;
     }
 
     void push_back(std::byte b)
     {
-        if (_size % bundle_size == 0) {
-            _storage.emplace_back();
-        }
-        (*this)[_size] = b;
-        _size++;
+        _storage.push_back(b);
     }
 
     void resize(size_t count)
     {
-        _storage.resize((count + bundle_size - 1) / bundle_size);
-        _size = count;
+        _storage.resize(count);
+    }
+
+    SnapshotBuffer compress() const;
+    SnapshotBuffer decompress() const;
+
+    bool is_compressed() const {
+        return _decompressed_size != 0;
     }
 
 private:
-    std::vector<aligned_bytes_t> _storage;
-    size_t _size{};
+    std::vector<std::byte, boost::alignment::aligned_allocator<std::byte, alignof(max_align_t)>>
+        _storage;
+    size_t _decompressed_size{};
 };
 
 template<typename T>
-auto consteval remove_template_const()
+consteval auto remove_template_const()
 {
     static constexpr auto t_dealias = dealias(^^T);
     if constexpr (has_template_arguments(t_dealias)) {
@@ -111,7 +88,7 @@ consteval auto all_nonstatic_data_members_of() {
 }
 
 template<typename T>
-bool consteval is_trivially_copyable()
+consteval bool is_trivially_copyable()
 {
     if constexpr (!std::is_trivially_copyable_v<T>) {
         return false;
@@ -177,7 +154,7 @@ private:
     {
         if (_b->empty()) {
             _b->resize(sizeof(T));
-            return _b->begin();
+            return _b->data();
         }
         auto const misalignment = _b->size() % alignof(T);
         if (misalignment != 0) {
@@ -191,7 +168,7 @@ private:
     {
         if (_b->empty()) {
             _b->resize(n);
-            return _b->begin();
+            return _b->data();
         }
         _b->resize(_b->size() + n);
         return &(*_b)[_b->size() - n];

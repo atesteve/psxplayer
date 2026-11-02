@@ -351,7 +351,7 @@ struct SPU::Private {
     void update_key_on_off(uint32_t effective_value, auto member);
 
     void tick(Timing::Event& event, uint64_t clock_cycle);
-    std::pair<int16_t, int16_t> tick_voice(size_t v, uint64_t rt_cycle);
+    std::pair<int16_t, int16_t> tick_voice(size_t v, uint64_t rt_cycle, bool no_output);
     std::pair<int16_t, int16_t> tick_reverb(std::pair<int16_t, int16_t> input);
 
     R3000* emu;
@@ -730,11 +730,16 @@ void SPU::Private::tick(Timing::Event& event, uint64_t const clock_cycle)
         return;
     }
 
+    bool const no_output = out.size() == 0;
+
     std::pair<int32_t, int32_t> sum{};
     std::pair<int32_t, int32_t> reverbSum{};
 
     for (auto v = 0u; v < N_VOICES; v++) {
-        auto const sample = tick_voice(v, rt_cycle);
+        auto const sample = tick_voice(v, rt_cycle, no_output);
+        if (no_output) {
+            continue;
+        }
         sum.first += sample.first;
         sum.second += sample.second;
         if (reg->voice_reverb_on & (1 << v)) {
@@ -743,7 +748,7 @@ void SPU::Private::tick(Timing::Event& event, uint64_t const clock_cycle)
         }
     }
 
-    if (reg->control.fields.reverb_en) {
+    if (reg->control.fields.reverb_en && !no_output) {
         auto const clamped =
             std::make_pair(smooth_clamp(reverbSum.first), smooth_clamp(reverbSum.second));
         auto const reverb_sample = tick_reverb(clamped);
@@ -761,7 +766,8 @@ void SPU::Private::tick(Timing::Event& event, uint64_t const clock_cycle)
     event.period = (SAMPLE_RATE_CYCLES * speed) >> 8;
 }
 
-std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t rt_cycle)
+std::pair<int16_t, int16_t>
+    SPU::Private::tick_voice(size_t const v, uint64_t rt_cycle, bool no_output)
 {
     auto& voice_regs = reg->voice[v];
     auto& voice_state = state.voice[v];
@@ -820,9 +826,6 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t rt
         voice_state.sample_buffer.frac -= 0x1000;
     }
 
-    auto filtered_sample =
-        voice_state.filter_buffer.get_filtered(voice_state.sample_buffer.get_fractional_index());
-
     // Run the ADSR once per "real time" cycle. That way, the ADSR speed scales smoothly with the
     // playback speed. For speeds faster than real time, that means running ADSR twice or more per
     // sample. For slower speeds, some samples would skip ADSR.
@@ -835,6 +838,12 @@ std::pair<int16_t, int16_t> SPU::Private::tick_voice(size_t const v, uint64_t rt
         }
     }
 
+    if (no_output) {
+        return {0, 0};
+    }
+
+    auto filtered_sample =
+        voice_state.filter_buffer.get_filtered(voice_state.sample_buffer.get_fractional_index());
     filtered_sample = (filtered_sample * int(voice_regs.adsr_vol)) >> 15;
 
     auto apply_vol = [&](int16_t sample, auto const& vol_reg) -> int16_t {
