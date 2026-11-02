@@ -28,7 +28,6 @@ public:
 
     template<std::integral Int>
     static Int read_mem_impl(void* addr);
-
     template<std::integral Int>
     static void write_mem_impl(void* addr, Int value);
 

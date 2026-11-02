@@ -226,11 +226,11 @@ struct MMAPR3000Bus::Private {
     void protect_hw(bool throwOnError = true);
 
     uint8_t* mem_space = nullptr;
-    std::vector<uint8_t> device_mem;
     int ram_memfd = -1;
     int spad_memfd = -1;
     R3000* emu;
     RegisterDispatcher dispatcher;
+    alignas(uint32_t) std::array<uint8_t, PSX_IO_SIZE> device_mem{};
 };
 
 void MMAPR3000Bus::Private::init(R3000* emu)
@@ -255,8 +255,6 @@ void MMAPR3000Bus::Private::init(R3000* emu)
     map_memory("psx-scratchpad", spad_memfd, mem_space, PSX_SPAD_SIZE, PSX_SPAD_ADDRS);
     // Keep device memory outside the address space, with read and write permissions. This way,
     // there is no need to call mprotect. The memory can be just an std::vector;
-    device_mem.resize(PSX_IO_SIZE);
-
     dispatcher.set_mem_space(device_mem.data());
 }
 

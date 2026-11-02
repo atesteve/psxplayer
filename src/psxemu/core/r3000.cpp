@@ -3,6 +3,7 @@
 
 #include "r3000-impl.h"
 #include "mmap-r3000bus.h"
+#include "soft-r3000bus.h"
 #include "psxemu/bios/bios.h"
 #include "psxemu/dma/dma.h"
 #include "psxemu/spu/spu.h"
@@ -198,14 +199,14 @@ struct R3000Core<c>::Private {
     Int read_mem(r3000_ptr_t addr)
     {
         check_alignment<Int>(addr, AccessType::READ);
-        return bus.read_mem<Int>(addr);
+        return bus.template read_mem<Int>(addr);
     }
 
     template<std::integral Int>
     void write_mem(r3000_ptr_t addr, Int value)
     {
         check_alignment<Int>(addr, AccessType::WRITE);
-        bus.write_mem<Int>(addr, value);
+        bus.template write_mem<Int>(addr, value);
     }
 
     struct load_delay_slot {
@@ -271,11 +272,14 @@ struct R3000Core<c>::Private {
         uint32_t imask{};
     };
 
+    using Bus =
+        std::conditional_t<c.fault_check == FaultCheck::HARDWARE, MMAPR3000Bus, SoftR3000Bus>;
+
     Core core;
     CP0 cp0;
     load_delay_slot load_slot;
     branch_delay_slot branch_slot;
-    MMAPR3000Bus bus;
+    Bus bus;
     Bios bios;
     DMA dma;
     SPU spu;
@@ -1313,6 +1317,10 @@ uint8_t* R3000Core<c>::get_buffer_checked(r3000_ptr_t addr, uint32_t size, bool 
         throw AddressException{addr + size};
     }
 
+    if (ram) {
+        return ptr + (addr & (max_size - 1));
+    }
+
     return ptr + (addr - base_addr);
 }
 
@@ -1463,5 +1471,5 @@ void R3000Core<c>::restore_snapshot(SnapshotBuffer const& snapshot)
 
 std::unique_ptr<R3000> R3000::build()
 {
-    return std::make_unique<R3000Core<{FaultCheck::HARDWARE, AlignmentCheck::NO_CHECK}>>();
+    return std::make_unique<R3000Core<{FaultCheck::SOFTWARE, AlignmentCheck::NO_CHECK}>>();
 }

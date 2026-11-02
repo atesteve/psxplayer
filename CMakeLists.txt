@@ -55,6 +55,8 @@ set(TARGET_SRC
   src/psxemu/core/mmap-r3000bus.cpp
   src/psxemu/core/mmap-r3000bus.h
   src/psxemu/core/mmap-r3000bus-rw.s
+  src/psxemu/core/soft-r3000bus.cpp
+  src/psxemu/core/soft-r3000bus.h
   src/psxemu/core/register-dispatcher.cpp
   src/psxemu/core/register-dispatcher.h
   src/psxemu/core/events.cpp
