@@ -26,6 +26,8 @@ qt_standard_project_setup()
 
 set(TARGET_SRC
   src/main.cpp
+  src/benchmark.cpp
+  src/benchmark.h
   src/main-window.cpp
   src/main-window.h
   src/upse.cpp
