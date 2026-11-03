@@ -45,7 +45,7 @@ void reorder_heap_head(std::vector<EventTime>& v)
 struct Timing::Private {
     Timing::Handler schedule(Event event);
     bool cancel(Timing::Handler handler);
-    void run_events();
+    bool run_events();
     void fast_forward();
 
     uint64_t clk{};
@@ -69,15 +69,19 @@ Timing::Handler Timing::Private::schedule(Event event)
     return handler;
 }
 
-void Timing::Private::run_events()
+bool Timing::Private::run_events()
 {
     auto const current_clk = clk;
+    bool ran_cpu_visible_callback = false;
     while (!event_heap.empty() && event_heap.front().clk_time <= current_clk) {
         auto& event_time = event_heap.front();
         auto const it = events.find(event_time.handler);
         auto& [_, event] = *it;
         if (!event.cancelled) {
             event.callback(event, current_clk);
+            if (event.cpu_visible) {
+                ran_cpu_visible_callback = true;
+            }
         }
         if (event.type == Event::Type::ONE_SHOT || event.cancelled) {
             pop_heap(event_heap);
@@ -93,6 +97,8 @@ void Timing::Private::run_events()
         }
         reorder_heap_head(event_heap);
     }
+
+    return ran_cpu_visible_callback;
 }
 
 bool Timing::Private::cancel(Timing::Handler handler)
@@ -116,11 +122,14 @@ bool Timing::Private::cancel(Timing::Handler handler)
     return false;
 }
 
-void Timing::Private::fast_forward() {
+void Timing::Private::fast_forward()
+{
     if (event_heap.empty()) {
         return;
     }
-    clk = event_heap.front().clk_time;
+    do {
+        clk = event_heap.front().clk_time;
+    } while (run_events());
 }
 
 Timing::Handler Timing::schedule(Event event)

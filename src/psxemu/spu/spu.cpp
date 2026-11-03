@@ -991,6 +991,7 @@ void SPU::init(R3000* emu)
                      [](SPU::Private* p, auto, auto& event, uint64_t cycle) {
                          p->tick(event, cycle);
                      }},
+        .cpu_visible = false,
     });
 }
 

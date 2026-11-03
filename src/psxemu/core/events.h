@@ -67,6 +67,7 @@ public:
         uint64_t period = UNINITIALIZED;
         uint64_t first_shot = UNINITIALIZED;
         EventCallback callback;
+        bool cpu_visible = true;
         bool cancelled = false;
     };
 
