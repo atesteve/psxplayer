@@ -23,41 +23,58 @@ public:
         };
 
         struct EventCallback {
-            template<typename T>
-            using fn_ptr = void (*)(T*, uintptr_t, Event&, uint64_t);
+            using fn_ptr = uint64_t (*)(void*, uintptr_t, Event&, uint64_t, uint64_t);
 
             explicit EventCallback() = default;
 
             template<typename T, typename Fn>
-                requires(requires(fn_ptr<T> fn_ptr, Fn&& fn) { fn_ptr = fn; })
-            EventCallback(T* ptr, Fn fn)
+            EventCallback(T* ptr, Fn)
                 : ptr{(void*)ptr}
                 , arg{0}
             {
-                fn_ptr<T> fn_ptr = fn;
-                this->fn = (uintptr_t)fn_ptr;
+                set_fn<T, Fn>();
             }
 
             template<typename T, typename Fn>
-                requires(requires(fn_ptr<T> fn_ptr, Fn&& fn) { fn_ptr = fn; })
-            EventCallback(T* ptr, uintptr_t arg, Fn fn)
+            EventCallback(T* ptr, uintptr_t arg, Fn)
                 : ptr{(void*)ptr}
                 , arg{arg}
             {
-                fn_ptr<T> fn_ptr = fn;
-                this->fn = (uintptr_t)fn_ptr;
+                set_fn<T, Fn>();
             }
 
-            void operator()(Event& event, uint64_t clock) const
+            uint64_t operator()(Event& event, uint64_t clock, uint64_t iterations) const
             {
-                // Uber UB... but it's fine.
-                auto fn_cast = (fn_ptr<void>)fn;
-                fn_cast(ptr, arg, event, clock);
+                return fn(ptr, arg, event, clock, iterations);
             }
 
             void* ptr;
             uintptr_t arg;
-            uintptr_t fn;
+            fn_ptr fn;
+
+        private:
+            template<typename T, typename Fn>
+                requires(requires(Fn f, Event e) {
+                    { f(nullptr, 0, e, 0) } -> std::same_as<void>;
+                })
+            void set_fn()
+            {
+                fn = [](void* ptr, uintptr_t arg, Event& event, uint64_t clock, uint64_t)
+                    -> uint64_t {
+                    Fn{}((T*)ptr, arg, event, clock);
+                    return 0;
+                };
+            }
+
+            template<typename T, typename Fn>
+                requires(requires(Fn f, Event e) {
+                    { f(nullptr, 0, e, 0, 0) } -> std::integral;
+                })
+            void set_fn()
+            {
+                fn = [](void* ptr, uintptr_t arg, Event& event, uint64_t clock, uint64_t its)
+                    -> uint64_t { return Fn{}((T*)ptr, arg, event, clock, its); };
+            }
         };
 
         static constexpr uint64_t UNINITIALIZED = -1;

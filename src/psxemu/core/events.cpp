@@ -40,12 +40,25 @@ void reorder_heap_head(std::vector<EventTime>& v)
     std::ranges::push_heap(v, event_time_greater);
 }
 
+EventTime const* peek_second(std::vector<EventTime> const& v)
+{
+    if (v.size() <= 1) {
+        return nullptr;
+    }
+    if (v.size() == 2) {
+        return &v[1];
+    }
+    auto const* e1 = &v[1];
+    auto const* e2 = &v[2];
+    return e1->clk_time < e2->clk_time ? e1 : e2;
+}
+
 } // namespace
 
 struct Timing::Private {
     Timing::Handler schedule(Event event);
     bool cancel(Timing::Handler handler);
-    bool run_events();
+    void run_events(bool fast_forward);
     void fast_forward();
 
     uint64_t clk{};
@@ -69,18 +82,23 @@ Timing::Handler Timing::Private::schedule(Event event)
     return handler;
 }
 
-bool Timing::Private::run_events()
+void Timing::Private::run_events(bool fast_forward)
 {
     auto const current_clk = clk;
-    bool ran_cpu_visible_callback = false;
     while (!event_heap.empty() && event_heap.front().clk_time <= current_clk) {
         auto& event_time = event_heap.front();
+        auto const event_clk = event_time.clk_time;
         auto const it = events.find(event_time.handler);
         auto& [_, event] = *it;
+        uint64_t iterations = 1;
         if (!event.cancelled) {
-            event.callback(event, current_clk);
-            if (event.cpu_visible) {
-                ran_cpu_visible_callback = true;
+            if (auto const* next = peek_second(event_heap);
+                !event.cpu_visible && event.type == Event::Type::PERIODIC && fast_forward && next) {
+                auto const clock_cycles_until_next = next->clk_time - event_clk;
+                iterations =
+                    event.callback(event, event_clk, 1 + clock_cycles_until_next / event.period);
+            } else {
+                event.callback(event, event_clk, 1);
             }
         }
         if (event.type == Event::Type::ONE_SHOT || event.cancelled) {
@@ -89,7 +107,7 @@ bool Timing::Private::run_events()
             continue;
         }
         if (event.type == Event::Type::PERIODIC) {
-            event_time.clk_time += event.period;
+            event_time.clk_time += event.period * iterations;
         } else if (event.type == Event::Type::PERIODIC_NON_STRICT) {
             while (event_time.clk_time <= current_clk) {
                 event_time.clk_time += event.period;
@@ -97,8 +115,6 @@ bool Timing::Private::run_events()
         }
         reorder_heap_head(event_heap);
     }
-
-    return ran_cpu_visible_callback;
 }
 
 bool Timing::Private::cancel(Timing::Handler handler)
@@ -127,9 +143,8 @@ void Timing::Private::fast_forward()
     if (event_heap.empty()) {
         return;
     }
-    do {
-        clk = event_heap.front().clk_time;
-    } while (run_events());
+    clk = event_heap.front().clk_time;
+    run_events(true);
 }
 
 Timing::Handler Timing::schedule(Event event)
@@ -159,7 +174,7 @@ uint64_t Timing::get_clock() const
 
 void Timing::run_events()
 {
-    _p->run_events();
+    _p->run_events(false);
 }
 
 void Timing::take_snapshot(SnapshotSerializer& s)

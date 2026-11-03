@@ -359,8 +359,9 @@ struct SPU::Private {
     void update_status();
     void update_key_on_off(uint32_t effective_value, bool on);
 
-    void tick(Timing::Event& event, uint64_t clock_cycle);
-    std::pair<int16_t, int16_t> tick_voice(size_t v, uint64_t rt_cycle, bool no_output);
+    uint64_t run_spu(Timing::Event& event, uint64_t clock_cycle, uint64_t iterations);
+    inline void tick(uint64_t rt_cycle, bool no_output);
+    inline std::pair<int16_t, int16_t> tick_voice(size_t v, uint64_t rt_cycle, bool no_output);
     std::pair<int16_t, int16_t> tick_reverb(std::pair<int16_t, int16_t> input);
 
     R3000* emu;
@@ -735,16 +736,27 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     return 0;
 }
 
-void SPU::Private::tick(Timing::Event& event, uint64_t const clock_cycle)
+uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint64_t iterations)
 {
-    uint64_t const rt_cycle = clock_cycle / SAMPLE_RATE_CYCLES;
-
     if (!reg->control.fields.enable) {
-        return;
+        return iterations;
     }
 
     bool const no_output = out.size() == 0;
 
+    for (auto i = 0u; i < iterations; i++) {
+        uint64_t const rt_cycle = clock_cycle / SAMPLE_RATE_CYCLES;
+        tick(rt_cycle, no_output);
+        clock_cycle += event.period;
+    }
+
+    event.period = (SAMPLE_RATE_CYCLES * speed) >> 8;
+
+    return iterations;
+}
+
+void SPU::Private::tick(uint64_t const rt_cycle, bool no_output)
+{
     std::pair<int32_t, int32_t> sum{};
     std::pair<int32_t, int32_t> reverbSum{};
 
@@ -761,7 +773,13 @@ void SPU::Private::tick(Timing::Event& event, uint64_t const clock_cycle)
         }
     }
 
-    if (reg->control.fields.reverb_en && !no_output) {
+    state.last_rt_cycle = rt_cycle;
+
+    if (no_output) {
+        return;
+    }
+
+    if (reg->control.fields.reverb_en) {
         auto const clamped =
             std::make_pair(smooth_clamp(reverbSum.first), smooth_clamp(reverbSum.second));
         auto const reverb_sample = tick_reverb(clamped);
@@ -774,9 +792,6 @@ void SPU::Private::tick(Timing::Event& event, uint64_t const clock_cycle)
         out[out_p + 1] = smooth_clamp(sum.second);
         out_p += 2;
     }
-
-    state.last_rt_cycle = rt_cycle;
-    event.period = (SAMPLE_RATE_CYCLES * speed) >> 8;
 }
 
 std::pair<int16_t, int16_t>
@@ -1000,8 +1015,8 @@ void SPU::init(R3000* emu)
         .type = Timing::Event::Type::PERIODIC,
         .period = (SAMPLE_RATE_CYCLES << 8) / speed,
         .callback = {_p.get(),
-                     [](SPU::Private* p, auto, auto& event, uint64_t cycle) {
-                         p->tick(event, cycle);
+                     [](SPU::Private* p, auto, auto& event, uint64_t cycle, uint64_t its) {
+                         return p->run_spu(event, cycle, its);
                      }},
         .cpu_visible = false,
     });
