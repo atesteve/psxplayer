@@ -6,6 +6,7 @@
 #include "adpcm.h"
 #include "psxemu/dma/dma.h"
 #include "gauss.h"
+#include "util/soa.h"
 
 #include <fmt/format.h>
 
@@ -159,7 +160,7 @@ struct AdsrState {
 
     void release() { phase = AdsrPhase::RELEASE; }
 
-    bool tick(voice_registers_t& regs)
+    bool tick(auto& state)
     {
         using enum AdsrPhase;
 
@@ -174,30 +175,30 @@ struct AdsrState {
             switch (phase) {
             case ATTACK:
                 return {
-                    .exponential = regs.adsr.fields.attack_exp,
+                    .exponential = state.adsr_regs.fields.attack_exp,
                     .decrease = false,
-                    .shift = regs.adsr.fields.attack_shift,
-                    .step = regs.adsr.fields.attack_step,
+                    .shift = state.adsr_regs.fields.attack_shift,
+                    .step = state.adsr_regs.fields.attack_step,
                 };
             case DECAY:
                 return {
                     .exponential = true,
                     .decrease = true,
-                    .shift = regs.adsr.fields.decay_shift,
+                    .shift = state.adsr_regs.fields.decay_shift,
                     .step = 0,
                 };
             case SUSTAIN:
                 return {
-                    .exponential = regs.adsr.fields.sustain_exp,
-                    .decrease = regs.adsr.fields.sustain_dir,
-                    .shift = regs.adsr.fields.sustain_shift,
-                    .step = regs.adsr.fields.sustain_step,
+                    .exponential = state.adsr_regs.fields.sustain_exp,
+                    .decrease = state.adsr_regs.fields.sustain_dir,
+                    .shift = state.adsr_regs.fields.sustain_shift,
+                    .step = state.adsr_regs.fields.sustain_step,
                 };
             case RELEASE:
                 return {
-                    .exponential = regs.adsr.fields.release_exp,
+                    .exponential = state.adsr_regs.fields.release_exp,
                     .decrease = true,
-                    .shift = regs.adsr.fields.release_shift,
+                    .shift = state.adsr_regs.fields.release_shift,
                     .step = 0,
                 };
             default:
@@ -205,7 +206,7 @@ struct AdsrState {
             }
         }();
 
-        auto& volume = regs.adsr_vol;
+        auto& volume = state.adsr_vol;
 
         int vol_inc = 7 - settings.step;
         if (settings.decrease) {
@@ -243,7 +244,7 @@ struct AdsrState {
             }
             return false;
         case DECAY:
-            if (int const sustain_level = ((regs.adsr.fields.sustain_level + 1) << 12);
+            if (int const sustain_level = ((state.adsr_regs.fields.sustain_level + 1) << 12);
                 volume <= sustain_level) {
                 phase = SUSTAIN;
             }
@@ -276,6 +277,14 @@ struct VoiceState {
     AdsrState adsr{};
     VoiceStatus status{};
     bool ignore_loop_start{};
+
+    vol_reg_t vol_left{};
+    vol_reg_t vol_right{};
+    int16_t adsr_vol{};
+    uint16_t adpcm_sample_rate{};
+    spu_compressed_addr_t adpcm_start_addr{};
+    spu_compressed_addr_t adpcm_repeat_addr{};
+    adsr_reg_t adsr_regs{};
 };
 
 struct FIR {
@@ -348,7 +357,7 @@ struct SPU::Private {
     uint64_t dma_read(r3000_ptr_t addr, uint32_t nbytes);
 
     void update_status();
-    void update_key_on_off(uint32_t effective_value, auto member);
+    void update_key_on_off(uint32_t effective_value, bool on);
 
     void tick(Timing::Event& event, uint64_t clock_cycle);
     std::pair<int16_t, int16_t> tick_voice(size_t v, uint64_t rt_cycle, bool no_output);
@@ -360,7 +369,7 @@ struct SPU::Private {
 
     struct State {
         uint32_t transfer_addr{};
-        std::array<VoiceState, N_VOICES> voice{};
+        SOA<VoiceState, N_VOICES> voice{};
         ReverbState reverb{};
         uint64_t last_rt_cycle{};
     } state{};
@@ -409,7 +418,7 @@ void SPU::Private::update_status()
     status.fields.dma_read_req = control.transfer_mode == 3;
 }
 
-void SPU::Private::update_key_on_off(uint32_t effective_value, auto member)
+void SPU::Private::update_key_on_off(uint32_t effective_value, bool on)
 {
     if (!reg->control.fields.enable) {
         return;
@@ -421,7 +430,11 @@ void SPU::Private::update_key_on_off(uint32_t effective_value, auto member)
         if (bit >= state.voice.size()) {
             break;
         }
-        state.voice[bit].*member = true;
+        if (on) {
+            state.voice[bit].key_on_requested = true;
+        } else {
+            state.voice[bit].key_off_requested = true;
+        }
     }
 }
 
@@ -449,18 +462,18 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
         auto const offset = addr - RANGE_BASE;
         auto const voice_n = offset / sizeof(voice[0]);
         auto const index = (offset % sizeof(voice[0])) / sizeof(uint16_t);
-        auto& v = voice[voice_n];
+        auto v = state.voice[voice_n];
         // clang-format off
         switch (index) {
             case 0: v.vol_left.raw             = value;     break;
             case 1: v.vol_right.raw            = value;     break;
             case 2: v.adpcm_sample_rate        = value;     break;
             case 3: v.adpcm_start_addr.raw     = value;     break;
-            case 4: write_32bit_reg(&v.adsr.raw, value, 0); break;
-            case 5: write_32bit_reg(&v.adsr.raw, value, 2); break;
+            case 4: write_32bit_reg(&v.adsr_regs.raw, value, 0); break;
+            case 5: write_32bit_reg(&v.adsr_regs.raw, value, 2); break;
             case 6: v.adsr_vol                 = value;     break;
             case 7: v.adpcm_repeat_addr.raw    = value;
-                    state.voice[voice_n].ignore_loop_start = true;
+                    v.ignore_loop_start        = true;
                     break;
         }
         // clang-format on
@@ -486,12 +499,12 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
     handle_reg(voice_key_on, 0x1f801d88, 0x1f801d8c)
     {
         auto effective_value = write_32bit_reg(&voice_key_on, value, addr - RANGE_BASE);
-        update_key_on_off(effective_value, &VoiceState::key_on_requested);
+        update_key_on_off(effective_value, true);
     }
     handle_reg(voice_key_off, 0x1f801d8c, 0x1f801d90)
     {
         auto effective_value = write_32bit_reg(&voice_key_off, value, addr - RANGE_BASE);
-        update_key_on_off(effective_value, &VoiceState::key_off_requested);
+        update_key_on_off(effective_value, false);
     }
     handle_reg(voice_fmod_en, 0x1f801d90, 0x1f801d94)
     {
@@ -589,15 +602,15 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
         auto const offset = addr - RANGE_BASE;
         auto const voice_n = offset / sizeof(voice[0]);
         auto const index = (offset % sizeof(voice[0])) / sizeof(uint16_t);
-        auto& v = voice[voice_n];
+        auto v = state.voice[voice_n];
         // clang-format off
         switch (index) {
             case 0: return v.vol_left.raw;
             case 1: return v.vol_right.raw;
             case 2: return v.adpcm_sample_rate;
             case 3: return v.adpcm_start_addr.raw;
-            case 4: return read_32bit_reg(v.adsr.raw, 0);
-            case 5: return read_32bit_reg(v.adsr.raw, 2);
+            case 4: return read_32bit_reg(v.adsr_regs.raw, 0);
+            case 5: return read_32bit_reg(v.adsr_regs.raw, 2);
             case 6: return v.adsr_vol;
             case 7: return v.adpcm_repeat_addr.raw;
         }
@@ -769,18 +782,17 @@ void SPU::Private::tick(Timing::Event& event, uint64_t const clock_cycle)
 std::pair<int16_t, int16_t>
     SPU::Private::tick_voice(size_t const v, uint64_t rt_cycle, bool no_output)
 {
-    auto& voice_regs = reg->voice[v];
-    auto& voice_state = state.voice[v];
+    auto voice_state = state.voice[v];
 
     if (voice_state.key_on_requested) {
         voice_state.key_on_requested = false;
         voice_state.sample_buffer.reset();
         voice_state.filter_buffer.reset();
         voice_state.adsr.start();
-        voice_state.sample_p = voice_regs.adpcm_start_addr;
+        voice_state.sample_p = voice_state.adpcm_start_addr;
         voice_state.status = VoiceStatus::ON;
         voice_state.ignore_loop_start = false;
-        voice_regs.adsr_vol = 0;
+        voice_state.adsr_vol = 0;
         reg->voice_end &= ~(1 << v);
     }
 
@@ -793,13 +805,13 @@ std::pair<int16_t, int16_t>
         return {0, 0};
     }
 
-    auto const adpcm_sample_rate = std::min<uint16_t>(voice_regs.adpcm_sample_rate, 0x4000);
+    auto const adpcm_sample_rate = std::min<uint16_t>(voice_state.adpcm_sample_rate, 0x4000);
     voice_state.sample_buffer.frac += adpcm_sample_rate;
     while (voice_state.sample_buffer.frac >= 0x1000) {
         if (voice_state.sample_buffer.empty()) {
             if (voice_state.status == VoiceStatus::LOOP_END) {
                 voice_state.status = VoiceStatus::OFF;
-                voice_regs.adsr_vol = 0;
+                voice_state.adsr_vol = 0;
                 return {0, 0};
             }
             auto const header = decode_adpcm_block(ram,
@@ -808,10 +820,10 @@ std::pair<int16_t, int16_t>
                                                    voice_state.sample_buffer.samples);
             voice_state.sample_buffer.loaded_block();
             if (header.loop_start && !voice_state.ignore_loop_start) {
-                voice_regs.adpcm_repeat_addr = voice_state.sample_p;
+                voice_state.adpcm_repeat_addr = voice_state.sample_p;
             }
             if (header.loop_end) {
-                voice_state.sample_p = voice_regs.adpcm_repeat_addr;
+                voice_state.sample_p = voice_state.adpcm_repeat_addr;
                 reg->voice_end |= 1 << v;
                 if (!header.loop_repeat) {
                     voice_state.status = VoiceStatus::LOOP_END;
@@ -830,10 +842,10 @@ std::pair<int16_t, int16_t>
     // playback speed. For speeds faster than real time, that means running ADSR twice or more per
     // sample. For slower speeds, some samples would skip ADSR.
     for (auto i = state.last_rt_cycle; i < rt_cycle; i++) {
-        auto const turn_off_voice = voice_state.adsr.tick(voice_regs);
+        auto const turn_off_voice = voice_state.adsr.tick(voice_state);
         if (turn_off_voice) {
             voice_state.status = VoiceStatus::OFF;
-            voice_regs.adsr_vol = 0;
+            voice_state.adsr_vol = 0;
             break;
         }
     }
@@ -844,7 +856,7 @@ std::pair<int16_t, int16_t>
 
     auto filtered_sample =
         voice_state.filter_buffer.get_filtered(voice_state.sample_buffer.get_fractional_index());
-    filtered_sample = (filtered_sample * int(voice_regs.adsr_vol)) >> 15;
+    filtered_sample = (filtered_sample * int(voice_state.adsr_vol)) >> 15;
 
     auto apply_vol = [&](int16_t sample, auto const& vol_reg) -> int16_t {
         if (!vol_reg.sweep_mode.mode) {
@@ -855,8 +867,8 @@ std::pair<int16_t, int16_t>
         }
     };
 
-    return {apply_vol(filtered_sample, voice_regs.vol_left),
-            apply_vol(filtered_sample, voice_regs.vol_right)};
+    return {apply_vol(filtered_sample, voice_state.vol_left),
+            apply_vol(filtered_sample, voice_state.vol_right)};
 }
 
 std::pair<int16_t, int16_t> SPU::Private::tick_reverb(std::pair<int16_t, int16_t> input_raw)
