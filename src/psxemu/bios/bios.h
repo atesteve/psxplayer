@@ -31,6 +31,8 @@ public:
 
     uint32_t setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf);
     noreturn longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t ret);
+    r3000_ptr_t strcpy(R3000& emu, r3000_ptr_t dst, r3000_ptr_t src);
+    r3000_ptr_t bzero(R3000& emu, r3000_ptr_t ptr, int32_t n);
     r3000_ptr_t memset(R3000& emu, r3000_ptr_t s, int32_t c, uint32_t n);
     r3000_ptr_t memcpy(R3000& emu, r3000_ptr_t d, r3000_ptr_t s, uint32_t n);
     int32_t printf(R3000& emu, r3000_ptr_t fmt);
