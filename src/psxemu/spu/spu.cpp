@@ -439,6 +439,7 @@ struct SPU::Private {
         SOA<VoiceState, N_VOICES> voice{};
         ReverbState reverb{};
         uint64_t last_rt_cycle{};
+        bool first_sound_played{false};
     } state{};
 
     EmuBuffer<uint16_t> system_ram;
@@ -533,7 +534,9 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
         // clang-format off
         switch (index) {
             case 0: v.vol_left.raw             = value;     break;
-            case 1: v.vol_right.raw            = value;     break;
+                    state.first_sound_played   = state.first_sound_played || value != 0; break;
+            case 1: v.vol_right.raw            = value;
+                    state.first_sound_played   = state.first_sound_played || value != 0; break;
             case 2: v.adpcm_sample_rate        = value;     break;
             case 3: v.adpcm_start_addr.raw     = value;     break;
             case 4: write_32bit_reg(&v.adsr_regs.raw, value, 0); break;
@@ -659,6 +662,16 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
         fmt::println("Unhandled SPU write: {:#010x} = {:#06x}", addr, value);
     }
     end_reg_handling();
+
+    // if (!state.first_sound_played) {
+    //     for (auto v : state.voice) {
+    //         if ((v.status != VoiceStatus::OFF || v.key_on_requested)
+    //             && (v.vol_left.raw || v.vol_right.raw)) {
+    //             state.first_sound_played = true;
+    //             return;
+    //         }
+    //     }
+    // }
 }
 
 uint16_t SPU::Private::read_register(r3000_ptr_t addr)
@@ -804,8 +817,8 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
 
 uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint64_t iterations)
 {
-    if (!reg->control.fields.enable) {
-        return iterations;
+    if (!reg->control.fields.enable || !state.first_sound_played) {
+        return 1;
     }
 
     bool const no_output = out.size() == 0;
@@ -1071,6 +1084,11 @@ void SPU::set_output_buffer(std::span<int16_t> output)
 size_t SPU::rendered_samples() const
 {
     return _p->out_p / 2;
+}
+
+bool SPU::first_sound_played() const
+{
+    return _p->state.first_sound_played;
 }
 
 void SPU::init(R3000* emu)

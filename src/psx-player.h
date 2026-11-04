@@ -24,6 +24,7 @@ public:
 
     std::chrono::milliseconds tell_seek() const;
     void seek(std::chrono::milliseconds pos);
+    bool seek_done() const;
 
 private:
     explicit PsxPlayer() = default;

@@ -24,6 +24,8 @@
 #include <bit>
 #include <vector>
 
+using namespace std::literals;
+
 namespace {
 
 // clang-format off
@@ -181,7 +183,9 @@ struct R3000Core<c>::Private {
     uint64_t run_ij_unk(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
 
     size_t render_audio(std::span<int16_t> output, size_t n_samples);
-    void fast_forward(std::chrono::milliseconds pos, std::chrono::milliseconds max_runtime);
+    void fast_forward(std::chrono::milliseconds pos,
+                      std::chrono::milliseconds max_runtime,
+                      bool until_first_sound);
 
     template<std::integral Int>
     void check_alignment(r3000_ptr_t addr, AccessType rw) const
@@ -287,6 +291,7 @@ struct R3000Core<c>::Private {
     Timing timing;
     Misc misc;
     R3000Core<c>* parent;
+    uint64_t first_sound_clk{};
     bool return_from_callback_flag = false;
 };
 
@@ -1208,7 +1213,8 @@ size_t R3000Core<c>::Private::render_audio(std::span<int16_t> output, size_t n_s
 
 template<R3000CoreConfig c>
 void R3000Core<c>::Private::fast_forward(std::chrono::milliseconds pos,
-                                         std::chrono::milliseconds max_runtime)
+                                         std::chrono::milliseconds max_runtime,
+                                         bool until_first_sound)
 {
     auto const timeout = std::chrono::steady_clock::now() + max_runtime;
     auto const clk_target = (pos.count() * CPU_FREQ) / 1000;
@@ -1216,8 +1222,14 @@ void R3000Core<c>::Private::fast_forward(std::chrono::milliseconds pos,
     Private::HWAlignmentCheck::enable();
     ScopeGuard align_check_guard{[] { Private::HWAlignmentCheck::disable(); }};
 
-    while (timing.get_clock() < clk_target && std::chrono::steady_clock::now() < timeout) {
+    while (timing.get_clock() - first_sound_clk < clk_target
+           && std::chrono::steady_clock::now() < timeout
+           && (!until_first_sound || !spu.first_sound_played())) {
         handle_longjmp([this] { run_instruction(); }, [&](auto const&) {});
+    }
+
+    if (until_first_sound) {
+        first_sound_clk = timing.get_clock();
     }
 }
 
@@ -1424,14 +1436,20 @@ template<R3000CoreConfig c>
 void R3000Core<c>::fast_forward(std::chrono::milliseconds pos,
                                 std::chrono::milliseconds max_runtime)
 {
-    return p->fast_forward(pos, max_runtime);
+    return p->fast_forward(pos, max_runtime, false);
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::run_to_first_sound(std::chrono::milliseconds max_time)
+{
+    return p->fast_forward(max_time, 5s, true);
 }
 
 template<R3000CoreConfig c>
 std::chrono::milliseconds R3000Core<c>::tell_seek() const
 {
-    // TODO: count from start of music, not start of emulation.
-    return std::chrono::milliseconds{(p->timing.get_clock() * 1000) / CPU_FREQ};
+    return std::chrono::milliseconds{((p->timing.get_clock() - p->first_sound_clk) * 1000)
+                                     / CPU_FREQ};
 }
 
 template<R3000CoreConfig c>

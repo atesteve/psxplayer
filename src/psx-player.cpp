@@ -14,6 +14,7 @@ std::expected<PsxPlayer, std::string> PsxPlayer::build(std::filesystem::path pat
     PsxPlayer ret;
     ret._emu = R3000::build();
     ret._emu->init(*psf);
+    ret._emu->run_to_first_sound(30s);
     ret._duration = psf->get_length();
     ret._fadeout_length = psf->get_fadeout_length();
 
@@ -50,4 +51,9 @@ std::chrono::milliseconds PsxPlayer::tell_seek() const
 void PsxPlayer::seek(std::chrono::milliseconds pos)
 {
     _pos = pos;
+}
+
+bool PsxPlayer::seek_done() const
+{
+    return _pos <= _emu->tell_seek();
 }

@@ -79,13 +79,9 @@ void UpseModule::run()
     buf.resize(8192);
 
     while (!_shutdown) {
-        if (_state == State::Seeking) {
-            _control.input.speed_multiplier = 2.5;
-        }
-
         if (_player && (_state == State::Playing || _state == State::Seeking)) {
 
-            n = _player->render_audio(buf, buf.size() / 4);
+            n = _player->render_audio(buf, _state == State::Seeking ? 0 : buf.size() / 4);
 
             if (auto const current_seek = _player->tell_seek();
                 current_seek < _player->get_duration()
@@ -96,7 +92,6 @@ void UpseModule::run()
             if (n == -1) {
                 set_state(State::Stopped);
                 _paused = true;
-                _control.input.speed_multiplier = _speed;
                 slow_timer_fired();
             }
         } else {
@@ -104,17 +99,14 @@ void UpseModule::run()
         }
 
         if (n > 0) {
-            if (_state != State::Seeking) {
-                auto const success = _audio.write({buf.begin(), size_t(n * 2)});
-                if (!success) {
-                    toggle_pause();
-                }
+            auto const success = _audio.write({buf.begin(), size_t(n * 2)});
+            if (!success) {
+                toggle_pause();
             }
-            if (_state == State::Seeking) {
-                _control.input.speed_multiplier = _speed;
-                set_state(_paused ? State::Paused : State::Playing);
-                slow_timer_fired();
-            }
+        } else if (_state == State::Seeking && _player->seek_done()) {
+            _control.input.speed_multiplier = _speed;
+            set_state(_paused ? State::Paused : State::Playing);
+            slow_timer_fired();
         }
 
         if (_state == State::Playing) {

@@ -69,6 +69,23 @@ struct SOA : public Fields<T,N>::F
         define<CR,T,transform_to_const_ref>();
     };
 
+    template<typename S>
+    struct Iterator {
+        S* soa;
+        size_t p;
+
+        decltype(auto) operator*() {
+            return (*soa)[p];
+        }
+
+        auto& operator++() {
+            p++;
+            return *this;
+        }
+
+        auto operator<=>(Iterator const&) const = default;
+    };
+
     constexpr R operator[](size_t n) {
         auto& [...refs] = *this;
         return {refs[n]...};
@@ -77,6 +94,16 @@ struct SOA : public Fields<T,N>::F
     constexpr CR operator[](size_t n) const {
         auto const& [...refs] = *this;
         return {refs[n]...};
+    }
+
+    template <typename Self>
+    constexpr auto begin(this Self&& self) {
+        return Iterator<typename std::remove_reference_t<Self>>{&self, 0};
+    }
+
+    template <typename Self>
+    constexpr auto end(this Self&& self) {
+        return Iterator<typename std::remove_reference_t<Self>>{&self, N};
     }
 
     constexpr size_t size() const {
