@@ -3,7 +3,6 @@
 
 #include "spu.h"
 #include "spu_registers.h"
-#include "adpcm.h"
 #include "psxemu/dma/dma.h"
 #include "gauss.h"
 #include "util/soa.h"
@@ -17,6 +16,72 @@
 int32_t speed = 256;
 
 namespace {
+
+struct ADPCMBlockHeader {
+    uint8_t shift : 4;
+    uint8_t filter : 4;
+    uint8_t loop_end : 1;
+    uint8_t loop_repeat : 1;
+    uint8_t loop_start : 1;
+    uint8_t : 5;
+};
+
+struct ADPCM_block {
+    ADPCMBlockHeader header;
+    struct Data {
+        int8_t lo_sample : 4;
+        int8_t hi_sample : 4;
+    } data[14];
+};
+
+int16_t adpcm_filter(uint8_t filter, int32_t sample, int32_t a, int32_t b)
+{
+    // clang-format off
+    auto const ret = [&] {
+        switch (filter) {
+            case 0: return sample;
+            case 1: return sample + (60  * a          + 32) / 64;
+            case 2: return sample + (115 * a - 52 * b + 32) / 64;
+            case 3: return sample + (98  * a - 55 * b + 32) / 64;
+            case 4: return sample + (122 * a - 60 * b + 32) / 64;
+            // Invalid, just return the raw sample.
+            default: return sample;
+        }
+    }();
+    // clang-format on
+    return std::saturating_cast<int16_t>(ret);
+}
+
+ADPCMBlockHeader decode_adpcm_block(std::span<uint16_t const> ram,
+                                    uint32_t addr,
+                                    std::pair<int16_t, int16_t> prev_samples,
+                                    std::span<int16_t> out)
+{
+    if (addr + sizeof(ADPCM_block) / 2 > ram.size()) {
+        return {};
+    }
+
+    auto [a, b] = prev_samples;
+    auto const* block = std::start_lifetime_as<ADPCM_block>(&ram[addr]);
+
+    for (auto const& [i, data] : std::ranges::enumerate_view{block->data}) {
+        auto const process_sample = [&](int32_t sample) {
+            auto const shifted = block->header.shift <= 12 ? sample << (12 - block->header.shift)
+                                                           : sample >> (block->header.shift - 12);
+            auto const ret = adpcm_filter(block->header.filter, shifted, a, b);
+            b = std::exchange(a, ret);
+            return ret;
+        };
+
+        auto const s1 = process_sample(data.lo_sample);
+        auto const s2 = process_sample(data.hi_sample);
+
+        out[i * 2] = s1;
+        out[i * 2 + 1] = s2;
+    }
+
+    return block->header;
+}
 
 // CPU cycles per each sample emmitted by the SPU, including both channels (L and R).
 constexpr uint64_t SAMPLE_RATE_CYCLES = 768;
@@ -360,8 +425,9 @@ struct SPU::Private {
     void update_key_on_off(uint32_t effective_value, bool on);
 
     uint64_t run_spu(Timing::Event& event, uint64_t clock_cycle, uint64_t iterations);
-    inline void tick(uint64_t rt_cycle, bool no_output);
-    inline std::pair<int16_t, int16_t> tick_voice(size_t v, uint64_t rt_cycle, bool no_output);
+    [[gnu::always_inline]] inline void tick(uint64_t rt_cycle, bool no_output);
+    [[gnu::always_inline]] inline std::pair<int16_t, int16_t>
+        tick_voice(size_t v, uint64_t rt_cycle, bool no_output);
     std::pair<int16_t, int16_t> tick_reverb(std::pair<int16_t, int16_t> input);
 
     R3000* emu;
@@ -744,6 +810,27 @@ uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint6
 
     bool const no_output = out.size() == 0;
 
+    for (auto v = 0u; v < N_VOICES; v++) {
+        auto voice_state = state.voice[v];
+
+        if (voice_state.key_on_requested) {
+            voice_state.key_on_requested = false;
+            voice_state.sample_buffer.reset();
+            voice_state.filter_buffer.reset();
+            voice_state.adsr.start();
+            voice_state.sample_p = voice_state.adpcm_start_addr;
+            voice_state.status = VoiceStatus::ON;
+            voice_state.ignore_loop_start = false;
+            voice_state.adsr_vol = 0;
+            reg->voice_end &= ~(1 << v);
+        }
+
+        if (voice_state.key_off_requested) {
+            voice_state.key_off_requested = false;
+            voice_state.adsr.release();
+        }
+    }
+
     for (auto i = 0u; i < iterations; i++) {
         uint64_t const rt_cycle = clock_cycle / SAMPLE_RATE_CYCLES;
         tick(rt_cycle, no_output);
@@ -798,23 +885,6 @@ std::pair<int16_t, int16_t>
     SPU::Private::tick_voice(size_t const v, uint64_t rt_cycle, bool no_output)
 {
     auto voice_state = state.voice[v];
-
-    if (voice_state.key_on_requested) {
-        voice_state.key_on_requested = false;
-        voice_state.sample_buffer.reset();
-        voice_state.filter_buffer.reset();
-        voice_state.adsr.start();
-        voice_state.sample_p = voice_state.adpcm_start_addr;
-        voice_state.status = VoiceStatus::ON;
-        voice_state.ignore_loop_start = false;
-        voice_state.adsr_vol = 0;
-        reg->voice_end &= ~(1 << v);
-    }
-
-    if (voice_state.key_off_requested) {
-        voice_state.key_off_requested = false;
-        voice_state.adsr.release();
-    }
 
     if (voice_state.status == VoiceStatus::OFF) {
         return {0, 0};

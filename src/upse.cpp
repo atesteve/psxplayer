@@ -76,7 +76,7 @@ void UpseModule::run()
 
     std::vector<int16_t> buf;
     int64_t n;
-    buf.resize(4096);
+    buf.resize(8192);
 
     while (!_shutdown) {
         if (_state == State::Seeking) {

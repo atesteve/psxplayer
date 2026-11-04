@@ -58,7 +58,8 @@ EventTime const* peek_second(std::vector<EventTime> const& v)
 struct Timing::Private {
     Timing::Handler schedule(Event event);
     bool cancel(Timing::Handler handler);
-    void run_events(bool fast_forward);
+    void run_events();
+    uint64_t run_next_event(bool fast_forward);
     void fast_forward();
 
     uint64_t clk{};
@@ -82,39 +83,47 @@ Timing::Handler Timing::Private::schedule(Event event)
     return handler;
 }
 
-void Timing::Private::run_events(bool fast_forward)
+void Timing::Private::run_events()
 {
     auto const current_clk = clk;
     while (!event_heap.empty() && event_heap.front().clk_time <= current_clk) {
-        auto& event_time = event_heap.front();
-        auto const event_clk = event_time.clk_time;
-        auto const it = events.find(event_time.handler);
-        auto& [_, event] = *it;
-        uint64_t iterations = 1;
-        if (!event.cancelled) {
-            if (auto const* next = peek_second(event_heap);
-                !event.cpu_visible && event.type == Event::Type::PERIODIC && fast_forward && next) {
-                auto const clock_cycles_until_next = next->clk_time - event_clk;
-                iterations =
-                    event.callback(event, event_clk, 1 + clock_cycles_until_next / event.period);
-            } else {
-                event.callback(event, event_clk, 1);
-            }
-        }
-        if (event.type == Event::Type::ONE_SHOT || event.cancelled) {
-            pop_heap(event_heap);
-            events.erase(it);
-            continue;
-        }
-        if (event.type == Event::Type::PERIODIC) {
-            event_time.clk_time += event.period * iterations;
-        } else if (event.type == Event::Type::PERIODIC_NON_STRICT) {
-            while (event_time.clk_time <= current_clk) {
-                event_time.clk_time += event.period;
-            }
-        }
-        reorder_heap_head(event_heap);
+        run_next_event(false);
     }
+}
+
+uint64_t Timing::Private::run_next_event(bool fast_forward)
+{
+    if (event_heap.empty()) {
+        return clk;
+    }
+
+    auto& event_time = event_heap.front();
+    auto const event_clk = event_time.clk_time;
+    auto const it = events.find(event_time.handler);
+    auto& [_, event] = *it;
+    auto const event_period = event.period;
+    uint64_t iterations = 1;
+    if (!event.cancelled) {
+        if (auto const* next = peek_second(event_heap);
+            !event.cpu_visible && event.type == Event::Type::PERIODIC && fast_forward && next) {
+            auto const clock_cycles_until_next = next->clk_time - event_clk;
+            iterations =
+                event.callback(event, event_clk, 1 + clock_cycles_until_next / event_period);
+        } else {
+            event.callback(event, event_clk, 1);
+        }
+    }
+    if (event.type == Event::Type::ONE_SHOT || event.cancelled) {
+        pop_heap(event_heap);
+        events.erase(it);
+        return event_clk;
+    }
+    if (event.type == Event::Type::PERIODIC) {
+        event_time.clk_time += event_period * iterations;
+    }
+    reorder_heap_head(event_heap);
+
+    return event_clk + event_period * (iterations - 1);
 }
 
 bool Timing::Private::cancel(Timing::Handler handler)
@@ -140,11 +149,7 @@ bool Timing::Private::cancel(Timing::Handler handler)
 
 void Timing::Private::fast_forward()
 {
-    if (event_heap.empty()) {
-        return;
-    }
-    clk = event_heap.front().clk_time;
-    run_events(true);
+    clk = run_next_event(true);
 }
 
 Timing::Handler Timing::schedule(Event event)
@@ -174,7 +179,7 @@ uint64_t Timing::get_clock() const
 
 void Timing::run_events()
 {
-    _p->run_events(false);
+    _p->run_events();
 }
 
 void Timing::take_snapshot(SnapshotSerializer& s)

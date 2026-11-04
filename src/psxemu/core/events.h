@@ -19,7 +19,6 @@ public:
         enum class Type {
             ONE_SHOT,
             PERIODIC,
-            PERIODIC_NON_STRICT,
         };
 
         struct EventCallback {
