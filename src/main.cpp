@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "main-window.h"
-#include "libupse/upse.h"
 
 #include <QApplication>
 #include <QtSystemDetection>
@@ -16,6 +15,7 @@ int main(int argc, char* argv[])
     // Prefer pulseaudio in Linux over pipewire, the pipewire driver seems to get stuck when
     // changing audio devices sometimes.
     SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "pulseaudio");
+    SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
 #endif
     SDL_SetAppMetadata("PSXPlayer", "0.0.1", "psxplayer");
     SDL_InitSubSystem(SDL_INIT_AUDIO);
