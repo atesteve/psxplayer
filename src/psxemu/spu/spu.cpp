@@ -5,7 +5,6 @@
 #include "spu_registers.h"
 #include "psxemu/dma/dma.h"
 #include "gauss.h"
-#include "util/soa.h"
 
 #include <fmt/format.h>
 
@@ -221,78 +220,63 @@ struct AdsrState {
     uint16_t counter{};
     AdsrPhase phase{};
 
-    void start() { *this = {}; }
+    struct {
+        bool exponential{};
+        bool decrease{};
+        int shift{};
+        int step{};
+    } settings{};
 
-    void release() { phase = AdsrPhase::RELEASE; }
+    void start(auto& state)
+    {
+        *this = {.settings = {
+                     .exponential = state.adsr_regs.fields.attack_exp,
+                     .decrease = false,
+                     .shift = state.adsr_regs.fields.attack_shift,
+                     .step = state.adsr_regs.fields.attack_step,
+                 }};
+    }
+
+    void release(auto& state)
+    {
+        phase = AdsrPhase::RELEASE;
+        settings = {
+            .exponential = state.adsr_regs.fields.release_exp,
+            .decrease = true,
+            .shift = state.adsr_regs.fields.release_shift,
+            .step = 0,
+        };
+    }
 
     bool tick(auto& state)
     {
         using enum AdsrPhase;
 
-        struct Settings {
-            bool exponential;
-            bool decrease;
-            int shift;
-            int step;
-        };
-
-        auto const settings = [&] -> Settings {
-            switch (phase) {
-            case ATTACK:
-                return {
-                    .exponential = state.adsr_regs.fields.attack_exp,
-                    .decrease = false,
-                    .shift = state.adsr_regs.fields.attack_shift,
-                    .step = state.adsr_regs.fields.attack_step,
-                };
-            case DECAY:
-                return {
-                    .exponential = true,
-                    .decrease = true,
-                    .shift = state.adsr_regs.fields.decay_shift,
-                    .step = 0,
-                };
-            case SUSTAIN:
-                return {
-                    .exponential = state.adsr_regs.fields.sustain_exp,
-                    .decrease = state.adsr_regs.fields.sustain_dir,
-                    .shift = state.adsr_regs.fields.sustain_shift,
-                    .step = state.adsr_regs.fields.sustain_step,
-                };
-            case RELEASE:
-                return {
-                    .exponential = state.adsr_regs.fields.release_exp,
-                    .decrease = true,
-                    .shift = state.adsr_regs.fields.release_shift,
-                    .step = 0,
-                };
-            default:
-                std::unreachable();
-            }
-        }();
-
         auto& volume = state.adsr_vol;
 
         int vol_inc = 7 - settings.step;
-        if (settings.decrease) {
-            // Bitwise negation, not arithmetic negation.
-            vol_inc = ~vol_inc;
-        }
+        int const vol_inc_negated = ~vol_inc;
+        vol_inc *= !settings.decrease;
+        vol_inc += vol_inc_negated * settings.decrease;
+
         int vol_shift = std::max(0, 11 - settings.shift);
         int counter_shift = std::max(0, settings.shift - 11);
         vol_inc <<= vol_shift;
         int counter_inc = 0x8000 >> counter_shift;
-        if (settings.exponential && !settings.decrease && volume > 0x6000) {
-            vol_inc >>= 1;
-            counter_inc >>= 1;
-            if (settings.shift < 10) {
-                vol_inc >>= 1;
-            } else if (settings.shift >= 11) {
-                counter_inc >>= 1;
-            }
-        } else if (settings.exponential && settings.decrease) {
-            vol_inc = (vol_inc * volume) >> 15;
-        }
+
+        bool const exp_increase = settings.exponential && !settings.decrease && volume > 0x6000;
+        bool const exp_decrease = !exp_increase && settings.exponential && settings.decrease;
+
+        auto const vol_inc_pre = vol_inc;
+        auto const counter_inc_pre = counter_inc;
+
+        vol_inc *= !exp_increase;
+        vol_inc *= !exp_decrease;
+        vol_inc += (vol_inc_pre >> (1 + (settings.shift < 10))) * exp_increase;
+        vol_inc += ((vol_inc_pre * volume) >> 15) * exp_decrease;
+
+        counter_inc *= !exp_increase;
+        counter_inc += (counter_inc_pre >> (1 + (settings.shift >= 11))) * exp_increase;
 
         counter += counter_inc;
         if (counter < 0x8000) {
@@ -306,12 +290,24 @@ struct AdsrState {
         case ATTACK:
             if (volume == std::numeric_limits<int16_t>::max()) {
                 phase = DECAY;
+                settings = {
+                    .exponential = true,
+                    .decrease = true,
+                    .shift = state.adsr_regs.fields.decay_shift,
+                    .step = 0,
+                };
             }
             return false;
         case DECAY:
             if (int const sustain_level = ((state.adsr_regs.fields.sustain_level + 1) << 12);
                 volume <= sustain_level) {
                 phase = SUSTAIN;
+                settings = {
+                    .exponential = state.adsr_regs.fields.sustain_exp,
+                    .decrease = state.adsr_regs.fields.sustain_dir,
+                    .shift = state.adsr_regs.fields.sustain_shift,
+                    .step = state.adsr_regs.fields.sustain_step,
+                };
             }
             return false;
         case SUSTAIN:
@@ -436,7 +432,7 @@ struct SPU::Private {
 
     struct State {
         uint32_t transfer_addr{};
-        SOA<VoiceState, N_VOICES> voice{};
+        std::array<VoiceState, N_VOICES> voice{};
         ReverbState reverb{};
         uint64_t last_rt_cycle{};
         bool first_sound_played{false};
@@ -530,7 +526,7 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
         auto const offset = addr - RANGE_BASE;
         auto const voice_n = offset / sizeof(voice[0]);
         auto const index = (offset % sizeof(voice[0])) / sizeof(uint16_t);
-        auto v = state.voice[voice_n];
+        auto& v = state.voice[voice_n];
         // clang-format off
         switch (index) {
             case 0: v.vol_left.raw             = value;     break;
@@ -682,7 +678,7 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
         auto const offset = addr - RANGE_BASE;
         auto const voice_n = offset / sizeof(voice[0]);
         auto const index = (offset % sizeof(voice[0])) / sizeof(uint16_t);
-        auto v = state.voice[voice_n];
+        auto& v = state.voice[voice_n];
         // clang-format off
         switch (index) {
             case 0: return v.vol_left.raw;
@@ -824,13 +820,13 @@ uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint6
     bool const no_output = out.size() == 0;
 
     for (auto v = 0u; v < N_VOICES; v++) {
-        auto voice_state = state.voice[v];
+        auto& voice_state = state.voice[v];
 
         if (voice_state.key_on_requested) {
             voice_state.key_on_requested = false;
             voice_state.sample_buffer.reset();
             voice_state.filter_buffer.reset();
-            voice_state.adsr.start();
+            voice_state.adsr.start(voice_state);
             voice_state.sample_p = voice_state.adpcm_start_addr;
             voice_state.status = VoiceStatus::ON;
             voice_state.ignore_loop_start = false;
@@ -840,7 +836,7 @@ uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint6
 
         if (voice_state.key_off_requested) {
             voice_state.key_off_requested = false;
-            voice_state.adsr.release();
+            voice_state.adsr.release(voice_state);
         }
     }
 
@@ -897,7 +893,7 @@ void SPU::Private::tick(uint64_t const rt_cycle, bool no_output)
 std::pair<int16_t, int16_t>
     SPU::Private::tick_voice(size_t const v, uint64_t rt_cycle, bool no_output)
 {
-    auto voice_state = state.voice[v];
+    auto& voice_state = state.voice[v];
 
     if (voice_state.status == VoiceStatus::OFF) {
         return {0, 0};
