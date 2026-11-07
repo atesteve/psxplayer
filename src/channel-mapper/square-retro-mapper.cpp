@@ -4,7 +4,7 @@
 #include "square-retro-mapper.h"
 
 #include <fmt/format.h>
-
+/*
 namespace {
 struct SaveState {
     std::vector<int> phys_to_log;
@@ -199,3 +199,4 @@ bool SquareRetroMapper::sw_hook(upse_module_instance_t* ins,
 
     return true;
 }
+*/

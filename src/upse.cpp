@@ -32,11 +32,11 @@ UpseModule::UpseModule(QObject* parent)
     QObject::connect(&_fast_timer, &QTimer::timeout, this, &UpseModule::fast_timer_fired);
     _fast_timer.setSingleShot(false);
 
-    for (auto& channel : _control.input.channel) {
-        channel.vol_multiplier = 1.f;
-    }
+    // for (auto& channel : _control.input.channel) {
+    //     channel.vol_multiplier = 1.f;
+    // }
 }
-
+/*
 void UpseModule::jal_hook(void* self, upse_module_instance_t* ins)
 {
     static_cast<UpseModule*>(self)->jal_hook(ins);
@@ -67,7 +67,7 @@ void UpseModule::sw_hook(upse_module_instance_t* ins,
         update_mapped_channels();
     }
 }
-
+*/
 void UpseModule::run()
 {
     QThread::currentThread()->setObjectName("UpseModule");
@@ -104,7 +104,6 @@ void UpseModule::run()
                 toggle_pause();
             }
         } else if (_state == State::Seeking && _player->seek_done()) {
-            _control.input.speed_multiplier = _speed;
             set_state(_paused ? State::Paused : State::Playing);
             slow_timer_fired();
         }
@@ -184,14 +183,14 @@ void UpseModule::find_sample_frequency()
 
 void UpseModule::handle_channel_fire()
 {
-    for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
-        if (!channel.fired) {
-            continue;
-        }
+    // for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
+    //     if (!channel.fired) {
+    //         continue;
+    //     }
 
-        channel.fired = false;
-        emit channel_fired(_channel_mapper->physical_to_logical(ch));
-    }
+    //     channel.fired = false;
+    //     emit channel_fired(_channel_mapper->physical_to_logical(ch));
+    // }
 }
 
 void UpseModule::take_snapshot()
@@ -199,7 +198,7 @@ void UpseModule::take_snapshot()
     auto const current_seek = _player->tell_seek();
     auto& emplaced = _snapshots.emplace_back();
     emplaced.first = current_seek;
-    emplaced.second.second = _channel_mapper->take_snapshot();
+    //emplaced.second.second = _channel_mapper->take_snapshot();
     emplaced.second.first = _player->take_snapshot();
 }
 
@@ -221,7 +220,7 @@ void UpseModule::seek(int pos)
     assert(it != _snapshots.begin());
     if (pos_ms < current_seek || prev(it)->first > current_seek) {
         _player->restore_snapshot(prev(it)->second.first);
-        _channel_mapper->restore_snapshot(prev(it)->second.second);
+        //_channel_mapper->restore_snapshot(prev(it)->second.second);
     }
 
     _player->seek(pos_ms);
@@ -236,8 +235,8 @@ void UpseModule::load_file(QString const& file_name)
     _snapshots.clear();
     _snapshots.shrink_to_fit();
     _sample_freq.clear();
-    _control.output = {};
-    _control.input.speed_multiplier = _speed;
+    // _control.output = {};
+    // _control.input.speed_multiplier = _speed;
 
     auto new_player = PsxPlayer::build(file_name.toStdString());
 
@@ -249,17 +248,15 @@ void UpseModule::load_file(QString const& file_name)
 
     _player = std::move(*new_player);
 
-    _channel_mapper = ChannelMapper::build(nullptr, "", "");
-    _channel_state.clear();
-    _channel_state.resize(_channel_mapper->supported_channels());
+    // _channel_mapper = ChannelMapper::build(nullptr, "", "");
+    // _channel_state.clear();
+    // _channel_state.resize(_channel_mapper->supported_channels());
 
-    // _snapshots.reserve(
-    //     (_mod->metadata->length / duration_cast<milliseconds>(SNAPSHOT_INTERVAL).count()) + 1);
     take_snapshot();
 
     _paused = false;
 
-    emit supported_channels(_channel_mapper->supported_channels());
+    //emit supported_channels(_channel_mapper->supported_channels());
 
     set_state(State::Playing);
     emit total_time_changed(_player->get_duration());
@@ -308,21 +305,19 @@ void UpseModule::stop()
 void UpseModule::set_speed(float speed)
 {
     _speed = speed;
-    if (_state != State::Seeking) {
-        _control.input.speed_multiplier = _speed;
-    }
+    //_control.input.speed_multiplier = _speed;
 }
 
 void UpseModule::update_mapped_channels()
 {
-    for (auto const& [log_channel, channel_state] : std::views::enumerate(_channel_state)) {
-        auto const hw_channel = _channel_mapper->logical_to_physical(log_channel);
-        if (hw_channel == -1) {
-            continue;
-        }
-        _control.input.channel[hw_channel].mute = channel_state.muted;
-        _control.input.channel[hw_channel].vol_multiplier = channel_state.vol;
-    }
+    // for (auto const& [log_channel, channel_state] : std::views::enumerate(_channel_state)) {
+    //     auto const hw_channel = _channel_mapper->logical_to_physical(log_channel);
+    //     if (hw_channel == -1) {
+    //         continue;
+    //     }
+    //     _control.input.channel[hw_channel].mute = channel_state.muted;
+    //     _control.input.channel[hw_channel].vol_multiplier = channel_state.vol;
+    // }
 }
 
 void UpseModule::mute_channel(int ch, bool muted)
@@ -339,7 +334,7 @@ void UpseModule::set_channel_vol(int ch, float vol)
 
 void UpseModule::set_endless_play(bool nonstop)
 {
-    _control.input.endless_play = nonstop;
+    //_control.input.endless_play = nonstop;
 }
 
 void UpseModule::shutdown()
@@ -381,54 +376,54 @@ void UpseModule::slow_timer_fired()
 
 void UpseModule::fast_timer_fired()
 {
-    auto const compute_rms = [](auto&& buf) {
-        double rms = 0;
-        for (auto s : buf) {
-            rms += s * s;
-        }
-        return std::sqrt(rms / std::size(buf));
-    };
+    // auto const compute_rms = [](auto&& buf) {
+    //     double rms = 0;
+    //     for (auto s : buf) {
+    //         rms += s * s;
+    //     }
+    //     return std::sqrt(rms / std::size(buf));
+    // };
 
     if (_state == State::Playing) {
-        emit sound_level_changed(compute_rms(_control.output.window_l) / 32768,
-                                 compute_rms(_control.output.window_r) / 32768);
+        // emit sound_level_changed(compute_rms(_control.output.window_l) / 32768,
+        //                          compute_rms(_control.output.window_r) / 32768);
     } else {
         emit sound_level_changed(0, 0);
     }
 
-    for (auto ch = 0u; ch < _channel_state.size(); ch++) {
-        auto const hw_channel = _channel_mapper->logical_to_physical(ch);
-        if (hw_channel == -1) {
-            emit channel_sound_level_changed(ch, 0, 0);
-            emit channel_frequency_changed(ch, 0);
-            continue;
-        }
+    // for (auto ch = 0u; ch < _channel_state.size(); ch++) {
+    //     auto const hw_channel = _channel_mapper->logical_to_physical(ch);
+    //     if (hw_channel == -1) {
+    //         emit channel_sound_level_changed(ch, 0, 0);
+    //         emit channel_frequency_changed(ch, 0);
+    //         continue;
+    //     }
 
-        auto const& channel_info = _control.output.channel[hw_channel];
+    //     auto const& channel_info = _control.output.channel[hw_channel];
 
-        if (_state == State::Playing) {
-            emit channel_sound_level_changed(
-                ch, compute_rms(channel_info.l) / 32768, compute_rms(channel_info.r) / 32768);
+    //     if (_state == State::Playing) {
+    //         emit channel_sound_level_changed(
+    //             ch, compute_rms(channel_info.l) / 32768, compute_rms(channel_info.r) / 32768);
 
-            auto const it = _sample_freq.find({channel_info.sample_addr, channel_info.loop_addr});
-            if (it == _sample_freq.end()) {
-                continue;
-            }
-            auto const sample_freq = it->second.get();
-            if (!sample_freq) {
-                emit channel_frequency_changed(ch, 0);
-                continue;
-            }
-            if (std::isnan(*sample_freq) || *sample_freq == 0) {
-                emit channel_frequency_changed(ch, 0);
-                continue;
-            }
-            emit channel_frequency_changed(ch, (*sample_freq * channel_info.pitch) / 0x1000);
-        } else {
-            emit channel_sound_level_changed(ch, 0, 0);
-            emit channel_frequency_changed(ch, 0);
-        }
-    }
+    //         auto const it = _sample_freq.find({channel_info.sample_addr, channel_info.loop_addr});
+    //         if (it == _sample_freq.end()) {
+    //             continue;
+    //         }
+    //         auto const sample_freq = it->second.get();
+    //         if (!sample_freq) {
+    //             emit channel_frequency_changed(ch, 0);
+    //             continue;
+    //         }
+    //         if (std::isnan(*sample_freq) || *sample_freq == 0) {
+    //             emit channel_frequency_changed(ch, 0);
+    //             continue;
+    //         }
+    //         emit channel_frequency_changed(ch, (*sample_freq * channel_info.pitch) / 0x1000);
+    //     } else {
+    //         emit channel_sound_level_changed(ch, 0, 0);
+    //         emit channel_frequency_changed(ch, 0);
+    //     }
+    // }
 }
 
 UpseModule::Freq::Freq(double value)

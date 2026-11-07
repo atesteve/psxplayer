@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "adpcm.h"
-#include "iop/util.h"
 
 #include <fftw3.h>
 #include <fmt/format.h>
@@ -245,7 +244,7 @@ ADPCMBlockHeader decode_adpcm_block(std::span<uint16_t const> ram,
     }
 
     auto [a, b] = prev_samples;
-    auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
+    auto const* block = std::start_lifetime_as<ADPCM_block>(&ram[addr]);
 
     for (auto const& [i, data] : std::ranges::enumerate_view{block->data}) {
         auto const process_sample = [&](int32_t sample) {

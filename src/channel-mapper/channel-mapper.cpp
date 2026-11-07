@@ -7,7 +7,7 @@
 #include "null-mapper.h"
 
 #include <unordered_map>
-
+/*
 namespace {
 
 using cm_ptr = std::unique_ptr<ChannelMapper>;
@@ -67,3 +67,4 @@ std::unique_ptr<ChannelMapper> ChannelMapper::build(upse_module_instance_t* ins,
     }
     return it->second(ins, title);
 }
+*/

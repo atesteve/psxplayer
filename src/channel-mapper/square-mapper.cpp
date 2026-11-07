@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "square-mapper.h"
-
+/*
 namespace {
 struct SaveState {
     std::vector<int> phys_to_log;
@@ -111,3 +111,4 @@ bool SquareMapper::jal_hook(upse_module_instance_t* ins)
     // There is no change to the map, it has only been set up.
     return false;
 }
+*/

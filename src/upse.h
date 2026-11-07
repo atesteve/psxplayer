@@ -82,14 +82,14 @@ private:
     void handle_channel_fire();
     void find_sample_frequency();
 
-    static void jal_hook(void* self, upse_module_instance_t* ins);
-    void jal_hook(upse_module_instance_t* ins);
-    static void sw_hook(void* self,
-                        upse_module_instance_t* ins,
-                        mem_access_size_t size,
-                        uint32_t addr,
-                        uint32_t data);
-    void sw_hook(upse_module_instance_t* ins, mem_access_size_t size, uint32_t addr, uint32_t data);
+    // static void jal_hook(void* self, upse_module_instance_t* ins);
+    // void jal_hook(upse_module_instance_t* ins);
+    // static void sw_hook(void* self,
+    //                     upse_module_instance_t* ins,
+    //                     mem_access_size_t size,
+    //                     uint32_t addr,
+    //                     uint32_t data);
+    // void sw_hook(upse_module_instance_t* ins, mem_access_size_t size, uint32_t addr, uint32_t data);
 
     std::optional<PsxPlayer> _player;
     Audio _audio;
@@ -108,21 +108,21 @@ private:
     std::vector<std::pair<std::chrono::milliseconds, std::pair<SnapshotBuffer, std::any>>>
         _snapshots;
 
-    emulation_control_t _control{
-        .input =
-            {
-                .speed_multiplier = 1,
-                .endless_play = false,
-                .channel = {},
-            },
-        .output = {},
-        .hooks =
-            {
-                .data = this,
-                .jal = UpseModule::jal_hook,
-                .sw = sw_hook,
-            },
-    };
+    // emulation_control_t _control{
+    //     .input =
+    //         {
+    //             .speed_multiplier = 1,
+    //             .endless_play = false,
+    //             .channel = {},
+    //         },
+    //     .output = {},
+    //     .hooks =
+    //         {
+    //             .data = this,
+    //             .jal = UpseModule::jal_hook,
+    //             .sw = sw_hook,
+    //         },
+    // };
 
     struct pair_hash {
         static size_t operator()(std::pair<uint32_t, uint32_t> const& p) noexcept
