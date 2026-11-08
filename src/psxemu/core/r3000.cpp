@@ -182,7 +182,9 @@ struct R3000Core<c>::Private {
     uint64_t run_ij_bios(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
     uint64_t run_ij_unk(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t target);
 
-    size_t render_audio(std::span<int16_t> output, size_t n_samples);
+    size_t render_audio(std::span<int16_t> output,
+                        size_t n_samples,
+                        std::chrono::milliseconds max_runtime);
     void fast_forward(std::chrono::milliseconds pos,
                       std::chrono::milliseconds max_runtime,
                       bool until_first_sound);
@@ -1196,15 +1198,18 @@ void R3000Core<c>::Private::run(bool letLongjmpThrough)
 }
 
 template<R3000CoreConfig c>
-size_t R3000Core<c>::Private::render_audio(std::span<int16_t> output, size_t n_samples)
+size_t R3000Core<c>::Private::render_audio(std::span<int16_t> output,
+                                           size_t n_samples,
+                                           std::chrono::milliseconds max_runtime)
 {
+    auto const timeout = std::chrono::steady_clock::now() + max_runtime;
     spu.set_output_buffer(output);
     ScopeGuard remove_spu_output{[this] { spu.set_output_buffer({}); }};
 
     Private::HWAlignmentCheck::enable();
     ScopeGuard align_check_guard{[] { Private::HWAlignmentCheck::disable(); }};
 
-    while (spu.rendered_samples() < n_samples) {
+    while (spu.rendered_samples() < n_samples && std::chrono::steady_clock::now() < timeout) {
         handle_longjmp([this] { run_instruction(); }, [&](auto const&) {});
     }
 
@@ -1427,9 +1432,11 @@ uint32_t R3000Core<c>::soft_call(r3000_ptr_t addr)
 }
 
 template<R3000CoreConfig c>
-size_t R3000Core<c>::render_audio(std::span<int16_t> output, size_t n_samples)
+size_t R3000Core<c>::render_audio(std::span<int16_t> output,
+                                  size_t n_samples,
+                                  std::chrono::milliseconds max_runtime)
 {
-    return p->render_audio(output, n_samples);
+    return p->render_audio(output, n_samples, max_runtime);
 }
 
 template<R3000CoreConfig c>

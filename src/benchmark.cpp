@@ -29,7 +29,7 @@ void run_benchmark(std::filesystem::path path, std::chrono::milliseconds time, b
         if (fast_forward) {
             emu->fast_forward(time, 1h);
         } else {
-            emu->render_audio(buf, samples);
+            emu->render_audio(buf, samples, 50ms);
         }
         auto const end = std::chrono::steady_clock::now();
         dur += end - start;

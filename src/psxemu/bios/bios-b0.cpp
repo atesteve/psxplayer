@@ -3,6 +3,8 @@
 
 #include "bios.h"
 
+#include <cstdio>
+
 namespace {
 
 // clang-format off
@@ -150,4 +152,14 @@ Bios::noreturn Bios::returnFromException(R3000& emu)
     emu.cp0_regs().Status.fields = state.saved_state.sr;
     emu.return_from_exception();
     throw LongjmpException{};
+}
+
+int32_t Bios::puts(R3000& emu, r3000_ptr_t str)
+{
+    char c;
+    while ((c = emu.read_mem<uint8_t>(str++))) {
+        ::putc(c, ::stdout);
+    }
+    ::putc('\n', ::stdout);
+    return 0;
 }

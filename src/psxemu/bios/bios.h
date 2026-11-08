@@ -31,6 +31,7 @@ public:
 
     uint32_t setjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf);
     noreturn longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t ret);
+    r3000_ptr_t strcat(R3000& emu, r3000_ptr_t dst, r3000_ptr_t src);
     r3000_ptr_t strcpy(R3000& emu, r3000_ptr_t dst, r3000_ptr_t src);
     r3000_ptr_t bzero(R3000& emu, r3000_ptr_t ptr, int32_t n);
     r3000_ptr_t memset(R3000& emu, r3000_ptr_t s, int32_t c, uint32_t n);
@@ -43,8 +44,8 @@ public:
 
     void noop() {}
 
-    template<uint32_t V>
-    auto noop_return()
+    template<std::integral auto V>
+    uint32_t noop_return()
     {
         return V;
     }
@@ -58,6 +59,7 @@ public:
     int32_t disableEvent(uint32_t event);
     void HookEntryInt(EmuBuffer<psx_jmp_buf> buf);
     noreturn returnFromException(R3000& emu);
+    int32_t puts(R3000& emu, r3000_ptr_t str);
 
     void exception_handler(R3000& emu);
     void init(EmuBuffer<uint8_t> ram);

@@ -45,15 +45,26 @@ Bios::noreturn Bios::longjmp(R3000& emu, EmuBuffer<psx_jmp_buf> buf, uint32_t re
     throw LongjmpException{};
 }
 
-r3000_ptr_t Bios::strcpy(R3000& emu, r3000_ptr_t dst, r3000_ptr_t src)
+r3000_ptr_t Bios::strcat(R3000& emu, r3000_ptr_t dst, r3000_ptr_t src)
 {
-    auto dst_buf = emu.get_buffer(dst, 100);
-    auto src_buf = emu.get_buffer(src, 100);
     size_t p = 0;
-    while ((dst_buf[p] = src_buf[p]) != 0) {
+    while (emu.read_mem<uint8_t>(dst + p)) {
         p++;
     }
-    return dst + p + 1;
+    strcpy(emu, dst + p, src);
+    return dst;
+}
+
+r3000_ptr_t Bios::strcpy(R3000& emu, r3000_ptr_t dst, r3000_ptr_t src)
+{
+    size_t p = 0;
+    uint8_t c;
+    do {
+        c = emu.read_mem<uint8_t>(src + p);
+        emu.write_mem(dst + p, c);
+        p++;
+    } while (c != 0);
+    return dst + p;
 }
 
 r3000_ptr_t Bios::bzero(R3000& emu, r3000_ptr_t ptr, int32_t n)

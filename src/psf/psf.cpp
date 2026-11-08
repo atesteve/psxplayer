@@ -42,6 +42,14 @@ struct [[=Endianness::Little{}]] PSXExeHeader {
     uint32_t text_addr;
     [[=Offset(0x1c)]]
     uint32_t text_size;
+    [[=Offset(0x20)]]
+    uint32_t data_addr;
+    [[=Offset(0x24)]]
+    uint32_t data_size;
+    [[=Offset(0x28)]]
+    uint32_t bss_addr;
+    [[=Offset(0x2c)]]
+    uint32_t bss_size;
     [[=Offset(0x30)]]
     uint32_t sp;
     [[=Offset(0x4c), =StrDecodeMode::NullTerminated{}]]

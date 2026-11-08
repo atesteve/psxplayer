@@ -422,7 +422,9 @@ struct R3000 {
 
     virtual uint32_t soft_call(r3000_ptr_t addr) = 0;
 
-    virtual size_t render_audio(std::span<int16_t> output, size_t n_samples) = 0;
+    virtual size_t render_audio(std::span<int16_t> output,
+                                size_t n_samples,
+                                std::chrono::milliseconds max_runtime) = 0;
     virtual void fast_forward(std::chrono::milliseconds pos,
                               std::chrono::milliseconds max_runtime) = 0;
     virtual void run_to_first_sound(std::chrono::milliseconds max_time) = 0;

@@ -28,7 +28,7 @@ int64_t PsxPlayer::render_audio(std::span<int16_t> output, size_t n_samples)
         return 0;
     }
 
-    auto const ret = _emu->render_audio(output, n_samples);
+    auto const ret = _emu->render_audio(output, n_samples, 50ms);
     _pos = _emu->tell_seek();
     return ret;
 }

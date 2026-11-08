@@ -15,6 +15,7 @@ namespace {
 
 constexpr r3000_ptr_t B0TableLocation = 0x400;
 constexpr r3000_ptr_t C0TableLocation = 0x800;
+constexpr r3000_ptr_t BuildIdLocation = 0x1000;
 constexpr uint32_t BiosTableSize = 256 * sizeof(uint32_t);
 
 using bios_call_result = std::variant<std::monostate, uint32_t, Bios::noreturn>;
@@ -84,8 +85,10 @@ bios_call_result bcall(Bios& bios, R3000& emu)
 }
 
 std::unordered_map<uint32_t, bios_call_result (*)(Bios& bios, R3000& emu)> const bios_fns = {
+    {0xa00b, bcall<&Bios::noop_return<BuildIdLocation>>}, // OBHandler
     {0xa013, bcall<&Bios::setjmp>},
     {0xa014, bcall<&Bios::longjmp>},
+    {0xa015, bcall<&Bios::strcat>},
     {0xa019, bcall<&Bios::strcpy>},
     {0xa028, bcall<&Bios::bzero>},
     {0xa02a, bcall<&Bios::memcpy>},
@@ -106,6 +109,12 @@ std::unordered_map<uint32_t, bios_call_result (*)(Bios& bios, R3000& emu)> const
     {0xb00d, bcall<&Bios::disableEvent>},
     {0xb019, bcall<&Bios::HookEntryInt>},
     {0xb017, bcall<&Bios::returnFromException>},
+    {0xb032, bcall<&Bios::noop_return<-5>>}, // open
+    {0xb033, bcall<&Bios::noop_return<-1>>}, // lseek
+    {0xb034, bcall<&Bios::noop_return<-1>>}, // read
+    {0xb035, bcall<&Bios::noop_return<-1>>}, // write
+    {0xb036, bcall<&Bios::noop_return<0>>},  // close
+    {0xb03f, bcall<&Bios::puts>},
     {0xb04a, bcall<&Bios::noop_return<1>>},               // InitCard
     {0xb04b, bcall<&Bios::noop_return<1>>},               // StartCard
     {0xb056, bcall<&Bios::noop_return<B0TableLocation>>}, // getB0Table
@@ -163,6 +172,19 @@ void Bios::init(EmuBuffer<uint8_t> ram)
 
     // Init timer_auto_ack to 1
     std::ranges::fill(state.timer_auto_ack, 1);
+
+    struct BuildId {
+        uint32_t namesz;
+        uint32_t descsz;
+        uint32_t type;
+        uint8_t strings[16];
+    };
+
+    auto* buildId = std::start_lifetime_as<BuildId>(&ram[BuildIdLocation]);
+    buildId->namesz = 1;
+    buildId->descsz = 2;
+    buildId->type = 3;
+    std::ranges::copy("blahblah", buildId->strings);
 }
 
 void Bios::take_snapshot(SnapshotSerializer& s)

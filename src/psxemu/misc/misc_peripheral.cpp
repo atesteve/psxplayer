@@ -12,6 +12,7 @@ constexpr r3000_ptr_t MDEC_CONTROL_STATUS = 0x1f801824;
 constexpr r3000_ptr_t GPU_GP0 = 0x1f801810;
 constexpr r3000_ptr_t GPU_GP1 = 0x1f801814;
 constexpr r3000_ptr_t CDROM_0 = 0x1f801800;
+constexpr r3000_ptr_t COM_DELAY = 0x1f801020;
 } // namespace
 
 void Misc::write_reg(r3000_ptr_t addr, uint32_t value)
@@ -23,6 +24,7 @@ void Misc::write_reg(r3000_ptr_t addr, uint32_t value)
     case GPU_GP0:
     case GPU_GP1:
     case CDROM_0:
+    case COM_DELAY:
         // Just ignore all of them.
         break;
     default:
@@ -37,6 +39,7 @@ uint32_t Misc::read_reg(r3000_ptr_t addr)
     case MDEC_COMMAND_DATA:
     case GPU_GP0:
     case CDROM_0:
+    case COM_DELAY:
         // Just ignore all of them.
         return 0;
         break;
