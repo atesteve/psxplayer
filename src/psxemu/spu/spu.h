@@ -24,7 +24,6 @@ public:
 
     void set_output_buffer(std::span<int16_t> output);
     size_t rendered_samples() const;
-    bool first_sound_played() const;
 
     void take_snapshot(SnapshotSerializer& s);
     void restore_snapshot(SnapshotDeserializer& s);

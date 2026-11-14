@@ -427,7 +427,6 @@ struct R3000 {
                                 std::chrono::milliseconds max_runtime) = 0;
     virtual void fast_forward(std::chrono::milliseconds pos,
                               std::chrono::milliseconds max_runtime) = 0;
-    virtual void run_to_first_sound(std::chrono::milliseconds max_time) = 0;
 
     virtual std::chrono::milliseconds tell_seek() const = 0;
 

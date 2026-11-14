@@ -53,7 +53,6 @@ public:
                         std::chrono::milliseconds max_runtime) override;
     void fast_forward(std::chrono::milliseconds pos,
                       std::chrono::milliseconds max_runtime) override;
-    void run_to_first_sound(std::chrono::milliseconds max_time) override;
 
     std::chrono::milliseconds tell_seek() const override;
 

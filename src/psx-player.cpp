@@ -14,7 +14,6 @@ std::expected<PsxPlayer, std::string> PsxPlayer::build(std::filesystem::path pat
     PsxPlayer ret;
     ret._emu = R3000::build();
     ret._emu->init(*psf);
-    ret._emu->run_to_first_sound(30s);
     ret._duration = psf->get_length();
     ret._fadeout_length = psf->get_fadeout_length();
 
