@@ -156,32 +156,6 @@ constexpr int16_t smooth_clamp(int32_t sample)
 
 } // namespace
 
-struct SampleBuffer {
-    uint16_t pos{};
-    uint16_t frac{};
-    std::array<int16_t, 28> samples{};
-
-    void reset()
-    {
-        pos = samples.size();
-        frac = 0;
-        std::ranges::fill(samples, 0);
-    }
-
-    bool empty() { return pos >= samples.size(); }
-
-    void loaded_block() { pos -= samples.size(); }
-
-    auto last_samples() const
-    {
-        return std::make_pair(samples[samples.size() - 1], samples[samples.size() - 2]);
-    }
-
-    int16_t sample_and_advance() { return samples[pos++]; }
-
-    uint8_t get_fractional_index() const { return frac >> 4; }
-};
-
 struct FilterBuffer {
     uint64_t buf{};
 
@@ -323,18 +297,28 @@ struct AdsrState {
     }
 };
 
+struct Sample {
+    std::vector<int16_t> samples;
+    size_t loop{};
+    spu_compressed_addr_t loop_addr{};
+};
+
 enum class VoiceStatus : uint8_t {
     OFF,
     ON,
     LOOP_END,
 };
 
+struct SamplePos {
+    size_t pos;
+    uint16_t frac;
+};
+
 struct VoiceState {
     bool key_on_requested{};
     bool key_off_requested{};
-    SampleBuffer sample_buffer{};
+    SamplePos sample_pos{};
     FilterBuffer filter_buffer{};
-    spu_compressed_addr_t sample_p{};
     AdsrState adsr{};
     VoiceStatus status{};
     bool ignore_loop_start{};
@@ -346,6 +330,7 @@ struct VoiceState {
     spu_compressed_addr_t adpcm_start_addr{};
     spu_compressed_addr_t adpcm_repeat_addr{};
     adsr_reg_t adsr_regs{};
+    Sample* sample{};
 };
 
 struct FIR {
@@ -426,6 +411,8 @@ struct SPU::Private {
         tick_voice(size_t v, uint64_t rt_cycle, bool no_output);
     std::pair<int16_t, int16_t> tick_reverb(std::pair<int16_t, int16_t> input);
 
+    void load_sample(size_t v);
+
     R3000* emu;
     DMA* dma;
     EmuBuffer<spu_regs_t> reg;
@@ -437,6 +424,7 @@ struct SPU::Private {
         uint64_t last_rt_cycle{};
     } state{};
 
+    std::unordered_map<uint64_t, Sample> sample_cache;
     EmuBuffer<uint16_t> system_ram;
     Timing* timing;
     std::span<int16_t> out{};
@@ -798,6 +786,59 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     return 0;
 }
 
+void SPU::Private::load_sample(size_t v)
+{
+    auto& voice_state = state.voice[v];
+    auto const key =
+        voice_state.adpcm_start_addr.get() | (voice_state.adpcm_repeat_addr.get() << 32);
+    auto& sample = sample_cache[key];
+    voice_state.sample = &sample;
+    if (!sample.samples.empty()) {
+        return;
+    }
+
+    auto sample_p = voice_state.adpcm_start_addr;
+    auto repeat_addr = voice_state.adpcm_repeat_addr;
+    std::pair<int16_t, int16_t> last_samples{};
+    std::optional<std::pair<int16_t, int16_t>> repeat_last_samples{};
+
+    while (true) {
+        if (!sample.samples.empty()) {
+            last_samples = std::make_pair(sample.samples[sample.samples.size() - 1],
+                                          sample.samples[sample.samples.size() - 2]);
+        }
+        sample.samples.resize(sample.samples.size() + 28);
+        auto const header = decode_adpcm_block(
+            ram, sample_p.get(), last_samples, std::span{(&sample.samples.back()) - 27, 28});
+        if (header.loop_start || sample_p == repeat_addr) {
+            repeat_addr = sample_p;
+            repeat_last_samples = last_samples;
+            sample.loop = sample.samples.size() - 28;
+            sample.loop_addr = sample_p;
+            voice_state.adpcm_repeat_addr = sample_p;
+        }
+        if (header.loop_end) {
+            sample_p = repeat_addr;
+            reg->voice_end |= 1 << v;
+            if (!header.loop_repeat) {
+                sample.loop = -1;
+                break;
+            }
+            auto const new_last_samples = std::make_pair(sample.samples[sample.samples.size() - 1],
+                                                         sample.samples[sample.samples.size() - 2]);
+            if (repeat_last_samples
+                && std::abs(repeat_last_samples->first - new_last_samples.first) < 10
+                && std::abs(repeat_last_samples->second - new_last_samples.second) < 10) {
+                break;
+            }
+        } else {
+            sample_p.raw += 2;
+        }
+    }
+
+    sample.samples.shrink_to_fit();
+}
+
 uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint64_t iterations)
 {
     if (!reg->control.fields.enable) {
@@ -811,14 +852,14 @@ uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint6
 
         if (voice_state.key_on_requested) {
             voice_state.key_on_requested = false;
-            voice_state.sample_buffer.reset();
+            voice_state.sample_pos = {};
             voice_state.filter_buffer.reset();
             voice_state.adsr.start(voice_state);
-            voice_state.sample_p = voice_state.adpcm_start_addr;
             voice_state.status = VoiceStatus::ON;
             voice_state.ignore_loop_start = false;
             voice_state.adsr_vol = 0;
             reg->voice_end &= ~(1 << v);
+            load_sample(v);
         }
 
         if (voice_state.key_off_requested) {
@@ -887,36 +928,22 @@ std::pair<int16_t, int16_t>
     }
 
     auto const adpcm_sample_rate = std::min<uint16_t>(voice_state.adpcm_sample_rate, 0x4000);
-    voice_state.sample_buffer.frac += adpcm_sample_rate;
-    while (voice_state.sample_buffer.frac >= 0x1000) {
-        if (voice_state.sample_buffer.empty()) {
-            if (voice_state.status == VoiceStatus::LOOP_END) {
+    voice_state.sample_pos.frac += adpcm_sample_rate;
+    while (voice_state.sample_pos.frac >= 0x1000) {
+        auto const sample = voice_state.sample->samples[voice_state.sample_pos.pos];
+        voice_state.sample_pos.pos++;
+        if (voice_state.sample_pos.pos >= voice_state.sample->samples.size()) {
+            reg->voice_end |= 1 << v;
+            if (voice_state.sample->loop < voice_state.sample->samples.size()) {
+                voice_state.sample_pos.pos = voice_state.sample->loop;
+            } else {
                 voice_state.status = VoiceStatus::OFF;
                 voice_state.adsr_vol = 0;
                 return {0, 0};
             }
-            auto const header = decode_adpcm_block(ram,
-                                                   voice_state.sample_p.get(),
-                                                   voice_state.sample_buffer.last_samples(),
-                                                   voice_state.sample_buffer.samples);
-            voice_state.sample_buffer.loaded_block();
-            if (header.loop_start && !voice_state.ignore_loop_start) {
-                voice_state.adpcm_repeat_addr = voice_state.sample_p;
-            }
-            if (header.loop_end) {
-                voice_state.sample_p = voice_state.adpcm_repeat_addr;
-                reg->voice_end |= 1 << v;
-                if (!header.loop_repeat) {
-                    voice_state.status = VoiceStatus::LOOP_END;
-                }
-            } else {
-                voice_state.sample_p.raw += 2;
-            }
         }
-
-        auto const sample = voice_state.sample_buffer.sample_and_advance();
         voice_state.filter_buffer.push(sample);
-        voice_state.sample_buffer.frac -= 0x1000;
+        voice_state.sample_pos.frac -= 0x1000;
     }
 
     // Run the ADSR once per "real time" cycle. That way, the ADSR speed scales smoothly with the
@@ -935,8 +962,7 @@ std::pair<int16_t, int16_t>
         return {0, 0};
     }
 
-    auto filtered_sample =
-        voice_state.filter_buffer.get_filtered(voice_state.sample_buffer.get_fractional_index());
+    auto filtered_sample = voice_state.filter_buffer.get_filtered(voice_state.sample_pos.frac >> 4);
     filtered_sample = (filtered_sample * int(voice_state.adsr_vol)) >> 15;
 
     auto apply_vol = [&](int16_t sample, auto const& vol_reg) -> int16_t {

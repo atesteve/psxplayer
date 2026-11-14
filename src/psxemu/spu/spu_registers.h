@@ -94,6 +94,7 @@ struct spu_compressed_addr_t {
 
     size_t get() const { return size_t(raw) << 2; }
     void set(size_t addr) { raw = addr >> 2; }
+    auto operator<=>(spu_compressed_addr_t const&) const = default;
 };
 
 struct voice_registers_t {
