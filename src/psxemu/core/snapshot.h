@@ -139,8 +139,7 @@ struct SnapshotSerializer {
     template<nontrivial_bindable T>
     void serialize(T const& c)
     {
-        auto const& [... members] = c;
-        template for (auto const& m : {members...})
+        template for (auto const& m : c)
         {
             serialize(m);
         }
@@ -207,8 +206,7 @@ struct SnapshotDeserializer {
     template<nontrivial_bindable T>
     void deserialize(T& c)
     {
-        auto& [... members] = c;
-        template for (auto& m : {members...})
+        template for (auto& m : c)
         {
             deserialize(m);
         }
