@@ -4,6 +4,8 @@
 
 using namespace std::literals;
 
+extern int32_t speed;
+
 std::expected<PsxPlayer, std::string> PsxPlayer::build(std::filesystem::path path)
 {
     auto psf = load_psf(path);
@@ -23,7 +25,9 @@ std::expected<PsxPlayer, std::string> PsxPlayer::build(std::filesystem::path pat
 int64_t PsxPlayer::render_audio(std::span<int16_t> output, size_t n_samples)
 {
     if (_emu->tell_seek() < _pos) {
+        speed = 10240;
         _emu->fast_forward(_pos, 100ms);
+        speed = 256;
         return 0;
     }
 

@@ -11,7 +11,7 @@ extern int32_t speed;
 
 void run_benchmark(std::filesystem::path path, std::chrono::milliseconds time, bool fast_forward)
 {
-    speed = 256;
+    speed = 10240;
     auto psf = load_psf(path);
     auto emu = R3000::build();
     emu->init(*psf);
