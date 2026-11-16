@@ -137,6 +137,23 @@ uint16_t read_32bit_reg(uint32_t const& reg, r3000_ptr_t offset)
     }
 }
 
+constexpr int16_t smooth_clamp(int32_t sample)
+{
+    // This is essentially fixed-point math, that's why it looks kind of funky.
+    // Assuming the range -32768..32767 maps to -1..1, this code implements this function:
+    // sample = clamp(sample, -1.5, 1.5);
+    // sample = sample / 3 + 0.5;
+    // sample = sample * sample * (6 - 4 * sample) - 1;
+
+    int64_t sample64 = std::clamp(sample, -49152, 49152); // 1.5 times the range size.
+    sample64 = sample64 / 3 + 16385;
+    auto const sample_sq = (sample64 * sample64) >> 15;
+    auto const third_term = (196608 - 4 * sample64);
+    sample64 = (sample_sq * third_term) >> 15;
+    sample64 -= 32768;
+    return sample64;
+}
+
 } // namespace
 
 struct FilterBuffer {
@@ -186,7 +203,7 @@ struct FilterBuffer {
         int32_t const result =
             ((a * fract3) >> 12) + ((b * fract2) >> 12) + ((c * fract1) >> 12) + d;
 
-        return std::saturating_cast<int16_t>(result);
+        return smooth_clamp(result);
     }
 };
 
@@ -925,16 +942,16 @@ void SPU::Private::tick(uint64_t const rt_cycle, bool no_output)
     }
 
     if (reg->control.fields.reverb_en) {
-        auto const clamped = std::make_pair(std::saturating_cast<int16_t>(reverbSum.first),
-                                            std::saturating_cast<int16_t>(reverbSum.second));
+        auto const clamped = std::make_pair(smooth_clamp(reverbSum.first),
+                                            smooth_clamp(reverbSum.second));
         auto const reverb_sample = tick_reverb(clamped);
         sum.first += reverb_sample.first;
         sum.second += reverb_sample.second;
     }
 
     if (out.size() >= out_p + 2) {
-        out[out_p] = std::saturating_cast<int16_t>(sum.first);
-        out[out_p + 1] = std::saturating_cast<int16_t>(sum.second);
+        out[out_p] = smooth_clamp(sum.first);
+        out[out_p + 1] = smooth_clamp(sum.second);
         out_p += 2;
     }
 }
