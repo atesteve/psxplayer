@@ -191,17 +191,16 @@ struct FilterBuffer {
         int32_t const y2 = samples[1];
         int32_t const y3 = samples[0];
 
-        int32_t const a = (-y0 + 3 * y1 - 3 * y2 + y3) / 6;
+        int32_t const a = -y0 + 3 * y1 - 3 * y2 + y3;
         int32_t const b = (y0 - 2 * y1 + y2) / 2;
-        int32_t const c = -(2 * y0 + 3 * y1 - 6 * y2 + y3) / 6;
+        int32_t const c = -2 * y0 - 3 * y1 + 6 * y2 - y3;
         int32_t const d = y1;
 
-        int32_t const fract1 = fract;
-        int32_t const fract2 = (fract1 * fract1) >> 12;
+        int32_t const fract1 = fract / 6;
+        int32_t const fract2 = (fract * fract) >> 12;
         int32_t const fract3 = (fract2 * fract1) >> 12;
 
-        int32_t const result =
-            ((a * fract3) >> 12) + ((b * fract2) >> 12) + ((c * fract1) >> 12) + d;
+        int32_t const result = ((a * fract3 + b * fract2 + c * fract1) >> 12) + d;
 
         return smooth_clamp(result);
     }
@@ -942,8 +941,8 @@ void SPU::Private::tick(uint64_t const rt_cycle, bool no_output)
     }
 
     if (reg->control.fields.reverb_en) {
-        auto const clamped = std::make_pair(smooth_clamp(reverbSum.first),
-                                            smooth_clamp(reverbSum.second));
+        auto const clamped =
+            std::make_pair(smooth_clamp(reverbSum.first), smooth_clamp(reverbSum.second));
         auto const reverb_sample = tick_reverb(clamped);
         sum.first += reverb_sample.first;
         sum.second += reverb_sample.second;
