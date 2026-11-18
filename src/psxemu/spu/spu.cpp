@@ -142,16 +142,13 @@ constexpr int16_t smooth_clamp(int32_t sample)
     // This is essentially fixed-point math, that's why it looks kind of funky.
     // Assuming the range -32768..32767 maps to -1..1, this code implements this function:
     // sample = clamp(sample, -1.5, 1.5);
-    // sample = sample / 3 + 0.5;
-    // sample = sample * sample * (6 - 4 * sample) - 1;
+    // sample = sample - 4 * pow(sample, 3) / 27;
 
-    int64_t sample64 = std::clamp(sample, -49152, 49152); // 1.5 times the range size.
-    sample64 = sample64 / 3 + 16385;
-    auto const sample_sq = (sample64 * sample64) >> 15;
-    auto const third_term = (196608 - 4 * sample64);
-    sample64 = (sample_sq * third_term) >> 15;
-    sample64 -= 32768;
-    return sample64;
+    // 1.5 times the range size. The two ends aren't equal to avoid overflow.
+    int64_t const sample64 = std::clamp(sample, -49000, 48900);
+    int64_t const sample64_3 = sample64 * sample64 * sample64;
+    // 38836 >> 18 == 4/27, plus 30 bits from the cube operation gives 48 shift bits.
+    return sample64 - ((38836 * sample64_3) >> 48);
 }
 
 } // namespace
@@ -191,16 +188,15 @@ struct FilterBuffer {
         int32_t const y2 = samples[1];
         int32_t const y3 = samples[0];
 
-        int32_t const a = -y0 + 3 * y1 - 3 * y2 + y3;
-        int32_t const b = (y0 - 2 * y1 + y2) / 2;
-        int32_t const c = -2 * y0 - 3 * y1 + 6 * y2 - y3;
-        int32_t const d = y1;
-
-        int32_t const fract1 = fract / 6;
-        int32_t const fract2 = (fract * fract) >> 12;
-        int32_t const fract3 = (fract2 * fract1) >> 12;
-
-        int32_t const result = ((a * fract3 + b * fract2 + c * fract1) >> 12) + d;
+        fract -= 1 << 12;
+        int32_t result = -y0 + 3 * y1 - 3 * y2 + y3;
+        result = (result * fract) >> 12;
+        result += 3 * y1 - 6 * y2 + 3 * y3;
+        result = (result * fract) >> 12;
+        result += y0 - 6 * y1 + 3 * y2 + 2 * y3;
+        result = (result * fract) >> 12;
+        result /= 6;
+        result += y2;
 
         return smooth_clamp(result);
     }
@@ -405,7 +401,7 @@ struct Fixed16 {
 
     friend Fixed16 operator*(Fixed16 a, Fixed16 b)
     {
-        return std::saturating_cast<int16_t>((a.raw * b.raw) >> 15);
+        return (a.raw * b.raw) >> 15;
     }
 
     friend Fixed16 operator+(Fixed16 a, Fixed16 b) { return std::saturating_add(a.raw, b.raw); }
