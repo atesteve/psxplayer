@@ -188,15 +188,16 @@ struct FilterBuffer {
         int32_t const y2 = samples[1];
         int32_t const y3 = samples[0];
 
-        fract -= 1 << 12;
+        // This curve interpolates between y1 and y2 while maintaining the slope at y1 and y2
+        // "pointing to" y0 and y3 respetively. More formally, the slope at y1 is (y1-y0), and the
+        // slope at y2 is (y3-y2).
         int32_t result = -y0 + 3 * y1 - 3 * y2 + y3;
         result = (result * fract) >> 12;
-        result += 3 * y1 - 6 * y2 + 3 * y3;
+        result += 2 * y0 - 5 * y1 + 4 * y2 - y3;
         result = (result * fract) >> 12;
-        result += y0 - 6 * y1 + 3 * y2 + 2 * y3;
+        result += -y0 + y1;
         result = (result * fract) >> 12;
-        result /= 6;
-        result += y2;
+        result += y1;
 
         return smooth_clamp(result);
     }
@@ -399,10 +400,7 @@ struct Fixed16 {
         : raw{i}
     {}
 
-    friend Fixed16 operator*(Fixed16 a, Fixed16 b)
-    {
-        return (a.raw * b.raw) >> 15;
-    }
+    friend Fixed16 operator*(Fixed16 a, Fixed16 b) { return (a.raw * b.raw) >> 15; }
 
     friend Fixed16 operator+(Fixed16 a, Fixed16 b) { return std::saturating_add(a.raw, b.raw); }
 
