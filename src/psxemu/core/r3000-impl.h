@@ -59,6 +59,8 @@ public:
     SnapshotBuffer take_snapshot() override;
     void restore_snapshot(SnapshotBuffer const& snapshot) override;
 
+    Control* get_control() override;
+
 private:
     struct Private;
     std::unique_ptr<Private> p;

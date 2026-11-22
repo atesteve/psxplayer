@@ -342,6 +342,14 @@ class Timing;
 class Misc;
 
 struct R3000 {
+    struct Control {
+        // 256 = 100% playback speed. Higher values mean proportionally faster playback speeds.
+        uint32_t playback_speed = 256;
+        std::vector<int16_t> master_l;
+        std::vector<int16_t> master_r;
+        size_t master_p{};
+    };
+
     virtual ~R3000() = default;
 
     static std::unique_ptr<R3000> build();
@@ -432,6 +440,8 @@ struct R3000 {
 
     virtual SnapshotBuffer take_snapshot() = 0;
     virtual void restore_snapshot(SnapshotBuffer const& snapshot) = 0;
+
+    virtual Control* get_control() = 0;
 
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;

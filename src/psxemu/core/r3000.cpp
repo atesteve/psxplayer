@@ -292,6 +292,7 @@ struct R3000Core<c>::Private {
     Misc misc;
     R3000Core<c>* parent;
     bool return_from_callback_flag = false;
+    Control control{};
 };
 
 template<R3000CoreConfig c>
@@ -1475,6 +1476,12 @@ void R3000Core<c>::restore_snapshot(SnapshotBuffer const& snapshot)
     p->spu.restore_snapshot(deserializer);
     p->timers.restore_snapshot(deserializer);
     p->timing.restore_snapshot(deserializer);
+}
+
+template<R3000CoreConfig c>
+R3000::Control* R3000Core<c>::get_control()
+{
+    return &p->control;
 }
 
 std::unique_ptr<R3000> R3000::build()

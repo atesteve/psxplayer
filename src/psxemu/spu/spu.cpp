@@ -12,9 +12,9 @@
 #include <utility>
 #include <numeric>
 
-int32_t speed = 256;
-
 namespace {
+
+constexpr size_t OUT_SAMPLE_SIZE = 1024;
 
 struct ADPCMBlockHeader {
     uint8_t shift : 4;
@@ -435,6 +435,7 @@ struct SPU::Private {
     void load_sample(size_t v);
 
     R3000* emu;
+    R3000::Control* control;
     DMA* dma;
     EmuBuffer<spu_regs_t> reg;
 
@@ -905,7 +906,7 @@ uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint6
         clock_cycle += event.period;
     }
 
-    event.period = (SAMPLE_RATE_CYCLES * speed) >> 8;
+    event.period = (SAMPLE_RATE_CYCLES * control->playback_speed) >> 8;
 
     return iterations;
 }
@@ -942,11 +943,18 @@ void SPU::Private::tick(uint64_t const rt_cycle, bool no_output)
         sum.second += reverb_sample.second;
     }
 
+    auto const out_l = smooth_clamp(sum.first);
+    auto const out_r = smooth_clamp(sum.second);
+
     if (out.size() >= out_p + 2) {
-        out[out_p] = smooth_clamp(sum.first);
-        out[out_p + 1] = smooth_clamp(sum.second);
+        out[out_p] = out_l;
+        out[out_p + 1] = out_r;
         out_p += 2;
     }
+
+    control->master_l[control->master_p] = out_l;
+    control->master_r[control->master_p] = out_r;
+    control->master_p = (control->master_p + 1) % OUT_SAMPLE_SIZE;
 }
 
 std::pair<int16_t, int16_t>
@@ -960,7 +968,7 @@ std::pair<int16_t, int16_t>
 
     uint32_t const adpcm_sample_rate = std::min<uint16_t>(voice_state.adpcm_sample_rate, 0x4000);
     if (no_output) {
-        voice_state.sample_pos.frac += (adpcm_sample_rate * speed) / 256;
+        voice_state.sample_pos.frac += (adpcm_sample_rate * control->playback_speed) / 256;
         if (voice_state.sample_pos.frac >= 0x1000) {
             auto const overflow = voice_state.sample_pos.frac - 0x1000;
             voice_state.sample_pos.frac = overflow % 0x1000;
@@ -1153,6 +1161,9 @@ size_t SPU::rendered_samples() const
 void SPU::init(R3000* emu)
 {
     _p->emu = emu;
+    _p->control = emu->get_control();
+    _p->control->master_l.resize(OUT_SAMPLE_SIZE);
+    _p->control->master_r.resize(OUT_SAMPLE_SIZE);
     _p->dma = emu->get_dma();
     _p->reg = emu->get_device_buffer<spu_regs_t>(SPU_BASE);
     _p->system_ram = emu->get_buffer<uint16_t>(0, 0x100000);
@@ -1160,7 +1171,7 @@ void SPU::init(R3000* emu)
     _p->timing->schedule(Timing::Event{
         .name = "spu_tick",
         .type = Timing::Event::Type::PERIODIC,
-        .period = (SAMPLE_RATE_CYCLES << 8) / speed,
+        .period = (SAMPLE_RATE_CYCLES << 8) / 256,
         .callback = {_p.get(),
                      [](SPU::Private* p, auto, auto& event, uint64_t cycle, uint64_t its) {
                          return p->run_spu(event, cycle, its);

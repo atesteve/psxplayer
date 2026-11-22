@@ -7,14 +7,12 @@
 
 using namespace std::literals;
 
-extern int32_t speed;
-
 void run_benchmark(std::filesystem::path path, std::chrono::milliseconds time, bool fast_forward)
 {
-    speed = 10240;
     auto psf = load_psf(path);
     auto emu = R3000::build();
     emu->init(*psf);
+    emu->get_control()->playback_speed = 10240;
     auto const samples = (time.count() * 338688) / 7680;
     std::vector<int16_t> buf;
     buf.resize(samples * 4);

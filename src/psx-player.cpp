@@ -1,10 +1,9 @@
 #include "psx-player.h"
 
 #include "psf/psf.h"
+#include "util/util.h"
 
 using namespace std::literals;
-
-extern int32_t speed;
 
 std::expected<PsxPlayer, std::string> PsxPlayer::build(std::filesystem::path path)
 {
@@ -18,6 +17,8 @@ std::expected<PsxPlayer, std::string> PsxPlayer::build(std::filesystem::path pat
     ret._emu->init(*psf);
     ret._duration = psf->get_length();
     ret._fadeout_length = psf->get_fadeout_length();
+    ret._tags = std::move(psf->tags);
+    ret._control = ret._emu->get_control();
 
     return ret;
 }
@@ -25,9 +26,11 @@ std::expected<PsxPlayer, std::string> PsxPlayer::build(std::filesystem::path pat
 int64_t PsxPlayer::render_audio(std::span<int16_t> output, size_t n_samples)
 {
     if (_emu->tell_seek() < _pos) {
-        speed = 10240;
+        ScopeGuard restore_playback_speed{[prev_speed = _control->playback_speed, this] {
+            _control->playback_speed = prev_speed;
+        }};
+        _control->playback_speed = 10240;
         _emu->fast_forward(_pos, 100ms);
-        speed = 256;
         return 0;
     }
 
@@ -59,4 +62,14 @@ void PsxPlayer::seek(std::chrono::milliseconds pos)
 bool PsxPlayer::seek_done() const
 {
     return _pos <= _emu->tell_seek();
+}
+
+void PsxPlayer::set_playback_speed(float speed)
+{
+    _control->playback_speed = 256 * speed;
+}
+
+std::pair<std::span<int16_t const>, std::span<int16_t const>> PsxPlayer::get_master_window() const
+{
+    return {_control->master_l, _control->master_r};
 }

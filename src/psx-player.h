@@ -26,6 +26,19 @@ public:
     void seek(std::chrono::milliseconds pos);
     bool seek_done() const;
 
+    std::string_view get_tag(std::string const& tag) const
+    {
+        auto const it = _tags.find(tag);
+        if (it == _tags.cend()) {
+            return "";
+        }
+        return it->second;
+    }
+
+    void set_playback_speed(float speed);
+
+    std::pair<std::span<int16_t const>, std::span<int16_t const>> get_master_window() const;
+
 private:
     explicit PsxPlayer() = default;
 
@@ -33,4 +46,6 @@ private:
     std::chrono::milliseconds _duration;
     std::chrono::milliseconds _fadeout_length;
     std::chrono::milliseconds _pos{};
+    std::unordered_map<std::string, std::string> _tags;
+    R3000::Control* _control;
 };

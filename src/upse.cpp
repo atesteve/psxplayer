@@ -235,8 +235,6 @@ void UpseModule::load_file(QString const& file_name)
     _snapshots.clear();
     _snapshots.shrink_to_fit();
     _sample_freq.clear();
-    // _control.output = {};
-    // _control.input.speed_multiplier = _speed;
 
     auto new_player = PsxPlayer::build(file_name.toStdString());
 
@@ -247,6 +245,7 @@ void UpseModule::load_file(QString const& file_name)
     }
 
     _player = std::move(*new_player);
+    _player->set_playback_speed(_speed);
 
     // _channel_mapper = ChannelMapper::build(nullptr, "", "");
     // _channel_state.clear();
@@ -305,7 +304,9 @@ void UpseModule::stop()
 void UpseModule::set_speed(float speed)
 {
     _speed = speed;
-    //_control.input.speed_multiplier = _speed;
+    if (_player) {
+        _player->set_playback_speed(speed);
+    }
 }
 
 void UpseModule::update_mapped_channels()
@@ -376,17 +377,18 @@ void UpseModule::slow_timer_fired()
 
 void UpseModule::fast_timer_fired()
 {
-    // auto const compute_rms = [](auto&& buf) {
-    //     double rms = 0;
-    //     for (auto s : buf) {
-    //         rms += s * s;
-    //     }
-    //     return std::sqrt(rms / std::size(buf));
-    // };
+    auto const compute_rms = [](auto&& buf) {
+        double rms = 0;
+        for (auto s : buf) {
+            rms += s * s;
+        }
+        return std::sqrt(rms / std::size(buf));
+    };
 
     if (_state == State::Playing) {
-        // emit sound_level_changed(compute_rms(_control.output.window_l) / 32768,
-        //                          compute_rms(_control.output.window_r) / 32768);
+        auto const window = _player->get_master_window();
+        emit sound_level_changed(compute_rms(window.first) / 32768,
+                                 compute_rms(window.second) / 32768);
     } else {
         emit sound_level_changed(0, 0);
     }
