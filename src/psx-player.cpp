@@ -71,5 +71,30 @@ void PsxPlayer::set_playback_speed(float speed)
 
 std::pair<std::span<int16_t const>, std::span<int16_t const>> PsxPlayer::get_master_window() const
 {
-    return {_control->master_l, _control->master_r};
+    return {_control->window_l, _control->window_r};
+}
+
+size_t PsxPlayer::n_channels() const
+{
+    return 24;
+}
+
+void PsxPlayer::mute_channel(size_t n, bool muted)
+{
+    _control->channel[n].muted = muted;
+}
+
+auto PsxPlayer::get_channel_information() const -> std::vector<ChannelInformation>
+{
+    std::vector<ChannelInformation> ret;
+    ret.reserve(std::size(_control->channel));
+    for (auto& ch : _control->channel) {
+        ret.push_back({
+            .samples = {ch.window_l, ch.window_r},
+            .playing = ch.playing,
+            .fired = ch.fire,
+        });
+        ch.fire = false;
+    }
+    return ret;
 }

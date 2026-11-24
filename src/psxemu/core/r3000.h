@@ -342,12 +342,22 @@ class Timing;
 class Misc;
 
 struct R3000 {
+    struct ChannelInfo {
+        std::vector<int16_t> window_l;
+        std::vector<int16_t> window_r;
+        size_t window_p{};
+        bool playing{};
+        bool fire{};
+        bool muted{};
+    };
+
     struct Control {
         // 256 = 100% playback speed. Higher values mean proportionally faster playback speeds.
         uint32_t playback_speed = 256;
-        std::vector<int16_t> master_l;
-        std::vector<int16_t> master_r;
-        size_t master_p{};
+        std::vector<int16_t> window_l;
+        std::vector<int16_t> window_r;
+        size_t window_p{};
+        ChannelInfo channel[24];
     };
 
     virtual ~R3000() = default;

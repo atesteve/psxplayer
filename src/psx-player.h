@@ -37,7 +37,20 @@ public:
 
     void set_playback_speed(float speed);
 
-    std::pair<std::span<int16_t const>, std::span<int16_t const>> get_master_window() const;
+    using window_t = std::pair<std::span<int16_t const>, std::span<int16_t const>>;
+
+    window_t get_master_window() const;
+
+    size_t n_channels() const;
+    void mute_channel(size_t n, bool muted);
+
+    struct ChannelInformation {
+        window_t samples;
+        bool playing;
+        bool fired;
+    };
+
+    std::vector<ChannelInformation> get_channel_information() const;
 
 private:
     explicit PsxPlayer() = default;

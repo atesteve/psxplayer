@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "channel-mapper/channel-mapper.h"
 #include "audio.h"
 #include "psx-player.h"
 
@@ -76,10 +75,8 @@ private:
         std::future<double> _future;
     };
 
-    void update_mapped_channels();
     void take_snapshot();
     void set_state(State new_state);
-    void handle_channel_fire();
     void find_sample_frequency();
 
     // static void jal_hook(void* self, upse_module_instance_t* ins);
@@ -101,28 +98,8 @@ private:
     int _stopped_cycles{};
     QTimer _slow_timer;
     QTimer _fast_timer;
-    std::vector<ChannelState> _channel_state;
 
-    std::unique_ptr<ChannelMapper> _channel_mapper;
-
-    std::vector<std::pair<std::chrono::milliseconds, std::pair<SnapshotBuffer, std::any>>>
-        _snapshots;
-
-    // emulation_control_t _control{
-    //     .input =
-    //         {
-    //             .speed_multiplier = 1,
-    //             .endless_play = false,
-    //             .channel = {},
-    //         },
-    //     .output = {},
-    //     .hooks =
-    //         {
-    //             .data = this,
-    //             .jal = UpseModule::jal_hook,
-    //             .sw = sw_hook,
-    //         },
-    // };
+    std::vector<std::pair<std::chrono::milliseconds, SnapshotBuffer>> _snapshots;
 
     struct pair_hash {
         static size_t operator()(std::pair<uint32_t, uint32_t> const& p) noexcept

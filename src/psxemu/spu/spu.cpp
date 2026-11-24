@@ -540,7 +540,12 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
         switch (index) {
             case 0: v.vol_left.raw             = value;     break;
             case 1: v.vol_right.raw            = value;     break;
-            case 2: v.adpcm_sample_rate        = value;     break;
+            case 2: if (v.status != VoiceStatus::OFF &&
+                            (std::max<int>(v.adpcm_sample_rate, value) * 1000) /
+                            std::min<int>(v.adpcm_sample_rate, value) > 1041) {
+                        control->channel[voice_n].fire = true;
+                    }
+                    v.adpcm_sample_rate        = value;     break;
             case 3: v.adpcm_start_addr.raw     = value;     break;
             case 4: write_32bit_reg(&v.adsr_regs.raw, value, 0); break;
             case 5: write_32bit_reg(&v.adsr_regs.raw, value, 2); break;
@@ -892,6 +897,8 @@ uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint6
             voice_state.adsr_vol = 0;
             reg->voice_end &= ~(1 << v);
             load_sample(v);
+            control->channel[v].fire = true;
+            control->channel[v].playing = true;
         }
 
         if (voice_state.key_off_requested) {
@@ -918,9 +925,20 @@ void SPU::Private::tick(uint64_t const rt_cycle, bool no_output)
 
     for (auto v = 0u; v < N_VOICES; v++) {
         auto const sample = tick_voice(v, rt_cycle, no_output);
+
         if (no_output) {
             continue;
         }
+
+        auto& cc = control->channel[v];
+        cc.window_l[cc.window_p] = sample.first;
+        cc.window_r[cc.window_p] = sample.second;
+        cc.window_p = (cc.window_p + 1) % OUT_SAMPLE_SIZE;
+
+        if (cc.muted) {
+            continue;
+        }
+
         sum.first += sample.first;
         sum.second += sample.second;
         if (reg->voice_reverb_on & (1 << v)) {
@@ -952,9 +970,9 @@ void SPU::Private::tick(uint64_t const rt_cycle, bool no_output)
         out_p += 2;
     }
 
-    control->master_l[control->master_p] = out_l;
-    control->master_r[control->master_p] = out_r;
-    control->master_p = (control->master_p + 1) % OUT_SAMPLE_SIZE;
+    control->window_l[control->window_p] = out_l;
+    control->window_r[control->window_p] = out_r;
+    control->window_p = (control->window_p + 1) % OUT_SAMPLE_SIZE;
 }
 
 std::pair<int16_t, int16_t>
@@ -984,6 +1002,7 @@ std::pair<int16_t, int16_t>
                 } else {
                     voice_state.status = VoiceStatus::OFF;
                     voice_state.adsr_vol = 0;
+                    control->channel[v].playing = false;
                     return {0, 0};
                 }
             }
@@ -1000,6 +1019,7 @@ std::pair<int16_t, int16_t>
                 } else {
                     voice_state.status = VoiceStatus::OFF;
                     voice_state.adsr_vol = 0;
+                    control->channel[v].playing = false;
                     return {0, 0};
                 }
             }
@@ -1016,6 +1036,7 @@ std::pair<int16_t, int16_t>
         if (turn_off_voice) {
             voice_state.status = VoiceStatus::OFF;
             voice_state.adsr_vol = 0;
+            control->channel[v].playing = false;
             break;
         }
     }
@@ -1162,8 +1183,12 @@ void SPU::init(R3000* emu)
 {
     _p->emu = emu;
     _p->control = emu->get_control();
-    _p->control->master_l.resize(OUT_SAMPLE_SIZE);
-    _p->control->master_r.resize(OUT_SAMPLE_SIZE);
+    _p->control->window_l.resize(OUT_SAMPLE_SIZE);
+    _p->control->window_r.resize(OUT_SAMPLE_SIZE);
+    for (auto& c : _p->control->channel) {
+        c.window_l.resize(OUT_SAMPLE_SIZE);
+        c.window_r.resize(OUT_SAMPLE_SIZE);
+    }
     _p->dma = emu->get_dma();
     _p->reg = emu->get_device_buffer<spu_regs_t>(SPU_BASE);
     _p->system_ram = emu->get_buffer<uint16_t>(0, 0x100000);
