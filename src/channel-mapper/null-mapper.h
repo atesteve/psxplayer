@@ -4,6 +4,7 @@
 #pragma once
 
 #include "channel-mapper.h"
+#include "psxemu/core/r3000.h"
 
 class NullMapper : public ChannelMapper {
 public:
@@ -28,8 +29,16 @@ public:
         return log_channel;
     }
     int supported_channels() const override { return _supported_channels; }
-    bool sw_hook(R3000*, uint32_t, uint32_t, uint32_t) override { return false; }
-    bool jal_hook(R3000*) override { return false; }
+    bool sw_hook(R3000* emu, uint32_t, uint32_t, uint32_t) override
+    {
+        emu->set_sw_hook({});
+        return false;
+    }
+    bool jal_hook(R3000* emu) override
+    {
+        emu->set_jal_hook({});
+        return false;
+    }
 
 private:
     int _supported_channels;

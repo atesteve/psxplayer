@@ -20,14 +20,12 @@ void SquareMapper::take_snapshot(SnapshotSerializer& serializer) const
 {
     serializer.serialize(_phys_to_log);
     serializer.serialize(_log_to_phys);
-    serializer.serialize(_channel_base_addr);
 }
 
 void SquareMapper::restore_snapshot(SnapshotDeserializer& deserializer)
 {
     deserializer.deserialize(_phys_to_log);
     deserializer.deserialize(_log_to_phys);
-    deserializer.deserialize(_channel_base_addr);
 }
 
 int SquareMapper::physical_to_logical(int phys_channel) const
@@ -99,6 +97,9 @@ bool SquareMapper::jal_hook(R3000* emu)
     auto const channel_base_ptr = base_ptr + _base_ptr_offset;
 
     _channel_base_addr = channel_base_ptr;
+
+    // We no longer need this hook, disable it.
+    emu->set_jal_hook({});
 
     // There is no change to the map, it has only been set up.
     return false;
