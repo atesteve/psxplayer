@@ -1008,7 +1008,13 @@ std::pair<int16_t, int16_t>
             }
         }
     } else {
-        voice_state.sample_pos.frac += adpcm_sample_rate;
+        auto const effective_sample_rate = [&] -> uint32_t {
+            if (control->transpose_cents == 0) {
+                return adpcm_sample_rate;
+            }
+            return adpcm_sample_rate * std::pow(2, control->transpose_cents / 1200.f);
+        }();
+        voice_state.sample_pos.frac += effective_sample_rate;
         while (voice_state.sample_pos.frac >= 0x1000) {
             auto const sample = voice_state.sample->samples[voice_state.sample_pos.pos];
             voice_state.sample_pos.pos++;

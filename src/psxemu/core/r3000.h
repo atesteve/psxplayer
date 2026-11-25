@@ -358,6 +358,7 @@ struct R3000 {
         std::vector<int16_t> window_r;
         size_t window_p{};
         ChannelInfo channel[24];
+        int32_t transpose_cents{};
     };
 
     virtual ~R3000() = default;

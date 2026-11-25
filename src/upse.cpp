@@ -72,7 +72,7 @@ void UpseModule::run()
 
     std::vector<int16_t> buf;
     int64_t n;
-    buf.resize(8192);
+    buf.resize(4096);
 
     while (!_shutdown) {
         if (_player && (_state == State::Playing || _state == State::Seeking)) {
