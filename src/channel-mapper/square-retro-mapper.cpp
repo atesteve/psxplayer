@@ -2,34 +2,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "square-retro-mapper.h"
+#include "psxemu/core/r3000.h"
 
 #include <fmt/format.h>
-/*
-namespace {
-struct SaveState {
-    std::vector<int> phys_to_log;
-    std::vector<int> log_to_phys;
-    std::vector<int> next_log;
-};
 
-template<typename Int = uint32_t>
-auto read_psx_memory(upse_module_instance_t* ins, uint32_t addr)
-{
-    auto const* ptr = ins->upse_ps1_memory_LUT[addr >> 16];
-    if (!ptr) {
-        return Int{};
-    }
-    return *((Int const*)(&ptr[addr & 0xffff]));
-}
-
-} // namespace
-
-SquareRetroMapper::SquareRetroMapper(upse_module_instance_t* ins, uint32_t module_base_addr)
+SquareRetroMapper::SquareRetroMapper(R3000* emu, uint32_t module_base_addr)
     : _phys_to_log(24, -1)
     , _log_to_phys(SUPPORTED_CHANNELS, -1)
 {
-    if (read_psx_memory(ins, module_base_addr) != 2
-        || read_psx_memory(ins, module_base_addr + 4) != 12) {
+    if (emu->read_mem<uint32_t>(module_base_addr) != 2
+        || emu->read_mem<uint32_t>(module_base_addr + 4) != 12) {
         fmt::println("Warning: unrecognized module format");
         return;
     }
@@ -37,7 +19,7 @@ SquareRetroMapper::SquareRetroMapper(upse_module_instance_t* ins, uint32_t modul
     auto const channels_offsets = [&] -> uint32_t {
         int found_nulls = 0;
         for (uint32_t i = 0; i < 0x10000; i += sizeof(uint32_t)) {
-            if (read_psx_memory(ins, module_base_addr + i) == 0) {
+            if (emu->read_mem<uint32_t>(module_base_addr + i) == 0) {
                 found_nulls += 1;
             }
             if (found_nulls == 2) {
@@ -57,7 +39,7 @@ SquareRetroMapper::SquareRetroMapper(upse_module_instance_t* ins, uint32_t modul
     auto const channel_addrs = [&] {
         std::vector<uint32_t> channel_addrs;
         for (int i = 0; i < 16; i++) {
-            auto const entry = read_psx_memory(ins, channels_offsets + i * sizeof(uint32_t));
+            auto const entry = emu->read_mem<uint32_t>(channels_offsets + i * sizeof(uint32_t));
             if (entry == SECTION_END) {
                 break;
             }
@@ -76,7 +58,7 @@ SquareRetroMapper::SquareRetroMapper(upse_module_instance_t* ins, uint32_t modul
         int simultaneous_notes = 1;
         int max_sim_notes = 1;
         for (uint32_t i = 0; i < 0x10000; i += 4) {
-            auto const entry = read_psx_memory(ins, channel_base + i);
+            auto const entry = emu->read_mem<uint32_t>(channel_base + i);
 
             if (entry == SECTION_END) {
                 max_sim_notes = std::max(max_sim_notes, simultaneous_notes);
@@ -109,21 +91,18 @@ SquareRetroMapper::SquareRetroMapper(upse_module_instance_t* ins, uint32_t modul
     }
 }
 
-std::any SquareRetroMapper::take_snapshot() const
+void SquareRetroMapper::take_snapshot(SnapshotSerializer& serializer) const
 {
-    return SaveState{
-        _phys_to_log,
-        _log_to_phys,
-        _next_log,
-    };
+    serializer.serialize(_phys_to_log);
+    serializer.serialize(_log_to_phys);
+    serializer.serialize(_next_log);
 }
 
-void SquareRetroMapper::restore_snapshot(std::any const& snapshot)
+void SquareRetroMapper::restore_snapshot(SnapshotDeserializer& deserializer)
 {
-    auto const& state = std::any_cast<SaveState const&>(snapshot);
-    _phys_to_log = state.phys_to_log;
-    _log_to_phys = state.log_to_phys;
-    _next_log = state.next_log;
+    deserializer.deserialize(_phys_to_log);
+    deserializer.deserialize(_log_to_phys);
+    deserializer.deserialize(_next_log);
 }
 
 int SquareRetroMapper::physical_to_logical(int phys_channel) const
@@ -142,10 +121,7 @@ int SquareRetroMapper::logical_to_physical(int log_channel) const
     return _log_to_phys[log_channel];
 }
 
-bool SquareRetroMapper::sw_hook(upse_module_instance_t* ins,
-                        mem_access_size_t,
-                        uint32_t addr,
-                        uint32_t value)
+bool SquareRetroMapper::sw_hook(R3000* emu, uint32_t, uint32_t addr, uint32_t value)
 {
     static constexpr uint32_t BASE_ADDR = 0x8009ba10;
     static constexpr uint32_t HOOK_PC_1 = 0x800433cc;
@@ -157,7 +133,9 @@ bool SquareRetroMapper::sw_hook(upse_module_instance_t* ins,
         return false;
     }
 
-    if (ins->cpustate.pc != HOOK_PC_1 && ins->cpustate.pc != HOOK_PC_2) {
+    auto const& core = emu->core();
+
+    if (core.pc != HOOK_PC_1 && core.pc != HOOK_PC_2) {
         return false;
     }
 
@@ -171,8 +149,8 @@ bool SquareRetroMapper::sw_hook(upse_module_instance_t* ins,
         uint32_t const ret = _log_channel_base[internal_log] + _next_log[internal_log];
 
         auto const entry_ptr =
-            read_psx_memory(ins, INSTRUMENT_BASE + internal_log * INSTRUMENT_PITCH);
-        auto const entry = read_psx_memory(ins, entry_ptr);
+            emu->read_mem<uint32_t>(INSTRUMENT_BASE + internal_log * INSTRUMENT_PITCH);
+        auto const entry = emu->read_mem<uint32_t>(entry_ptr);
         auto const duration = entry >> 24;
 
         if (duration == 0) {
@@ -199,4 +177,9 @@ bool SquareRetroMapper::sw_hook(upse_module_instance_t* ins,
 
     return true;
 }
-*/
+
+bool SquareRetroMapper::jal_hook(R3000* emu)
+{
+    emu->set_jal_hook({});
+    return false;
+}

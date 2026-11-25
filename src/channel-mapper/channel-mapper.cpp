@@ -44,18 +44,18 @@ const std::unordered_map<std::string_view, make_mapper_fn> builder_map{
             return std::make_unique<SquareMapper>(0x8004d084, 0x108, 0x124);
         },
     },
-    // {
-    //     "Final Fantasy VI",
-    //     [](auto* emu, auto) -> cm_ptr {
-    //         return std::make_unique<SquareRetroMapper>(emu, 0x80150000);
-    //     },
-    // },
-    // {
-    //     "Chrono Trigger",
-    //     [](auto* emu, auto) -> cm_ptr {
-    //         return std::make_unique<SquareRetroMapper>(emu, 0x80170000);
-    //     },
-    // },
+    {
+        "Final Fantasy VI",
+        [](auto* emu, auto) -> cm_ptr {
+            return std::make_unique<SquareRetroMapper>(emu, 0x80150000);
+        },
+    },
+    {
+        "Chrono Trigger",
+        [](auto* emu, auto) -> cm_ptr {
+            return std::make_unique<SquareRetroMapper>(emu, 0x80170000);
+        },
+    },
 };
 } // namespace
 
