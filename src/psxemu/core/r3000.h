@@ -14,6 +14,7 @@
 #include <stacktrace>
 #include <span>
 #include <chrono>
+#include <functional>
 
 enum class FaultCheck {
     SOFTWARE,
@@ -449,10 +450,14 @@ struct R3000 {
 
     virtual std::chrono::milliseconds tell_seek() const = 0;
 
-    virtual SnapshotBuffer take_snapshot() = 0;
-    virtual void restore_snapshot(SnapshotBuffer const& snapshot) = 0;
+    virtual void take_snapshot(SnapshotSerializer& serializer) = 0;
+    virtual void restore_snapshot(SnapshotDeserializer& deserializer) = 0;
 
     virtual Control* get_control() = 0;
+
+    virtual void set_jal_hook(std::move_only_function<void(R3000*)>) = 0;
+    virtual void
+        set_sw_hook(std::move_only_function<void(R3000*, uint32_t, uint32_t, uint32_t)>) = 0;
 
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;

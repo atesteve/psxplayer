@@ -32,38 +32,7 @@ UpseModule::UpseModule(QObject* parent)
     QObject::connect(&_fast_timer, &QTimer::timeout, this, &UpseModule::fast_timer_fired);
     _fast_timer.setSingleShot(false);
 }
-/*
-void UpseModule::jal_hook(void* self, upse_module_instance_t* ins)
-{
-    static_cast<UpseModule*>(self)->jal_hook(ins);
-}
 
-void UpseModule::jal_hook(upse_module_instance_t* ins)
-{
-    if (_channel_mapper->jal_hook(ins)) {
-        update_mapped_channels();
-    }
-}
-
-void UpseModule::sw_hook(void* self,
-                         upse_module_instance_t* ins,
-                         mem_access_size_t size,
-                         uint32_t addr,
-                         uint32_t data)
-{
-    static_cast<UpseModule*>(self)->sw_hook(ins, size, addr, data);
-}
-
-void UpseModule::sw_hook(upse_module_instance_t* ins,
-                         mem_access_size_t size,
-                         uint32_t addr,
-                         uint32_t data)
-{
-    if (_channel_mapper->sw_hook(ins, size, addr, data)) {
-        update_mapped_channels();
-    }
-}
-*/
 void UpseModule::run()
 {
     QThread::currentThread()->setObjectName("UpseModule");
@@ -342,7 +311,10 @@ void UpseModule::slow_timer_fired()
 
 void UpseModule::fast_timer_fired()
 {
-    auto const compute_rms = [](auto&& buf) {
+    auto const compute_rms = [](auto&& buf) -> double {
+        if (std::size(buf) == 0) {
+            return 0;
+        }
         double rms = 0;
         for (auto s : buf) {
             rms += s * s;
@@ -359,46 +331,16 @@ void UpseModule::fast_timer_fired()
     }
 
     for (auto const& [ch_i, ch] : std::views::enumerate(_player->get_channel_information())) {
+        if (_state != State::Playing) {
+            emit channel_sound_level_changed(ch_i, 0, 0);
+            continue;
+        }
         emit channel_sound_level_changed(
             ch_i, compute_rms(ch.samples.first) / 32768, compute_rms(ch.samples.second) / 32768);
-            if (ch.fired) {
-                emit channel_fired(ch_i);
-            }
+        if (ch.fired) {
+            emit channel_fired(ch_i);
+        }
     }
-
-    // for (auto ch = 0u; ch < _channel_state.size(); ch++) {
-    //     auto const hw_channel = _channel_mapper->logical_to_physical(ch);
-    //     if (hw_channel == -1) {
-    //         emit channel_sound_level_changed(ch, 0, 0);
-    //         emit channel_frequency_changed(ch, 0);
-    //         continue;
-    //     }
-
-    //     auto const& channel_info = _control.output.channel[hw_channel];
-
-    //     if (_state == State::Playing) {
-    //         emit channel_sound_level_changed(
-    //             ch, compute_rms(channel_info.l) / 32768, compute_rms(channel_info.r) / 32768);
-
-    //         auto const it = _sample_freq.find({channel_info.sample_addr,
-    //         channel_info.loop_addr}); if (it == _sample_freq.end()) {
-    //             continue;
-    //         }
-    //         auto const sample_freq = it->second.get();
-    //         if (!sample_freq) {
-    //             emit channel_frequency_changed(ch, 0);
-    //             continue;
-    //         }
-    //         if (std::isnan(*sample_freq) || *sample_freq == 0) {
-    //             emit channel_frequency_changed(ch, 0);
-    //             continue;
-    //         }
-    //         emit channel_frequency_changed(ch, (*sample_freq * channel_info.pitch) / 0x1000);
-    //     } else {
-    //         emit channel_sound_level_changed(ch, 0, 0);
-    //         emit channel_frequency_changed(ch, 0);
-    //     }
-    // }
 }
 
 UpseModule::Freq::Freq(double value)

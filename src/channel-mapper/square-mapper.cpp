@@ -2,15 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "square-mapper.h"
-/*
-namespace {
-struct SaveState {
-    std::vector<int> phys_to_log;
-    std::vector<int> log_to_phys;
-    uint32_t channel_base_addr;
-};
 
-} // namespace
+#include "psxemu/core/r3000.h"
 
 SquareMapper::SquareMapper(uint32_t jal_address,
                            uint32_t base_ptr_offset,
@@ -23,21 +16,18 @@ SquareMapper::SquareMapper(uint32_t jal_address,
     , _channel_base_addr{0}
 {}
 
-std::any SquareMapper::take_snapshot() const
+void SquareMapper::take_snapshot(SnapshotSerializer& serializer) const
 {
-    return SaveState{
-        _phys_to_log,
-        _log_to_phys,
-        _channel_base_addr,
-    };
+    serializer.serialize(_phys_to_log);
+    serializer.serialize(_log_to_phys);
+    serializer.serialize(_channel_base_addr);
 }
 
-void SquareMapper::restore_snapshot(std::any const& snapshot)
+void SquareMapper::restore_snapshot(SnapshotDeserializer& deserializer)
 {
-    auto const& state = std::any_cast<SaveState const&>(snapshot);
-    _phys_to_log = state.phys_to_log;
-    _log_to_phys = state.log_to_phys;
-    _channel_base_addr = state.channel_base_addr;
+    deserializer.deserialize(_phys_to_log);
+    deserializer.deserialize(_log_to_phys);
+    deserializer.deserialize(_channel_base_addr);
 }
 
 int SquareMapper::physical_to_logical(int phys_channel) const
@@ -56,7 +46,7 @@ int SquareMapper::logical_to_physical(int log_channel) const
     return _log_to_phys[log_channel];
 }
 
-bool SquareMapper::sw_hook(upse_module_instance_t*, mem_access_size_t, uint32_t addr, uint32_t data)
+bool SquareMapper::sw_hook(R3000*, uint32_t, uint32_t addr, uint32_t data)
 {
     if (_channel_base_addr == 0) {
         return false;
@@ -89,20 +79,22 @@ bool SquareMapper::sw_hook(upse_module_instance_t*, mem_access_size_t, uint32_t 
     return true;
 }
 
-bool SquareMapper::jal_hook(upse_module_instance_t* ins)
+bool SquareMapper::jal_hook(R3000* emu)
 {
     // If the information is already captured, no need to repeat the process.
     if (_channel_base_addr) {
         return false;
     }
 
+    auto const& core = emu->core();
+
     // Not an interesting function address.
-    if (ins->cpustate.pc != _jal_address) {
+    if (core.pc != _jal_address) {
         return false;
     }
 
     // a0 constains the interesting pointer.
-    auto const base_ptr = ins->cpustate.GPR.n.a0;
+    auto const base_ptr =  core.gpr.n.a0;
     // First channel at offset `_base_ptr_offset`
     auto const channel_base_ptr = base_ptr + _base_ptr_offset;
 
@@ -111,4 +103,3 @@ bool SquareMapper::jal_hook(upse_module_instance_t* ins)
     // There is no change to the map, it has only been set up.
     return false;
 }
-*/

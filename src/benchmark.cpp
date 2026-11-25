@@ -18,11 +18,15 @@ void run_benchmark(std::filesystem::path path, std::chrono::milliseconds time, b
     buf.resize(samples * 4);
 
     int const nruns = 10;
-    auto const snapshot = emu->take_snapshot();
+    SnapshotBuffer snapshot;
+    SnapshotSerializer ser{&snapshot};
+    emu->take_snapshot(ser);
+    snapshot.shrink_to_fit();
     std::chrono::steady_clock::duration dur{};
 
     auto const run = [&] {
-        emu->restore_snapshot(snapshot);
+        SnapshotDeserializer des{&snapshot};
+        emu->restore_snapshot(des);
         auto const start = std::chrono::steady_clock::now();
         if (fast_forward) {
             emu->fast_forward(time, 1h);

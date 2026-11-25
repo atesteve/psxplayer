@@ -10,30 +10,24 @@
 #include <filesystem>
 #include <chrono>
 
+class ChannelMapper;
+
 class PsxPlayer {
 public:
-    static std::expected<PsxPlayer, std::string> build(std::filesystem::path path);
+    static std::expected<std::unique_ptr<PsxPlayer>, std::string> build(std::filesystem::path path);
+    PsxPlayer(PsxPlayer&&);
+    PsxPlayer& operator=(PsxPlayer&&);
+    ~PsxPlayer();
 
     int64_t render_audio(std::span<int16_t> output, size_t n_samples);
     SnapshotBuffer take_snapshot();
     void restore_snapshot(SnapshotBuffer const& snapshot);
 
-    auto get_duration() const {
-        return _duration;
-    }
+    auto get_duration() const { return _duration; }
 
     std::chrono::milliseconds tell_seek() const;
     void seek(std::chrono::milliseconds pos);
     bool seek_done() const;
-
-    std::string_view get_tag(std::string const& tag) const
-    {
-        auto const it = _tags.find(tag);
-        if (it == _tags.cend()) {
-            return "";
-        }
-        return it->second;
-    }
 
     void set_playback_speed(float speed);
 
@@ -45,9 +39,9 @@ public:
     void mute_channel(size_t n, bool muted);
 
     struct ChannelInformation {
-        window_t samples;
-        bool playing;
-        bool fired;
+        window_t samples{};
+        bool playing{};
+        bool fired{};
     };
 
     std::vector<ChannelInformation> get_channel_information() const;
@@ -55,10 +49,19 @@ public:
 private:
     explicit PsxPlayer() = default;
 
+    void update_mapped_channels();
+
+    struct ChannelControl {
+        bool muted{};
+        float volume{1};
+    };
+
     std::unique_ptr<R3000> _emu;
     std::chrono::milliseconds _duration;
     std::chrono::milliseconds _fadeout_length;
     std::chrono::milliseconds _pos{};
     std::unordered_map<std::string, std::string> _tags;
-    R3000::Control* _control;
+    R3000::Control* _control{};
+    std::unique_ptr<ChannelMapper> _mapper{};
+    std::vector<ChannelControl> _channel_control{};
 };

@@ -56,10 +56,13 @@ public:
 
     std::chrono::milliseconds tell_seek() const override;
 
-    SnapshotBuffer take_snapshot() override;
-    void restore_snapshot(SnapshotBuffer const& snapshot) override;
+    void take_snapshot(SnapshotSerializer& serializer);
+    void restore_snapshot(SnapshotDeserializer& deserializer);
 
     Control* get_control() override;
+
+    void set_jal_hook(std::move_only_function<void(R3000*)>) override;
+    void set_sw_hook(std::move_only_function<void(R3000*, uint32_t, uint32_t, uint32_t)>) override;
 
 private:
     struct Private;

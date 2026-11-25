@@ -6,12 +6,14 @@
 #include "square-retro-mapper.h"
 #include "null-mapper.h"
 
+#include "psxemu/core/r3000.h"
+
 #include <unordered_map>
-/*
+
 namespace {
 
 using cm_ptr = std::unique_ptr<ChannelMapper>;
-using make_mapper_fn = cm_ptr (*)(upse_module_instance_t* ins, std::string_view title);
+using make_mapper_fn = cm_ptr (*)(R3000* emu, std::string_view title);
 
 const std::unordered_map<std::string_view, make_mapper_fn> builder_map{
     {
@@ -42,29 +44,27 @@ const std::unordered_map<std::string_view, make_mapper_fn> builder_map{
             return std::make_unique<SquareMapper>(0x8004d084, 0x108, 0x124);
         },
     },
-    {
-        "Final Fantasy VI",
-        [](auto* ins, auto) -> cm_ptr {
-            return std::make_unique<SquareRetroMapper>(ins, 0x80150000);
-        },
-    },
-    {
-        "Chrono Trigger",
-        [](auto* ins, auto) -> cm_ptr {
-            return std::make_unique<SquareRetroMapper>(ins, 0x80170000);
-        },
-    },
+    // {
+    //     "Final Fantasy VI",
+    //     [](auto* emu, auto) -> cm_ptr {
+    //         return std::make_unique<SquareRetroMapper>(emu, 0x80150000);
+    //     },
+    // },
+    // {
+    //     "Chrono Trigger",
+    //     [](auto* emu, auto) -> cm_ptr {
+    //         return std::make_unique<SquareRetroMapper>(emu, 0x80170000);
+    //     },
+    // },
 };
 } // namespace
 
-std::unique_ptr<ChannelMapper> ChannelMapper::build(upse_module_instance_t* ins,
-                                                    std::string_view game_name,
-                                                    std::string_view title)
+std::unique_ptr<ChannelMapper>
+    ChannelMapper::build(R3000* emu, std::string_view game_name, std::string_view title)
 {
     auto const it = builder_map.find(game_name);
     if (it == builder_map.end()) {
         return std::make_unique<NullMapper>(24);
     }
-    return it->second(ins, title);
+    return it->second(emu, title);
 }
-*/

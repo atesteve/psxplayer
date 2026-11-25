@@ -88,7 +88,7 @@ private:
     //                     uint32_t data);
     // void sw_hook(upse_module_instance_t* ins, mem_access_size_t size, uint32_t addr, uint32_t data);
 
-    std::optional<PsxPlayer> _player;
+    std::unique_ptr<PsxPlayer> _player;
     Audio _audio;
 
     State _state{};

@@ -107,7 +107,7 @@ struct R3000Core<c>::Private {
     void handle_longjmp(auto&& fn, auto&& handle_longjmp_fn);
     uint64_t run_returnFromException();
 
-    void set_branch_target(r3000_ptr_t target);
+    void set_branch_target(r3000_ptr_t target, bool link);
 
     uint64_t run_r_inst(uint32_t function, uint32_t rs, uint32_t rt, uint32_t rd, uint32_t shift);
     uint64_t run_bcond_inst(uint32_t function, uint32_t rs, uint32_t offset);
@@ -222,6 +222,7 @@ struct R3000Core<c>::Private {
     struct branch_delay_slot {
         int count = 0;
         r3000_ptr_t target{};
+        bool link{};
     };
 
     void load_slot_tick()
@@ -255,6 +256,9 @@ struct R3000Core<c>::Private {
             // An idle jump is a jump to itself.
             idle_jump = branch_slot.target == core.pc - 8;
             core.pc = branch_slot.target;
+            if (branch_slot.link && jal_hook) {
+                jal_hook(parent);
+            }
         }
         return idle_jump;
     }
@@ -293,16 +297,19 @@ struct R3000Core<c>::Private {
     R3000Core<c>* parent;
     bool return_from_callback_flag = false;
     Control control{};
+    std::move_only_function<void(R3000*)> jal_hook;
+    std::move_only_function<void(R3000*, uint32_t, uint32_t, uint32_t)> sw_hook;
 };
 
 template<R3000CoreConfig c>
-void R3000Core<c>::Private::set_branch_target(r3000_ptr_t target)
+void R3000Core<c>::Private::set_branch_target(r3000_ptr_t target, bool link)
 {
     if (branch_slot.count > 0) {
         return;
     }
     branch_slot.count = 2;
     branch_slot.target = target;
+    branch_slot.link = link;
 }
 
 template<R3000CoreConfig c>
@@ -609,7 +616,7 @@ void R3000Core<c>::Private::run_branch(uint32_t offset)
 {
     int32_t signed_offset = sign_extend_16(offset);
     signed_offset <<= 2;
-    set_branch_target(core.pc + signed_offset);
+    set_branch_target(core.pc + signed_offset, false);
 }
 
 
@@ -660,7 +667,7 @@ uint64_t R3000Core<c>::Private::run_r_srav(uint32_t rs, uint32_t rt, uint32_t rd
 template<R3000CoreConfig c>
 uint64_t R3000Core<c>::Private::run_r_jr(uint32_t rs, uint32_t, uint32_t, uint32_t)
 {
-    set_branch_target(core.gpr.r[rs]);
+    set_branch_target(core.gpr.r[rs], false);
     return 1;
 }
 
@@ -670,7 +677,7 @@ uint64_t R3000Core<c>::Private::run_r_jalr(uint32_t rs, uint32_t, uint32_t rd, u
     // TODO: this instruction traps immediately when core.gpr.r[rs] is an invalid address, and not
     // after the delay slot is executed like other branch instructions.
     core.gpr.r[rd] = core.pc + sizeof(uint32_t);
-    set_branch_target(core.gpr.r[rs]);
+    set_branch_target(core.gpr.r[rs], true);
     return 1;
 }
 
@@ -919,7 +926,7 @@ template<R3000CoreConfig c>
 uint64_t R3000Core<c>::Private::run_ij_j(uint32_t, uint32_t, uint32_t, uint32_t target)
 {
     auto const target_addr = (core.pc & 0xfc000000u) | (target << 2);
-    set_branch_target(target_addr);
+    set_branch_target(target_addr, false);
     return 1;
 }
 
@@ -928,7 +935,7 @@ uint64_t R3000Core<c>::Private::run_ij_jal(uint32_t, uint32_t, uint32_t, uint32_
 {
     core.gpr.n.ra = core.pc + sizeof(uint32_t);
     auto const target_addr = (core.pc & 0xfc000000u) | (target << 2);
-    set_branch_target(target_addr);
+    set_branch_target(target_addr, true);
     return 1;
 }
 
@@ -1104,21 +1111,36 @@ uint64_t R3000Core<c>::Private::run_ij_lwr(uint32_t rs, uint32_t rt, uint32_t im
 template<R3000CoreConfig c>
 uint64_t R3000Core<c>::Private::run_ij_sb(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    write_mem<uint8_t>(core.gpr.r[rs] + sign_extend_16(imm), core.gpr.r[rt]);
+    uint32_t const addr = core.gpr.r[rs] + sign_extend_16(imm);
+    uint8_t const data = core.gpr.r[rt];
+    if (sw_hook) {
+        sw_hook(parent, 1, addr, data);
+    }
+    write_mem<uint8_t>(addr, data);
     return 1;
 }
 
 template<R3000CoreConfig c>
 uint64_t R3000Core<c>::Private::run_ij_sh(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    write_mem<uint16_t>(core.gpr.r[rs] + sign_extend_16(imm), core.gpr.r[rt]);
+    uint32_t const addr = core.gpr.r[rs] + sign_extend_16(imm);
+    uint16_t const data = core.gpr.r[rt];
+    if (sw_hook) {
+        sw_hook(parent, 2, addr, data);
+    }
+    write_mem<uint16_t>(addr, data);
     return 1;
 }
 
 template<R3000CoreConfig c>
 uint64_t R3000Core<c>::Private::run_ij_sw(uint32_t rs, uint32_t rt, uint32_t imm, uint32_t)
 {
-    write_mem<uint32_t>(core.gpr.r[rs] + sign_extend_16(imm), core.gpr.r[rt]);
+    uint32_t const addr = core.gpr.r[rs] + sign_extend_16(imm);
+    uint32_t const data = core.gpr.r[rt];
+    if (sw_hook) {
+        sw_hook(parent, 4, addr, data);
+    }
+    write_mem<uint32_t>(addr, data);
     return 1;
 }
 
@@ -1444,10 +1466,8 @@ std::chrono::milliseconds R3000Core<c>::tell_seek() const
 }
 
 template<R3000CoreConfig c>
-SnapshotBuffer R3000Core<c>::take_snapshot()
+void R3000Core<c>::take_snapshot(SnapshotSerializer& serializer)
 {
-    SnapshotBuffer snapshot;
-    SnapshotSerializer serializer{&snapshot};
     serializer.serialize(p->core);
     serializer.serialize(p->cp0);
     serializer.serialize(p->load_slot);
@@ -1458,14 +1478,11 @@ SnapshotBuffer R3000Core<c>::take_snapshot()
     p->spu.take_snapshot(serializer);
     p->timers.take_snapshot(serializer);
     p->timing.take_snapshot(serializer);
-    return snapshot.compress();
 }
 
 template<R3000CoreConfig c>
-void R3000Core<c>::restore_snapshot(SnapshotBuffer const& snapshot)
+void R3000Core<c>::restore_snapshot(SnapshotDeserializer& deserializer)
 {
-    SnapshotBuffer const decompressed = snapshot.decompress();
-    SnapshotDeserializer deserializer{&decompressed};
     deserializer.deserialize(p->core);
     deserializer.deserialize(p->cp0);
     deserializer.deserialize(p->load_slot);
@@ -1482,6 +1499,19 @@ template<R3000CoreConfig c>
 R3000::Control* R3000Core<c>::get_control()
 {
     return &p->control;
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::set_jal_hook(std::move_only_function<void(R3000*)> fn)
+{
+    p->jal_hook = std::move(fn);
+}
+
+template<R3000CoreConfig c>
+void R3000Core<c>::set_sw_hook(
+    std::move_only_function<void(R3000*, uint32_t, uint32_t, uint32_t)> fn)
+{
+    p->sw_hook = std::move(fn);
 }
 
 std::unique_ptr<R3000> R3000::build()
