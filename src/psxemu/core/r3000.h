@@ -459,6 +459,8 @@ struct R3000 {
     virtual void
         set_sw_hook(std::move_only_function<void(R3000*, uint32_t, uint32_t, uint32_t)>) = 0;
 
+    virtual void flush_reverb() = 0;
+
 protected:
     virtual uint8_t read_mem_u8(r3000_ptr_t addr) const = 0;
     virtual uint16_t read_mem_u16(r3000_ptr_t addr) const = 0;

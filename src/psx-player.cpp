@@ -95,6 +95,7 @@ void PsxPlayer::restore_snapshot(SnapshotBuffer const& snapshot)
 
     _emu->restore_snapshot(deserializer);
     _mapper->restore_snapshot(deserializer);
+    _emu->flush_reverb();
 
     update_mapped_channels();
 }

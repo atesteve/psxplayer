@@ -392,6 +392,11 @@ struct FIR {
         }
         return std::saturating_cast<int16_t>(o >> (15 - mult_by_two));
     }
+
+    void flush() {
+        std::ranges::fill(buf, 0);
+        p = 0;
+    }
 };
 
 // Small ad-hoc 16-bit saturanting fixed-point helper type.
@@ -433,6 +438,8 @@ struct SPU::Private {
     std::pair<int16_t, int16_t> tick_reverb(std::pair<int16_t, int16_t> input);
 
     void load_sample(size_t v);
+
+    void flush_reverb();
 
     R3000* emu;
     R3000::Control* control;
@@ -1154,6 +1161,18 @@ std::pair<int16_t, int16_t> SPU::Private::tick_reverb(std::pair<int16_t, int16_t
     return {(out_l * reg->reverb_vol_left) >> 15, (out_r * reg->reverb_vol_right) >> 15};
 }
 
+void SPU::Private::flush_reverb()
+{
+    if (!reg->reverb_base_addr.get()) {
+        return;
+    }
+    std::ranges::fill(std::span(ram).subspan(reg->reverb_base_addr.get()), 0);
+    state.reverb.input_filter[0].flush();
+    state.reverb.input_filter[1].flush();
+    state.reverb.output_filter[0].flush();
+    state.reverb.output_filter[1].flush();
+}
+
 void SPU::write_reg(r3000_ptr_t addr, uint16_t value)
 {
     _p->write_register(addr, value);
@@ -1183,6 +1202,11 @@ void SPU::set_output_buffer(std::span<int16_t> output)
 size_t SPU::rendered_samples() const
 {
     return _p->out_p / 2;
+}
+
+void SPU::flush_reverb()
+{
+    _p->flush_reverb();
 }
 
 void SPU::init(R3000* emu)

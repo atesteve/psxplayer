@@ -1514,6 +1514,12 @@ void R3000Core<c>::set_sw_hook(
     p->sw_hook = std::move(fn);
 }
 
+template<R3000CoreConfig c>
+void R3000Core<c>::flush_reverb()
+{
+    p->spu.flush_reverb();
+}
+
 std::unique_ptr<R3000> R3000::build()
 {
     return std::make_unique<R3000Core<{FaultCheck::SOFTWARE, AlignmentCheck::NO_CHECK}>>();

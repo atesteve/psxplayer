@@ -64,6 +64,8 @@ public:
     void set_jal_hook(std::move_only_function<void(R3000*)>) override;
     void set_sw_hook(std::move_only_function<void(R3000*, uint32_t, uint32_t, uint32_t)>) override;
 
+    void flush_reverb() override;
+
 private:
     struct Private;
     std::unique_ptr<Private> p;
