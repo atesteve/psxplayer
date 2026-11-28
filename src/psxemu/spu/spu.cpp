@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr size_t OUT_SAMPLE_SIZE = 1024;
+constexpr size_t OUT_SAMPLE_SIZE = 256;
 
 struct ADPCMBlockHeader {
     uint8_t shift : 4;
@@ -321,9 +321,7 @@ struct AdsrState {
     }
 };
 
-struct Sample {
-    std::vector<int16_t> samples;
-    size_t loop{};
+struct Sample : public R3000::Sample {
     std::optional<spu_compressed_addr_t> loop_addr{};
 };
 
@@ -437,7 +435,7 @@ struct SPU::Private {
         tick_voice(size_t v, uint64_t rt_cycle, bool no_output);
     std::pair<int16_t, int16_t> tick_reverb(std::pair<int16_t, int16_t> input);
 
-    void load_sample(size_t v);
+    uint64_t load_sample(size_t v);
 
     void flush_reverb();
 
@@ -552,6 +550,7 @@ void SPU::Private::write_register(r3000_ptr_t addr, uint16_t value)
                             std::min<int>(v.adpcm_sample_rate, value) > 1041) {
                         control->channel[voice_n].fire = true;
                     }
+                    control->channel[voice_n].adpcm_freq = value;
                     v.adpcm_sample_rate        = value;     break;
             case 3: v.adpcm_start_addr.raw     = value;     break;
             case 4: write_32bit_reg(&v.adsr_regs.raw, value, 0); break;
@@ -820,18 +819,19 @@ uint16_t SPU::Private::read_register(r3000_ptr_t addr)
     return 0;
 }
 
-void SPU::Private::load_sample(size_t v)
+uint64_t SPU::Private::load_sample(size_t v)
 {
     auto& voice_state = state.voice[v];
-    auto const key =
+    uint64_t const key =
         voice_state.adpcm_start_addr.get() | (voice_state.adpcm_repeat_addr.get() << 32);
     auto& sample = sample_cache[key];
+    auto& samples = sample.samples;
     voice_state.sample = &sample;
-    if (!sample.samples.empty()) {
+    if (!samples.empty()) {
         if (sample.loop_addr) {
             voice_state.adpcm_repeat_addr = *sample.loop_addr;
         }
-        return;
+        return key;
     }
 
     auto sample_p = voice_state.adpcm_start_addr;
@@ -840,14 +840,14 @@ void SPU::Private::load_sample(size_t v)
     std::optional<std::pair<int16_t, int16_t>> repeat_last_samples;
     int loops = 0;
 
-    while (sample.samples.size() < SPU_RAM_SIZE_WORDS * 14) {
-        if (!sample.samples.empty()) {
-            last_samples = std::make_pair(sample.samples[sample.samples.size() - 1],
-                                          sample.samples[sample.samples.size() - 2]);
+    while (samples.size() < SPU_RAM_SIZE_WORDS * 14) {
+        if (!samples.empty()) {
+            last_samples = std::make_pair(samples[samples.size() - 1],
+                                          samples[samples.size() - 2]);
         }
-        sample.samples.resize(sample.samples.size() + 28);
+        samples.resize(samples.size() + 28);
         auto const header = decode_adpcm_block(
-            ram, sample_p.get(), last_samples, std::span{sample.samples}.last(28));
+            ram, sample_p.get(), last_samples, std::span{samples}.last(28));
         if (header.loop_start || sample_p == repeat_addr) {
             repeat_addr = sample_p;
             repeat_last_samples = last_samples;
@@ -865,8 +865,8 @@ void SPU::Private::load_sample(size_t v)
             if (loops >= 3) {
                 break;
             }
-            auto const new_last_samples = std::make_pair(sample.samples[sample.samples.size() - 1],
-                                                         sample.samples[sample.samples.size() - 2]);
+            auto const new_last_samples = std::make_pair(samples[samples.size() - 1],
+                                                         samples[samples.size() - 2]);
             if (repeat_last_samples
                 && std::abs(repeat_last_samples->first - new_last_samples.first) < 20
                 && std::abs(repeat_last_samples->second - new_last_samples.second) < 20) {
@@ -877,10 +877,12 @@ void SPU::Private::load_sample(size_t v)
         }
     }
 
-    sample.samples.shrink_to_fit();
+    samples.shrink_to_fit();
     if (sample.loop_addr) {
         voice_state.adpcm_repeat_addr = *sample.loop_addr;
     }
+
+    return key;
 }
 
 uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint64_t iterations)
@@ -903,9 +905,11 @@ uint64_t SPU::Private::run_spu(Timing::Event& event, uint64_t clock_cycle, uint6
             voice_state.ignore_loop_start = false;
             voice_state.adsr_vol = 0;
             reg->voice_end &= ~(1 << v);
-            load_sample(v);
+            auto const sample_key = load_sample(v);
             control->channel[v].fire = true;
             control->channel[v].playing = true;
+            control->channel[v].sample = voice_state.sample;
+            control->channel[v].sample_key = sample_key;
         }
 
         if (voice_state.key_off_requested) {

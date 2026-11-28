@@ -12,8 +12,6 @@
 #include <memory>
 #include <chrono>
 #include <vector>
-#include <future>
-#include <unordered_map>
 
 class UpseModule : public QThread {
     Q_OBJECT
@@ -60,33 +58,8 @@ private slots:
     void fast_timer_fired();
 
 private:
-    struct ChannelState {
-        bool muted{};
-        float vol{1};
-    };
-
-    struct Freq {
-        Freq(double value);
-        Freq(std::future<double> future);
-
-        std::optional<double> get();
-
-        std::optional<double> _value;
-        std::future<double> _future;
-    };
-
     void take_snapshot();
     void set_state(State new_state);
-    void find_sample_frequency();
-
-    // static void jal_hook(void* self, upse_module_instance_t* ins);
-    // void jal_hook(upse_module_instance_t* ins);
-    // static void sw_hook(void* self,
-    //                     upse_module_instance_t* ins,
-    //                     mem_access_size_t size,
-    //                     uint32_t addr,
-    //                     uint32_t data);
-    // void sw_hook(upse_module_instance_t* ins, mem_access_size_t size, uint32_t addr, uint32_t data);
 
     std::unique_ptr<PsxPlayer> _player;
     Audio _audio;
@@ -100,14 +73,4 @@ private:
     QTimer _fast_timer;
 
     std::vector<std::pair<std::chrono::milliseconds, SnapshotBuffer>> _snapshots;
-
-    struct pair_hash {
-        static size_t operator()(std::pair<uint32_t, uint32_t> const& p) noexcept
-        {
-            return std::hash<uint32_t>{}(p.first) ^ std::hash<uint32_t>{}(p.second);
-        }
-    };
-
-    std::unordered_map<std::pair<uint32_t, uint32_t>, Freq, pair_hash> _sample_freq;
-    std::mutex _sample_freq_mutex;
 };

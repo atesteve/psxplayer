@@ -18,6 +18,37 @@
 #include <vector>
 #include <numeric>
 
+struct fftw_deleter {
+    static void operator()(void* p) noexcept;
+};
+
+template<typename T>
+class FFTW3Holder {
+    using fftw_ptr = std::unique_ptr<T[], fftw_deleter>;
+
+public:
+    explicit FFTW3Holder(size_t size);
+
+    T& operator[](size_t i) { return _fftw.get()[i]; }
+    T const& operator[](size_t i) const { return _fftw.get()[i]; }
+
+    auto begin(this auto&& self) { return &self[0]; }
+    T const* cbegin() const { return begin(); }
+
+    auto end(this auto&& self) { return &self[0] + self._size; }
+    T const* cend() const { return end(); }
+
+    auto data(this auto&& self) { return self.begin(); }
+
+    size_t size() const { return _size; }
+
+private:
+    fftw_ptr _fftw;
+    size_t _size;
+};
+
+using Sample = FFTW3Holder<double>;
+
 namespace {
 
 struct fftw_plan_deleter {
@@ -25,21 +56,6 @@ struct fftw_plan_deleter {
 };
 
 using fftw_plan_ptr = std::unique_ptr<std::remove_pointer_t<fftw_plan>, fftw_plan_deleter>;
-
-// Technically, bitfield layout is implementation-defined, so it shouldn't be relied upon. However,
-// gcc, clang and msvc all implement the same layout, so I'm keeping this.
-struct ADPCM_block {
-    ADPCMBlockHeader header;
-    struct Data {
-        int8_t lo_sample : 4;
-        int8_t hi_sample : 4;
-    } data[14];
-};
-
-static_assert(sizeof(ADPCM_block) == 16);
-static_assert(alignof(ADPCM_block) == 1);
-
-// constexpr auto SAMPLES_PER_BLOCK = sizeof(ADPCM_block::data) * 2;
 
 double quinn_second_estimator(fftw_complex const& x0_in,
                               fftw_complex const& x1_in,
@@ -194,78 +210,7 @@ double find_peak_freq(FFTW3Holder<fftw_complex> const& fft, [[maybe_unused]] std
     return freq;
 }
 
-// std::pair<double, double> prime_adpcm(std::span<uint8_t const> ram,
-//                                       uint32_t addr,
-//                                       uint32_t loop_addr,
-//                                       SampleBounds const& bounds)
-// {
-//     std::pair<double, double> ret{0, 0};
-
-//     while (addr != bounds.loop_addr && addr < ram.size()) {
-//         ret = decode_adpcm_block(ram, addr, ret, {});
-//         auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
-//         if (block->loop_end && block->loop_repeat) {
-//             addr = loop_addr;
-//         } else {
-//             addr += sizeof(ADPCM_block);
-//         }
-//     }
-
-//     return ret;
-// }
-
-int16_t adpcm_filter(uint8_t filter, int32_t sample, int32_t a, int32_t b)
-{
-    // clang-format off
-    auto const ret = [&] {
-        switch (filter) {
-            case 0: return sample;
-            case 1: return sample + (60  * a          + 32) / 64;
-            case 2: return sample + (115 * a - 52 * b + 32) / 64;
-            case 3: return sample + (98  * a - 55 * b + 32) / 64;
-            case 4: return sample + (122 * a - 60 * b + 32) / 64;
-            // Invalid, just return the raw sample.
-            default: return sample;
-        }
-    }();
-    // clang-format on
-    return std::saturating_cast<int16_t>(ret);
-}
-
 } // namespace
-
-ADPCMBlockHeader decode_adpcm_block(std::span<uint16_t const> ram,
-                                    uint32_t addr,
-                                    std::pair<int16_t, int16_t> prev_samples,
-                                    std::span<int16_t> out)
-{
-    if (addr + sizeof(ADPCM_block) / 2 > ram.size()) {
-        return {};
-    }
-
-    auto [a, b] = prev_samples;
-    auto const* block = std::start_lifetime_as<ADPCM_block>(&ram[addr]);
-
-    for (auto const& [i, data] : std::ranges::enumerate_view{block->data}) {
-        auto const process_sample = [&](int32_t sample) {
-            auto const shifted = block->header.shift <= 12 ? sample << (12 - block->header.shift)
-                                                           : sample >> (block->header.shift - 12);
-            auto const ret = adpcm_filter(block->header.filter, shifted, a, b);
-            b = std::exchange(a, ret);
-            return ret;
-        };
-
-        auto const s1 = process_sample(data.lo_sample);
-        auto const s2 = process_sample(data.hi_sample);
-
-        out[i * 2] = s1;
-        out[i * 2 + 1] = s2;
-    }
-
-    return block->header;
-}
-
-/*
 
 void fftw_deleter::operator()(void* p) noexcept
 {
@@ -284,115 +229,37 @@ FFTW3Holder<fftw_complex>::FFTW3Holder(size_t size)
     , _size{size}
 {}
 
-SampleBounds get_sample_bounds(std::span<uint8_t const> ram, uint32_t addr, uint32_t loop_addr)
+double find_sample_freq(R3000::Sample const* sample, std::mutex& mutex, std::string_view name)
 {
-    uint32_t const start_addr = addr;
-    uint32_t max_addr = addr;
-    bool jump_taken = false;
+    static constexpr size_t MIN_SAMPLES = 5000;
 
-    while (addr <= ram.size() - 16) {
-        auto const* block = stdx::start_lifetime_as<ADPCM_block>(&ram[addr]);
-
-        if (block->loop_start) {
-            loop_addr = addr;
-        }
-
-        addr += sizeof(ADPCM_block);
-        max_addr = std::max(addr, max_addr);
-
-        if (block->loop_end && block->loop_repeat) {
-            if (jump_taken || (loop_addr >= start_addr && loop_addr < addr)) {
-                return {
-                    .start_addr = start_addr,
-                    .loop_addr = loop_addr,
-                    .end_addr = addr,
-                    .max_addr = max_addr,
-                };
-            }
-            addr = loop_addr;
-            jump_taken = true;
-
-        } else if (block->loop_end) {
-            return {
-                .start_addr = start_addr,
-                .loop_addr = start_addr,
-                .end_addr = addr,
-                .max_addr = max_addr,
-            };
-        }
-    }
-
-    return {};
-}
-
-std::optional<Sample> decode_adpcm_sample(std::span<uint8_t const> ram,
-                                          uint32_t addr,
-                                          uint32_t loop_addr,
-                                          std::optional<SampleBounds> bounds_in,
-                                          int repeats,
-                                          Sample* out_in)
-{
-    auto const& bounds = bounds_in ? *bounds_in : get_sample_bounds(ram, addr, loop_addr);
-
-    if (bounds.end_addr == 0) {
-        return std::nullopt;
-    }
-
-    auto const blocks = (bounds.end_addr - bounds.loop_addr) / sizeof(ADPCM_block);
-
-    std::optional<Sample> local_sample;
-    auto& out = [&] -> Sample& {
-        if (out_in) {
-            return *out_in;
+    auto const [sample_loop, repeats] = [&] -> std::pair<std::span<int16_t const>, size_t> {
+        if (sample->loop == std::numeric_limits<size_t>::max()) {
+            return {std::span{sample->samples}, 1};
         } else {
-            local_sample.emplace(blocks * repeats * SAMPLES_PER_BLOCK);
-            return *local_sample;
+            auto const sample_loop = std::span{sample->samples}.subspan(sample->loop);
+            size_t const repeats = MIN_SAMPLES / (sample_loop.size()) + 1;
+            return {sample_loop, repeats};
         }
     }();
 
-    auto prev_samples = prime_adpcm(ram, addr, loop_addr, bounds);
-
-    for (auto i = 0u; i < blocks * repeats; ++i) {
-        uint32_t p = bounds.loop_addr + (i % blocks) * sizeof(ADPCM_block);
-        uint32_t out_p = i * SAMPLES_PER_BLOCK;
-
-        prev_samples = decode_adpcm_block(
-            ram, p, prev_samples, std::span{out}.subspan(out_p, SAMPLES_PER_BLOCK));
+    if (sample_loop.size() * repeats < MIN_SAMPLES) {
+        return 0;
     }
 
-    if (out_in) {
-        return std::nullopt;
-    } else {
-        return {std::move(out)};
-    }
-}
-
-double find_sample_freq(std::span<uint8_t const> ram,
-                        uint32_t addr,
-                        uint32_t loop_addr,
-                        SampleBounds const& bounds,
-                        std::mutex& mutex,
-                        std::string_view name)
-{
-    auto const blocks = (bounds.end_addr - bounds.loop_addr) / sizeof(ADPCM_block);
-    int repeats = 1;
-    if (blocks < 200) {
-        repeats = 399 / blocks;
+    Sample sample_loop_d{sample_loop.size() * repeats};
+    for (size_t i = 0; i < sample_loop_d.size(); i++) {
+        sample_loop_d[i] = sample_loop[i % sample_loop.size()] / 32768.0;
     }
 
-    Sample sample{blocks * repeats * SAMPLES_PER_BLOCK};
-    FFTW3Holder<fftw_complex> fft{(blocks * repeats * SAMPLES_PER_BLOCK) / 2 + 1};
+    FFTW3Holder<fftw_complex> fft{sample_loop_d.size() / 2 + 1};
 
     std::unique_lock lock{mutex};
-    fftw_plan_ptr plan{
-        fftw_plan_dft_r2c_1d(sample.size(), sample.data(), fft.data(), FFTW_ESTIMATE)};
+    fftw_plan_ptr plan{fftw_plan_dft_r2c_1d(
+        sample_loop_d.size(), sample_loop_d.data(), fft.data(), FFTW_ESTIMATE)};
     lock.unlock();
-
-    decode_adpcm_sample(ram, addr, loop_addr, bounds, repeats, &sample);
 
     fftw_execute(plan.get());
 
     return find_peak_freq(fft, name);
 }
-
-*/

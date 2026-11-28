@@ -19,7 +19,7 @@ const std::unordered_map<std::string_view, make_mapper_fn> builder_map{
     {
         "Final Fantasy 7",
         [](auto*, auto title) -> cm_ptr {
-            if (title == "World Crisis" || title == "Staff Roll") {
+            if (title == "World Crisis" || title == "Staff Roll" || title == "Anxious Heart") {
                 return std::make_unique<NullMapper>(24);
             } else {
                 return std::make_unique<NullMapper>(16);

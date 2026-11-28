@@ -343,10 +343,18 @@ class Timing;
 class Misc;
 
 struct R3000 {
+    struct Sample {
+        std::vector<int16_t> samples;
+        size_t loop{};
+    };
+
     struct ChannelInfo {
         std::vector<int16_t> window_l;
         std::vector<int16_t> window_r;
         size_t window_p{};
+        Sample const* sample{};
+        uint64_t sample_key{};
+        uint16_t adpcm_freq{};
         bool playing{};
         bool fire{};
         bool muted{};

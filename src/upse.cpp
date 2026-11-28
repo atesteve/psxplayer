@@ -73,10 +73,6 @@ void UpseModule::run()
             slow_timer_fired();
         }
 
-        if (_state == State::Playing) {
-            find_sample_frequency();
-        }
-
         // QEventLoop::AllEvents returns immediately if there are no events to dispatch.
         // QEventLoop::WaitForMoreEvents blocks until there is at least one event, then dispatches
         // it and returns.
@@ -87,62 +83,6 @@ void UpseModule::run()
 
     _slow_timer.stop();
     _fast_timer.stop();
-}
-
-void UpseModule::find_sample_frequency()
-{
-    /*auto const* spu_state = reinterpret_cast<upse_spu_state_t const*>(_mod->instance.spu);
-    auto const offset_to_ram =
-        *reinterpret_cast<uint32_t const*>((char const*)spu_state->pCore + sizeof(uint32_t));
-    auto const* ram = reinterpret_cast<uint8_t const*>(spu_state->pCore) + offset_to_ram;
-
-    for (auto const& [ch, channel] : std::ranges::enumerate_view{_control.output.channel}) {
-        if (!channel.sample_addr) {
-            continue;
-        }
-
-        auto const key_pair = std::pair{channel.sample_addr, channel.loop_addr};
-
-        if (_sample_freq.contains(key_pair)) {
-            continue;
-        }
-
-        auto bounds = get_sample_bounds({ram, 0x80000}, channel.sample_addr, channel.loop_addr);
-
-        if (bounds.end_addr == 0) {
-            _sample_freq.emplace(key_pair, 0.0);
-            continue;
-        }
-
-        auto const v = {bounds.start_addr, bounds.loop_addr, bounds.end_addr};
-        auto const min_addr = *std::ranges::min_element(v);
-
-        auto const sample_size = bounds.max_addr - min_addr;
-        std::vector<uint8_t> sample_mem;
-        sample_mem.resize(sample_size);
-        std::memcpy(sample_mem.data(), ram + min_addr, sample_size);
-
-        bounds.start_addr -= min_addr;
-        bounds.loop_addr -= min_addr;
-        bounds.end_addr -= min_addr;
-        bounds.max_addr -= min_addr;
-
-        _sample_freq.emplace(
-            key_pair,
-            std::async(std::launch::async,
-                       [sample_mem = std::move(sample_mem),
-                        addr = channel.sample_addr - min_addr,
-                        loop_addr = channel.loop_addr - min_addr,
-                        bounds,
-                        name = fmt::format("channel {} - {:#x}, {:#x}",
-                                           _channel_mapper->physical_to_logical(ch),
-                                           channel.sample_addr,
-                                           channel.loop_addr),
-                        this] {
-                           return find_sample_freq(
-                               sample_mem, addr, loop_addr, bounds, _sample_freq_mutex, name);
-                       }));
-    }*/
 }
 
 void UpseModule::take_snapshot()
@@ -184,7 +124,6 @@ void UpseModule::load_file(QString const& file_name)
     _player.reset();
     _snapshots.clear();
     _snapshots.shrink_to_fit();
-    _sample_freq.clear();
 
     auto new_player = PsxPlayer::build(file_name.toStdString());
 
@@ -337,29 +276,9 @@ void UpseModule::fast_timer_fired()
         }
         emit channel_sound_level_changed(
             ch_i, compute_rms(ch.samples.first) / 32768, compute_rms(ch.samples.second) / 32768);
+        emit channel_frequency_changed(ch_i, ch.freq);
         if (ch.fired) {
             emit channel_fired(ch_i);
         }
     }
-}
-
-UpseModule::Freq::Freq(double value)
-    : _value{value}
-{}
-
-UpseModule::Freq::Freq(std::future<double> future)
-    : _future(std::move(future))
-{}
-
-std::optional<double> UpseModule::Freq::get()
-{
-    if (_value) {
-        return _value;
-    }
-    auto const future_state = _future.wait_for(0s);
-    if (future_state != std::future_status::ready) {
-        return std::nullopt;
-    }
-    _value = _future.get();
-    return _value;
 }

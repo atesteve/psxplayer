@@ -3,6 +3,7 @@
 #include "psf/psf.h"
 #include "util/util.h"
 #include "channel-mapper/channel-mapper.h"
+#include "psxemu/spu/adpcm.h"
 
 #include <optional>
 
@@ -23,8 +24,6 @@ std::optional<std::string_view> get_tag(auto const& tags, std::string_view key)
 } // namespace
 
 PsxPlayer::~PsxPlayer() = default;
-PsxPlayer::PsxPlayer(PsxPlayer&&) = default;
-PsxPlayer& PsxPlayer::operator=(PsxPlayer&&) = default;
 
 std::expected<std::unique_ptr<PsxPlayer>, std::string> PsxPlayer::build(std::filesystem::path path)
 {
@@ -136,7 +135,7 @@ void PsxPlayer::mute_channel(size_t n, bool muted)
     update_mapped_channels();
 }
 
-auto PsxPlayer::get_channel_information() const -> std::vector<ChannelInformation>
+auto PsxPlayer::get_channel_information() -> std::vector<ChannelInformation>
 {
     if (!_mapper) {
         return {};
@@ -150,6 +149,7 @@ auto PsxPlayer::get_channel_information() const -> std::vector<ChannelInformatio
         }
         ret[logical_channel] = {
             .samples = {ch.window_l, ch.window_r},
+            .freq = get_channel_frequency(i),
             .playing = ch.playing,
             .fired = ch.fire,
         };
@@ -167,4 +167,37 @@ void PsxPlayer::update_mapped_channels()
         }
         ch.muted = _channel_control[logical_channel].muted;
     }
+}
+
+double PsxPlayer::get_channel_frequency(int c)
+{
+    auto const& channel = _control->channel[c];
+    if (!channel.playing) {
+        return 0;
+    }
+    auto const sample_freq = get_sample_frequency(channel.sample, channel.sample_key);
+    auto const channel_multiplier = channel.adpcm_freq / 16384.0;
+    return sample_freq * channel_multiplier;
+}
+
+double PsxPlayer::get_sample_frequency(R3000::Sample const* sample, uint64_t key)
+{
+    if (!sample) {
+        return 0;
+    }
+    auto& freq = _sample_freq[key];
+    if (freq._value) {
+        return *freq._value;
+    }
+    if (!freq._future.valid()) {
+        freq._future = std::async(std::launch::async, [this, sample] -> double {
+            return find_sample_freq(sample, _sample_freq_mutex, "dunno lol");
+        });
+    }
+    auto const future_state = freq._future.wait_for(0s);
+    if (future_state != std::future_status::ready) {
+        return 0;
+    }
+    freq._value = freq._future.get();
+    return *freq._value;
 }
