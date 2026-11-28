@@ -130,7 +130,6 @@ void plot(FFTW3Holder<fftw_complex> const& fft,
     t.detach();
 }
 
-[[maybe_unused]]
 double find_peak_freq(FFTW3Holder<fftw_complex> const& fft, [[maybe_unused]] std::string_view name)
 {
     static constexpr double MAX_FREQ = 22050;
@@ -231,7 +230,7 @@ FFTW3Holder<fftw_complex>::FFTW3Holder(size_t size)
 
 double find_sample_freq(R3000::Sample const* sample, std::mutex& mutex, std::string_view name)
 {
-    static constexpr size_t MIN_SAMPLES = 5000;
+    static constexpr size_t MIN_SAMPLES = 10000;
 
     auto const [sample_loop, repeats] = [&] -> std::pair<std::span<int16_t const>, size_t> {
         if (sample->loop == std::numeric_limits<size_t>::max()) {
@@ -243,21 +242,17 @@ double find_sample_freq(R3000::Sample const* sample, std::mutex& mutex, std::str
         }
     }();
 
-    if (sample_loop.size() * repeats < MIN_SAMPLES) {
-        return 0;
-    }
-
     Sample sample_loop_d{sample_loop.size() * repeats};
-    for (size_t i = 0; i < sample_loop_d.size(); i++) {
-        sample_loop_d[i] = sample_loop[i % sample_loop.size()] / 32768.0;
-    }
-
     FFTW3Holder<fftw_complex> fft{sample_loop_d.size() / 2 + 1};
 
     std::unique_lock lock{mutex};
     fftw_plan_ptr plan{fftw_plan_dft_r2c_1d(
         sample_loop_d.size(), sample_loop_d.data(), fft.data(), FFTW_ESTIMATE)};
     lock.unlock();
+
+    for (size_t i = 0; i < sample_loop_d.size(); i++) {
+        sample_loop_d[i] = sample_loop[i % sample_loop.size()] / 32768.0;
+    }
 
     fftw_execute(plan.get());
 

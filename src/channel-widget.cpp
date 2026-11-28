@@ -102,7 +102,7 @@ void ChannelWidget::setFrequency(double freq)
             _ui.octaveLabel->setText(QString{""});
             _ui.centsLabel->setText(QString{""});
         });
-        _timer.setInterval(500);
+        _timer.setInterval(1000);
         _timer.setSingleShot(true);
         _timer.start();
         return;

@@ -5,6 +5,8 @@
 #include "channel-mapper/channel-mapper.h"
 #include "psxemu/spu/adpcm.h"
 
+#include <fmt/format.h>
+
 #include <optional>
 
 using namespace std::literals;
@@ -176,7 +178,7 @@ double PsxPlayer::get_channel_frequency(int c)
         return 0;
     }
     auto const sample_freq = get_sample_frequency(channel.sample, channel.sample_key);
-    auto const channel_multiplier = channel.adpcm_freq / 16384.0;
+    auto const channel_multiplier = channel.adpcm_freq / 4096.0;
     return sample_freq * channel_multiplier;
 }
 
@@ -190,8 +192,11 @@ double PsxPlayer::get_sample_frequency(R3000::Sample const* sample, uint64_t key
         return *freq._value;
     }
     if (!freq._future.valid()) {
-        freq._future = std::async(std::launch::async, [this, sample] -> double {
-            return find_sample_freq(sample, _sample_freq_mutex, "dunno lol");
+        freq._future = std::async(std::launch::async, [this, sample, key] -> double {
+            return find_sample_freq(
+                sample,
+                _sample_freq_mutex,
+                fmt::format("{:#x}, {:#x}", uint32_t(key << 1), key >> 31));
         });
     }
     auto const future_state = freq._future.wait_for(0s);
